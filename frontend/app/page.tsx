@@ -16,7 +16,6 @@ export default function Home() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
 
   // Load backlog on component mount
@@ -35,21 +34,6 @@ export default function Home() {
 
     loadBacklog();
   }, [projectId]);
-
-  // Load backlog on component mount
-  useEffect(() => {
-    const loadBacklog = async () => {
-      try {
-        const items = await getProjectBacklog(projectId);
-        setBacklogItems(items);
-      } catch (error) {
-        console.error("Failed to load backlog:", error);
-        // Optionally set an error state here
-      }
-    };
-
-    loadBacklog();
-  }, [projectId]); // Include projectId in dependencies
 
   const addTimelineEvent = (event: SSEEvent) => {
     const timelineEvent: TimelineEvent = {
