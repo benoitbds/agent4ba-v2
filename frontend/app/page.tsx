@@ -1,0 +1,177 @@
+"use client";
+
+import { useState } from "react";
+import ChatInput from "@/components/ChatInput";
+import AgentTimeline from "@/components/AgentTimeline";
+import ImpactPlanModal from "@/components/ImpactPlanModal";
+import { streamChatEvents, sendApprovalDecision } from "@/lib/api";
+import type { TimelineEvent, ImpactPlan, SSEEvent } from "@/types/events";
+
+export default function Home() {
+  const [projectId] = useState("demo");
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  const [impactPlan, setImpactPlan] = useState<ImpactPlan | null>(null);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const addTimelineEvent = (event: SSEEvent) => {
+    const timelineEvent: TimelineEvent = {
+      id: `${Date.now()}-${Math.random()}`,
+      timestamp: new Date(),
+      event,
+    };
+    setTimelineEvents((prev) => [...prev, timelineEvent]);
+  };
+
+  const handleChatSubmit = async (query: string) => {
+    // Reset state
+    setTimelineEvents([]);
+    setImpactPlan(null);
+    setThreadId(null);
+    setStatusMessage(null);
+    setIsStreaming(true);
+
+    try {
+      // Stream events from backend
+      for await (const event of streamChatEvents({ project_id: projectId, query })) {
+        addTimelineEvent(event);
+
+        // Handle special events
+        if (event.type === "thread_id") {
+          setThreadId(event.thread_id);
+        } else if (event.type === "impact_plan_ready") {
+          setImpactPlan(event.impact_plan);
+          setThreadId(event.thread_id);
+          setStatusMessage("ImpactPlan prêt pour validation");
+          break; // Stop streaming when ImpactPlan is ready
+        } else if (event.type === "workflow_complete") {
+          setStatusMessage(`Workflow terminé: ${event.result}`);
+        } else if (event.type === "error") {
+          setStatusMessage(`Erreur: ${event.error}`);
+        }
+      }
+    } catch (error) {
+      console.error("Error streaming events:", error);
+      setStatusMessage(
+        `Erreur de connexion: ${error instanceof Error ? error.message : "Erreur inconnue"}`
+      );
+    } finally {
+      setIsStreaming(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!threadId) {
+      console.error("No thread ID available");
+      return;
+    }
+
+    try {
+      setStatusMessage("Envoi de l'approbation...");
+      const response = await sendApprovalDecision(threadId, true);
+      setStatusMessage(`Approuvé: ${response.result}`);
+      setImpactPlan(null);
+      setThreadId(null);
+    } catch (error) {
+      console.error("Error approving plan:", error);
+      setStatusMessage(
+        `Erreur lors de l'approbation: ${error instanceof Error ? error.message : "Erreur inconnue"}`
+      );
+    }
+  };
+
+  const handleReject = async () => {
+    if (!threadId) {
+      console.error("No thread ID available");
+      return;
+    }
+
+    try {
+      setStatusMessage("Envoi du rejet...");
+      const response = await sendApprovalDecision(threadId, false);
+      setStatusMessage(`Rejeté: ${response.result}`);
+      setImpactPlan(null);
+      setThreadId(null);
+    } catch (error) {
+      console.error("Error rejecting plan:", error);
+      setStatusMessage(
+        `Erreur lors du rejet: ${error instanceof Error ? error.message : "Erreur inconnue"}`
+      );
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Agent4BA - AI Backlog Assistant
+          </h1>
+          <p className="text-gray-600 mt-1">
+            Projet: <span className="font-semibold">{projectId}</span>
+          </p>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column: Chat Input */}
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h2 className="text-xl font-semibold mb-4">
+                Nouvelle demande
+              </h2>
+              <ChatInput onSubmit={handleChatSubmit} disabled={isStreaming} />
+            </div>
+
+            {/* Status Message */}
+            {statusMessage && (
+              <div
+                className={`p-4 rounded-lg ${
+                  statusMessage.includes("Erreur")
+                    ? "bg-red-100 border border-red-300 text-red-800"
+                    : statusMessage.includes("prêt")
+                    ? "bg-yellow-100 border border-yellow-300 text-yellow-800"
+                    : "bg-green-100 border border-green-300 text-green-800"
+                }`}
+              >
+                <p className="font-semibold">{statusMessage}</p>
+              </div>
+            )}
+
+            {/* Streaming Indicator */}
+            {isStreaming && (
+              <div className="bg-blue-100 border border-blue-300 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                  <p className="text-blue-800 font-semibold">
+                    Traitement en cours...
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column: Timeline */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <AgentTimeline events={timelineEvents} />
+          </div>
+        </div>
+      </main>
+
+      {/* Impact Plan Modal */}
+      {impactPlan && threadId && (
+        <ImpactPlanModal
+          impactPlan={impactPlan}
+          threadId={threadId}
+          onApprove={handleApprove}
+          onReject={handleReject}
+          isOpen={true}
+        />
+      )}
+    </div>
+  );
+}
