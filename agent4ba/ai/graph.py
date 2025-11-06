@@ -281,10 +281,7 @@ def agent_node(state: GraphState) -> dict[str, Any]:
         }
 
     elif agent_task == "improve_description":
-        return {
-            "status": "completed",
-            "result": "Stub: Improving work item description (not yet implemented)",
-        }
+        return backlog_agent.improve_description(state)
 
     else:
         return {
@@ -346,8 +343,6 @@ def approval_node(state: GraphState) -> dict[str, Any]:
         existing_items = []
         print("[APPROVAL_NODE] No existing backlog found, starting fresh")
 
-    # Pour l'instant, on gère uniquement new_items (ajouts simples)
-    # Les modified_items et deleted_items seront gérés dans de futures itérations
     from agent4ba.core.models import WorkItem
 
     # Convertir new_items en WorkItem si nécessaire
@@ -357,6 +352,22 @@ def approval_node(state: GraphState) -> dict[str, Any]:
             new_work_items.append(WorkItem(**item_data))
         else:
             new_work_items.append(item_data)
+
+    # Gérer les modified_items (format: {"before": WorkItem, "after": WorkItem})
+    modified_count = 0
+    for modified_data in modified_items:
+        if isinstance(modified_data, dict) and "after" in modified_data:
+            # Extraire l'item "after"
+            after_data = modified_data["after"]
+            after_item = WorkItem(**after_data) if isinstance(after_data, dict) else after_data
+
+            # Trouver et remplacer l'item correspondant dans existing_items
+            for i, existing_item in enumerate(existing_items):
+                if existing_item.id == after_item.id:
+                    existing_items[i] = after_item
+                    modified_count += 1
+                    print(f"[APPROVAL_NODE] Updated item {after_item.id}")
+                    break
 
     # Construire le nouveau backlog complet
     updated_backlog = existing_items + new_work_items
@@ -371,13 +382,17 @@ def approval_node(state: GraphState) -> dict[str, Any]:
 
     print(f"[APPROVAL_NODE] Successfully saved backlog_v{latest_version}.json")
 
+    result_parts = []
+    if len(new_work_items) > 0:
+        result_parts.append(f"Added {len(new_work_items)} new work items")
+    if modified_count > 0:
+        result_parts.append(f"Modified {modified_count} work items")
+
+    result_message = "ImpactPlan approved and applied successfully. " + ". ".join(result_parts) + f". Backlog saved as version {latest_version}."
+
     return {
         "status": "approved",
-        "result": (
-            f"ImpactPlan approved and applied successfully. "
-            f"Added {len(new_work_items)} new work items. "
-            f"Backlog saved as version {latest_version}."
-        ),
+        "result": result_message,
     }
 
 

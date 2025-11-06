@@ -1,7 +1,10 @@
 "use client";
 
-import type { ImpactPlan, WorkItem } from "@/types/events";
-import { useState } from "react";
+import type { ImpactPlan, WorkItem, ModifiedItem } from "@/types/events";
+import { useState, useMemo } from "react";
+import { parseDiff, Diff, Hunk } from "react-diff-view";
+import { createPatch } from "diff";
+import "react-diff-view/style/index.css";
 
 interface ImpactPlanModalProps {
   impactPlan: ImpactPlan;
@@ -9,6 +12,93 @@ interface ImpactPlanModalProps {
   onApprove: () => void;
   onReject: () => void;
   isOpen: boolean;
+}
+
+// Composant pour afficher un item modifié avec diff visuel
+function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }) {
+  const { before, after } = modifiedItem;
+
+  // Générer le diff pour la description
+  const diffText = useMemo(() => {
+    const oldText = before.description || "";
+    const newText = after.description || "";
+
+    // Créer un diff unifié avec la bibliothèque diff
+    return createPatch("description", oldText, newText, "Avant", "Après");
+  }, [before.description, after.description]);
+
+  const files = useMemo(() => {
+    try {
+      return parseDiff(diffText);
+    } catch (e) {
+      console.error("Error parsing diff:", e);
+      return [];
+    }
+  }, [diffText]);
+
+  return (
+    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="flex items-start gap-2 mb-4">
+        <span
+          className={`px-2 py-1 text-xs font-semibold rounded ${
+            before.type === "feature"
+              ? "bg-purple-200 text-purple-800"
+              : before.type === "user_story"
+              ? "bg-blue-200 text-blue-800"
+              : "bg-green-200 text-green-800"
+          }`}
+        >
+          {before.type}
+        </span>
+        <div className="flex-1">
+          <h4 className="font-semibold text-gray-900">{before.title}</h4>
+          <p className="text-xs text-gray-500">ID: {before.id}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 border border-gray-300 rounded overflow-hidden">
+        <div className="bg-gray-100 px-3 py-2 border-b border-gray-300">
+          <span className="text-sm font-semibold text-gray-700">
+            Modifications de la description
+          </span>
+        </div>
+        <div className="bg-white overflow-x-auto">
+          {files.map((file, index) => (
+            <Diff
+              key={index}
+              viewType="split"
+              diffType={file.type}
+              hunks={file.hunks}
+            >
+              {(hunks) =>
+                hunks.map((hunk) => <Hunk key={hunk.content} hunk={hunk} />)
+              }
+            </Diff>
+          ))}
+        </div>
+      </div>
+
+      {after.attributes && (
+        <div className="flex gap-2 mt-3 text-xs">
+          {after.attributes.priority && (
+            <span className="px-2 py-1 bg-gray-200 rounded">
+              Priorité: {after.attributes.priority}
+            </span>
+          )}
+          {after.attributes.points !== undefined && (
+            <span className="px-2 py-1 bg-gray-200 rounded">
+              Points: {after.attributes.points}
+            </span>
+          )}
+          {after.attributes.status && (
+            <span className="px-2 py-1 bg-gray-200 rounded">
+              Statut: {after.attributes.status}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function ImpactPlanModal({
@@ -120,7 +210,9 @@ export default function ImpactPlanModal({
                 Items modifiés ({impactPlan.modified_items.length})
               </h3>
               <div className="space-y-3">
-                {impactPlan.modified_items.map(renderWorkItem)}
+                {impactPlan.modified_items.map((item) => (
+                  <ModifiedItemView key={item.before.id} modifiedItem={item} />
+                ))}
               </div>
             </div>
           )}

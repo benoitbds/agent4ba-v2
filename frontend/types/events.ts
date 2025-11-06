@@ -17,9 +17,14 @@ export interface WorkItem {
   };
 }
 
+export interface ModifiedItem {
+  before: WorkItem;
+  after: WorkItem;
+}
+
 export interface ImpactPlan {
   new_items: WorkItem[];
-  modified_items: WorkItem[];
+  modified_items: ModifiedItem[];
   deleted_items: string[];
 }
 
