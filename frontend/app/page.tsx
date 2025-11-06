@@ -60,7 +60,7 @@ export default function Home() {
     setTimelineEvents((prev) => [...prev, timelineEvent]);
   };
 
-  const handleChatSubmit = async (query: string) => {
+  const handleChatSubmit = async (query: string, documentContent?: string) => {
     // Reset state
     setTimelineEvents([]);
     setImpactPlan(null);
@@ -70,7 +70,11 @@ export default function Home() {
 
     try {
       // Stream events from backend
-      for await (const event of streamChatEvents({ project_id: projectId, query })) {
+      for await (const event of streamChatEvents({
+        project_id: projectId,
+        query,
+        document_content: documentContent,
+      })) {
         addTimelineEvent(event);
 
         // Handle special events
