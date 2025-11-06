@@ -222,7 +222,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right Column: Backlog and Timeline */}
+          {/* Right Column: Backlog */}
           <div className="space-y-6">
             {/* Backlog */}
             <div className="bg-white rounded-lg shadow-sm p-6">
