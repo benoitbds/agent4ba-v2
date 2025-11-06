@@ -1,0 +1,37 @@
+"use client";
+
+interface ProjectSelectorProps {
+  projects: string[];
+  selectedProject: string;
+  onProjectChange: (projectId: string) => void;
+}
+
+export default function ProjectSelector({
+  projects,
+  selectedProject,
+  onProjectChange,
+}: ProjectSelectorProps) {
+  return (
+    <div className="flex items-center gap-3">
+      <label htmlFor="project-select" className="text-sm font-medium text-gray-700">
+        Projet :
+      </label>
+      <select
+        id="project-select"
+        value={selectedProject}
+        onChange={(e) => onProjectChange(e.target.value)}
+        className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+      >
+        {projects.length === 0 ? (
+          <option value="">Aucun projet disponible</option>
+        ) : (
+          projects.map((project) => (
+            <option key={project} value={project}>
+              {project}
+            </option>
+          ))
+        )}
+      </select>
+    </div>
+  );
+}
