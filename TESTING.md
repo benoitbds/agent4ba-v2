@@ -146,13 +146,106 @@ Logs:
 [ROUTER_NODE] Low confidence (0.0), routing to end
 ```
 
-### Prochaines étapes
+### Test du workflow d'approbation complet (Two-Step Process)
 
-Une fois l'ImpactPlan reçu:
-1. Le frontend affiche les work items proposés à l'utilisateur
-2. L'utilisateur valide ou rejette les changements
-3. Si validé, un appel ultérieur sauvegarde le backlog avec `storage.save_backlog()`
-4. Si rejeté, le workflow est abandonné
+Le workflow d'approbation fonctionne maintenant en deux étapes:
+
+#### Étape 1: Génération de l'ImpactPlan
+
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "demo",
+    "query": "Décompose l'\''objectif système de paiement en user stories"
+  }'
+```
+
+**Résultat attendu:**
+```json
+{
+  "result": "Generated 5 work items for objective: système de paiement",
+  "project_id": "demo",
+  "status": "awaiting_approval",
+  "thread_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "impact_plan": {
+    "new_items": [...],
+    "modified_items": [],
+    "deleted_items": []
+  }
+}
+```
+
+**Important:** Notez le `thread_id` retourné dans la réponse. Il sera nécessaire pour l'étape suivante.
+
+#### Étape 2: Approbation et application des changements
+
+Utilisez le `thread_id` récupéré à l'étape 1 dans l'URL suivante:
+
+```bash
+# Remplacez {thread_id} par la valeur obtenue à l'étape 1
+curl -X POST http://127.0.0.1:8000/agent/run/{thread_id}/continue \
+  -H "Content-Type: application/json" \
+  -d '{
+    "approved": true
+  }'
+```
+
+**Résultat attendu (si approved=true):**
+```json
+{
+  "result": "ImpactPlan approved and applied successfully. Added 5 new work items. Backlog saved as version 3.",
+  "project_id": "demo",
+  "status": "approved",
+  "thread_id": null,
+  "impact_plan": null
+}
+```
+
+**Résultat attendu (si approved=false):**
+```json
+{
+  "result": "ImpactPlan rejected. No changes were applied to the backlog.",
+  "project_id": "demo",
+  "status": "rejected",
+  "thread_id": null,
+  "impact_plan": null
+}
+```
+
+#### Vérification du fichier backlog
+
+Après approbation, vérifiez qu'un nouveau fichier a été créé:
+
+```bash
+ls -la agent4ba/data/projects/demo/
+```
+
+Vous devriez voir un nouveau fichier `backlog_v3.json` (ou vN+1 si d'autres versions existent déjà).
+
+#### Gestion des erreurs
+
+**Thread ID invalide ou expiré:**
+```bash
+curl -X POST http://127.0.0.1:8000/agent/run/invalid-thread-id/continue \
+  -H "Content-Type: application/json" \
+  -d '{"approved": true}'
+```
+
+Résultat:
+```json
+{
+  "detail": "Thread invalid-thread-id not found or expired: ..."
+}
+```
+
+**Workflow non en pause:**
+Si vous essayez de continuer un workflow déjà terminé, vous obtiendrez:
+```json
+{
+  "detail": "Workflow is not in a paused state (no next node to execute)"
+}
+```
 
 ## Tests d'autres intentions
 
