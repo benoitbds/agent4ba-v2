@@ -11,9 +11,47 @@ interface ImpactPlanModalProps {
   isOpen: boolean;
 }
 
+interface InvestCriterion {
+  score: number;
+  reason: string;
+}
+
+interface InvestAnalysis {
+  I: InvestCriterion;
+  N: InvestCriterion;
+  V: InvestCriterion;
+  E: InvestCriterion;
+  S: InvestCriterion;
+  T: InvestCriterion;
+}
+
+// Fonction pour déterminer la couleur du badge selon le score
+function getBadgeColor(score: number): string {
+  if (score > 0.8) return "bg-green-500 text-white";
+  if (score > 0.6) return "bg-orange-500 text-white";
+  return "bg-red-500 text-white";
+}
+
+// Noms complets des critères INVEST
+const INVEST_LABELS: Record<string, string> = {
+  I: "Independent (Indépendante)",
+  N: "Negotiable (Négociable)",
+  V: "Valuable (Apporte de la valeur)",
+  E: "Estimable (Estimable)",
+  S: "Small (Petite)",
+  T: "Testable (Testable)",
+};
+
 // Composant pour afficher un item modifié avec diff visuel simple
 function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }) {
   const { before, after } = modifiedItem;
+
+  // Détecter si l'analyse INVEST a été ajoutée
+  const hasInvestAnalysis = after.attributes?.invest_analysis && !before.attributes?.invest_analysis;
+  const investAnalysis = after.attributes?.invest_analysis as InvestAnalysis | undefined;
+
+  // Détecter si la description a changé
+  const descriptionChanged = before.description !== after.description;
 
   return (
     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -35,37 +73,76 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }) {
         </div>
       </div>
 
-      <div className="mt-3 border border-gray-300 rounded overflow-hidden">
-        <div className="bg-gray-100 px-3 py-2 border-b border-gray-300">
-          <span className="text-sm font-semibold text-gray-700">
-            Modifications de la description
-          </span>
-        </div>
-
-        {/* Split view with before/after */}
-        <div className="grid grid-cols-2 divide-x divide-gray-300">
-          {/* Before (left side) */}
-          <div className="bg-red-50">
-            <div className="bg-red-100 px-3 py-1 border-b border-red-200">
-              <span className="text-xs font-semibold text-red-800">Avant</span>
-            </div>
-            <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
-              {before.description || "(vide)"}
-            </div>
+      {/* Diff de description (uniquement si modifiée) */}
+      {descriptionChanged && (
+        <div className="mt-3 border border-gray-300 rounded overflow-hidden">
+          <div className="bg-gray-100 px-3 py-2 border-b border-gray-300">
+            <span className="text-sm font-semibold text-gray-700">
+              Modifications de la description
+            </span>
           </div>
 
-          {/* After (right side) */}
-          <div className="bg-green-50">
-            <div className="bg-green-100 px-3 py-1 border-b border-green-200">
-              <span className="text-xs font-semibold text-green-800">Après</span>
+          {/* Split view with before/after */}
+          <div className="grid grid-cols-2 divide-x divide-gray-300">
+            {/* Before (left side) */}
+            <div className="bg-red-50">
+              <div className="bg-red-100 px-3 py-1 border-b border-red-200">
+                <span className="text-xs font-semibold text-red-800">Avant</span>
+              </div>
+              <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
+                {before.description || "(vide)"}
+              </div>
             </div>
-            <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
-              {after.description || "(vide)"}
+
+            {/* After (right side) */}
+            <div className="bg-green-50">
+              <div className="bg-green-100 px-3 py-1 border-b border-green-200">
+                <span className="text-xs font-semibold text-green-800">Après</span>
+              </div>
+              <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
+                {after.description || "(vide)"}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
+      {/* Analyse INVEST ajoutée */}
+      {hasInvestAnalysis && investAnalysis && (
+        <div className="mt-3 border border-green-300 rounded overflow-hidden bg-green-50">
+          <div className="bg-green-100 px-3 py-2 border-b border-green-200">
+            <span className="text-sm font-semibold text-green-800">
+              ✅ Analyse INVEST ajoutée
+            </span>
+          </div>
+          <div className="p-3">
+            <div className="grid grid-cols-2 gap-3">
+              {Object.entries(investAnalysis).map(([criterion, data]) => (
+                <div key={criterion} className="bg-white p-2 rounded border border-gray-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span
+                      className={`px-2 py-1 text-xs font-bold rounded ${getBadgeColor(data.score)}`}
+                    >
+                      {criterion}
+                    </span>
+                    <span className="text-xs font-semibold text-gray-700">
+                      {INVEST_LABELS[criterion]}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-600 mb-1">
+                    Score: {(data.score * 100).toFixed(0)}%
+                  </div>
+                  <div className="text-xs text-gray-700">
+                    {data.reason}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Autres attributs */}
       {after.attributes && (
         <div className="flex gap-2 mt-3 text-xs">
           {after.attributes.priority && (

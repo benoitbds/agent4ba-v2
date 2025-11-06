@@ -46,6 +46,21 @@ def load_improve_description_prompt() -> dict[str, Any]:
         return result
 
 
+def load_invest_analysis_prompt() -> dict[str, Any]:
+    """
+    Charge le prompt d'analyse INVEST depuis le fichier YAML.
+
+    Returns:
+        Dictionnaire contenant le prompt et les exemples
+    """
+    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "invest_analysis.yaml"
+    with prompt_path.open("r", encoding="utf-8") as f:
+        result = yaml.safe_load(f)
+        if not isinstance(result, dict):
+            raise ValueError("Invalid prompt configuration")
+        return result
+
+
 def decompose_objective(state: Any) -> dict[str, Any]:
     """
     Décompose un objectif métier en work items structurés.
@@ -294,3 +309,140 @@ def improve_description(state: Any) -> dict[str, Any]:
             "status": "error",
             "result": f"Failed to improve description: {e}",
         }
+
+
+def review_quality(state: Any) -> dict[str, Any]:
+    """
+    Analyse la qualité des User Stories du backlog selon les critères INVEST.
+
+    Args:
+        state: État actuel du graphe contenant project_id
+
+    Returns:
+        Mise à jour de l'état avec impact_plan et status
+    """
+    print("[BACKLOG_AGENT] Reviewing backlog quality with INVEST criteria...")
+
+    # Charger le contexte du projet
+    project_id = state.get("project_id", "")
+    storage = ProjectContextService()
+
+    try:
+        existing_items = storage.load_context(project_id)
+        print(f"[BACKLOG_AGENT] Loaded {len(existing_items)} existing work items")
+    except FileNotFoundError:
+        print("[BACKLOG_AGENT] No existing backlog found")
+        return {
+            "status": "error",
+            "result": f"No backlog found for project {project_id}",
+        }
+
+    # Filtrer uniquement les stories (pas les features ni les tasks)
+    stories = [item for item in existing_items if item.type == "user_story"]
+
+    if len(stories) == 0:
+        print("[BACKLOG_AGENT] No user stories found in backlog")
+        return {
+            "status": "completed",
+            "result": "No user stories found in backlog to analyze",
+        }
+
+    print(f"[BACKLOG_AGENT] Found {len(stories)} user stories to analyze")
+
+    # Charger le prompt
+    prompt_config = load_invest_analysis_prompt()
+
+    # Récupérer le modèle depuis l'environnement
+    model = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
+    temperature = float(os.getenv("LLM_TEMPERATURE", "0.0"))
+
+    print(f"[BACKLOG_AGENT] Using model: {model}")
+
+    # Préparer le contexte du projet
+    context_summary = f"Projet avec {len(existing_items)} work items dans le backlog ({len(stories)} user stories)"
+
+    modified_items = []
+
+    # Analyser chaque story
+    for story in stories:
+        print(f"[BACKLOG_AGENT] Analyzing story: {story.id} - {story.title}")
+
+        # Sauvegarder l'état "before"
+        item_before = story.model_copy(deep=True)
+
+        # Préparer le prompt utilisateur
+        user_prompt = prompt_config["user_prompt_template"].format(
+            title=story.title,
+            description=story.description or "",
+            context=context_summary,
+        )
+
+        try:
+            # Appeler le LLM
+            response = completion(
+                model=model,
+                messages=[
+                    {"role": "system", "content": prompt_config["system_prompt"]},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=temperature,
+            )
+
+            # Extraire la réponse
+            response_text = response.choices[0].message.content.strip()
+
+            print(f"[BACKLOG_AGENT] LLM response received for {story.id}")
+
+            # Parser la réponse JSON
+            analysis_result = json.loads(response_text)
+
+            if "invest_analysis" not in analysis_result:
+                print(f"[BACKLOG_AGENT] Warning: No 'invest_analysis' in response for {story.id}")
+                continue
+
+            invest_analysis = analysis_result["invest_analysis"]
+
+            print(f"[BACKLOG_AGENT] INVEST scores for {story.id}:")
+            for criterion, data in invest_analysis.items():
+                print(f"[BACKLOG_AGENT]   {criterion}: {data['score']:.2f} - {data['reason']}")
+
+            # Créer l'état "after" avec l'analyse INVEST dans les attributes
+            item_after = story.model_copy(deep=True)
+            item_after.attributes["invest_analysis"] = invest_analysis
+
+            # Ajouter à la liste des items modifiés
+            modified_items.append({
+                "before": item_before.model_dump(),
+                "after": item_after.model_dump(),
+            })
+
+        except json.JSONDecodeError as e:
+            print(f"[BACKLOG_AGENT] Error parsing JSON for {story.id}: {e}")
+            continue
+        except Exception as e:
+            print(f"[BACKLOG_AGENT] Error analyzing {story.id}: {e}")
+            continue
+
+    if len(modified_items) == 0:
+        print("[BACKLOG_AGENT] No stories were successfully analyzed")
+        return {
+            "status": "error",
+            "result": "Failed to analyze any stories",
+        }
+
+    # Construire l'ImpactPlan avec modified_items
+    impact_plan = {
+        "new_items": [],
+        "modified_items": modified_items,
+        "deleted_items": [],
+    }
+
+    print("[BACKLOG_AGENT] ImpactPlan created successfully")
+    print(f"[BACKLOG_AGENT] - {len(modified_items)} stories analyzed with INVEST criteria")
+    print("[BACKLOG_AGENT] Workflow paused, awaiting human approval")
+
+    return {
+        "impact_plan": impact_plan,
+        "status": "awaiting_approval",
+        "result": f"Analyzed {len(modified_items)} user stories with INVEST criteria",
+    }
