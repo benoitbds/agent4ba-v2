@@ -16,7 +16,6 @@ export default function Home() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
 
   // Load backlog on component mount
