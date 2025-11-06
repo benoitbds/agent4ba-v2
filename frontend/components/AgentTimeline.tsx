@@ -140,6 +140,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-semibold mb-4">Timeline d&apos;exécution</h2>
+      <div className="flex flex-col-reverse space-y-3 space-y-reverse">
       {events.map((event, index) => (
         <div key={event.id} className="relative">
           {/* Vertical line connecting events */}
@@ -168,6 +169,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
           </div>
         </div>
       ))}
+      </div>
     </div>
   );
 }

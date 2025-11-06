@@ -18,6 +18,7 @@ from agent4ba.api.events import (
     WorkflowCompleteEvent,
 )
 from agent4ba.api.schemas import ApprovalRequest, ChatRequest, ChatResponse
+from agent4ba.core.storage import ProjectContextService
 
 app = FastAPI(
     title="Agent4BA V2",
@@ -228,3 +229,31 @@ async def continue_workflow(thread_id: str, request: ApprovalRequest) -> ChatRes
         thread_id=None,  # Le workflow est terminé, plus besoin du thread_id
         impact_plan=None,
     )
+
+
+@app.get("/projects/{project_id}/backlog")
+async def get_project_backlog(project_id: str) -> JSONResponse:
+    """
+    Récupère le backlog actuel d'un projet.
+
+    Args:
+        project_id: Identifiant unique du projet
+
+    Returns:
+        JSONResponse contenant la liste des WorkItems du backlog
+
+    Raises:
+        HTTPException: Si le projet n'existe pas ou n'a pas de backlog
+    """
+    storage = ProjectContextService()
+
+    try:
+        work_items = storage.load_context(project_id)
+        # Convertir les WorkItems en dictionnaires pour la réponse JSON
+        work_items_data = [item.model_dump() for item in work_items]
+        return JSONResponse(content={"work_items": work_items_data})
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' not found or has no backlog: {e}",
+        ) from e
