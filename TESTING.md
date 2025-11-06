@@ -1,6 +1,169 @@
 # Guide de Test - Agent4BA V2
 
-## Test du Backlog Agent avec ImpactPlan
+## Test du Streaming SSE en Temps Réel
+
+L'endpoint `/chat` utilise maintenant Server-Sent Events (SSE) pour streamer les événements du workflow en temps réel. Cela permet aux UI de type "Agent Timeline" d'afficher la progression de l'exécution au fur et à mesure.
+
+### Prérequis
+
+1. Configurer une clé API LLM valide dans `.env`:
+   ```bash
+   cp .env.example .env
+   # Éditer .env et ajouter votre clé OpenAI ou Anthropic
+   ```
+
+2. Démarrer le serveur:
+   ```bash
+   poetry run uvicorn agent4ba.api.main:app --reload --port 8002
+   ```
+
+### Test SSE avec curl
+
+La commande suivante utilise l'option `-N` pour désactiver le buffering et afficher les événements en temps réel:
+
+```bash
+curl -N -X POST http://127.0.0.1:8002/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "demo",
+    "query": "Décompose l'\''objectif système de paiement en user stories"
+  }'
+```
+
+### Types d'événements SSE
+
+Chaque événement est formaté selon le protocole SSE: `data: {JSON}\n\n`
+
+#### 1. ThreadIdEvent (premier événement)
+```json
+data: {"type":"thread_id","thread_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890"}
+```
+**Importance:** Le client doit stocker ce thread_id pour pouvoir approuver/rejeter l'ImpactPlan ultérieurement.
+
+#### 2. NodeStartEvent
+```json
+data: {"type":"node_start","node_name":"entry_node"}
+data: {"type":"node_start","node_name":"intent_classifier_node"}
+data: {"type":"node_start","node_name":"router_node"}
+data: {"type":"node_start","node_name":"agent_node"}
+```
+
+#### 3. NodeEndEvent
+```json
+data: {"type":"node_end","node_name":"entry_node","output":{"project_id":"demo","user_query":"..."}}
+data: {"type":"node_end","node_name":"intent_classifier_node","output":{"intent":{"intent_id":"decompose_objective","confidence":0.95}}}
+data: {"type":"node_end","node_name":"router_node","output":{"next_node":"agent","agent_task":"decompose_objective"}}
+data: {"type":"node_end","node_name":"agent_node","output":{"impact_plan":{...},"status":"awaiting_approval"}}
+```
+
+#### 4. ImpactPlanReadyEvent (workflow en pause)
+```json
+data: {
+  "type": "impact_plan_ready",
+  "impact_plan": {
+    "new_items": [
+      {
+        "id": "temp-1",
+        "project_id": "demo",
+        "type": "feature",
+        "title": "Intégration du système de paiement",
+        "description": "...",
+        "attributes": {"priority": "high", "status": "todo", "points": 21}
+      }
+    ],
+    "modified_items": [],
+    "deleted_items": []
+  },
+  "thread_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "status": "awaiting_approval"
+}
+```
+
+#### 5. WorkflowCompleteEvent (workflow terminé sans pause)
+```json
+data: {"type":"workflow_complete","result":"Operation completed successfully","status":"completed"}
+```
+
+#### 6. ErrorEvent (en cas d'erreur)
+```json
+data: {"type":"error","error":"Connection timeout","details":"An error occurred during workflow execution"}
+```
+
+### Flux SSE typique pour décomposition d'objectif
+
+```
+data: {"type":"thread_id","thread_id":"xyz123"}
+
+data: {"type":"node_start","node_name":"entry_node"}
+
+data: {"type":"node_end","node_name":"entry_node","output":{...}}
+
+data: {"type":"node_start","node_name":"intent_classifier_node"}
+
+data: {"type":"node_end","node_name":"intent_classifier_node","output":{...}}
+
+data: {"type":"node_start","node_name":"router_node"}
+
+data: {"type":"node_end","node_name":"router_node","output":{...}}
+
+data: {"type":"node_start","node_name":"agent_node"}
+
+data: {"type":"node_end","node_name":"agent_node","output":{...}}
+
+data: {"type":"impact_plan_ready","impact_plan":{...},"thread_id":"xyz123","status":"awaiting_approval"}
+```
+
+### Intégration Frontend
+
+Pour une UI React/Vue/Angular, utilisez EventSource:
+
+```javascript
+const eventSource = new EventSource('http://localhost:8002/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ project_id: 'demo', query: 'Test' })
+});
+
+let threadId = null;
+
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  switch (data.type) {
+    case 'thread_id':
+      threadId = data.thread_id;
+      console.log('Thread ID:', threadId);
+      break;
+    case 'node_start':
+      console.log('Node started:', data.node_name);
+      break;
+    case 'node_end':
+      console.log('Node completed:', data.node_name);
+      break;
+    case 'impact_plan_ready':
+      console.log('ImpactPlan ready for approval');
+      // Afficher l'ImpactPlan à l'utilisateur
+      // Stocker threadId pour l'approbation
+      eventSource.close();
+      break;
+    case 'workflow_complete':
+      console.log('Workflow completed');
+      eventSource.close();
+      break;
+    case 'error':
+      console.error('Error:', data.error);
+      eventSource.close();
+      break;
+  }
+};
+
+eventSource.onerror = () => {
+  console.error('SSE connection error');
+  eventSource.close();
+};
+```
+
+## Test du Backlog Agent avec ImpactPlan (Workflow Complet)
 
 ### Prérequis
 
