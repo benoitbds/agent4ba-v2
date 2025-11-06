@@ -123,3 +123,20 @@ export async function getProjectBacklog(
 
   return response.json();
 }
+/**
+ * Get the list of available projects
+ */
+export async function getProjects(): Promise<string[]> {
+  const response = await fetch(`${API_URL}/projects`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
