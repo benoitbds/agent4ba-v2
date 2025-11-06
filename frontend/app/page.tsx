@@ -235,13 +235,6 @@ export default function Home() {
                 <BacklogView items={backlogItems} />
               )}
             </div>
-
-            {/* Timeline - only show if there are events */}
-            {timelineEvents.length > 0 && (
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <AgentTimeline events={timelineEvents} />
-              </div>
-            )}
           </div>
         </div>
       </main>
