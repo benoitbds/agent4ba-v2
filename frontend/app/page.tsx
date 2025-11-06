@@ -16,7 +16,6 @@ export default function Home() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
 
   // Load backlog on component mount
@@ -35,21 +34,6 @@ export default function Home() {
 
     loadBacklog();
   }, [projectId]);
-
-  // Load backlog on component mount
-  useEffect(() => {
-    const loadBacklog = async () => {
-      try {
-        const items = await getProjectBacklog(projectId);
-        setBacklogItems(items);
-      } catch (error) {
-        console.error("Failed to load backlog:", error);
-        // Optionally set an error state here
-      }
-    };
-
-    loadBacklog();
-  }, [projectId]); // Include projectId in dependencies
 
   const addTimelineEvent = (event: SSEEvent) => {
     const timelineEvent: TimelineEvent = {
@@ -199,25 +183,29 @@ export default function Home() {
               </div>
             )}
 
-            {/* Agent Timeline */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <AgentTimeline events={timelineEvents} />
-            </div>
-          </div>
-
-          {/* Right Column: Backlog and Timeline */}
-          <div className="space-y-6">
-            {/* Backlog */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <BacklogView items={backlogItems} />
-            </div>
-
-            {/* Timeline - only show if there are events */}
+            {/* Agent Timeline - only show if there are events */}
             {timelineEvents.length > 0 && (
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <AgentTimeline events={timelineEvents} />
               </div>
             )}
+          </div>
+
+          {/* Right Column: Backlog */}
+          <div className="space-y-6">
+            {/* Backlog */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              {isLoadingBacklog ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center gap-3">
+                    <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
+                    <p className="text-gray-600">Chargement du backlog...</p>
+                  </div>
+                </div>
+              ) : (
+                <BacklogView items={backlogItems} />
+              )}
+            </div>
           </div>
         </div>
       </main>
