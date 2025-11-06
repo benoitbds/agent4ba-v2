@@ -9,6 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
 export interface ChatRequest {
   project_id: string;
   query: string;
+  document_content?: string;
 }
 
 export interface ApprovalRequest {

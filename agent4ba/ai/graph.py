@@ -11,7 +11,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from litellm import completion
 
-from agent4ba.ai import backlog_agent
+from agent4ba.ai import backlog_agent, document_agent
 from agent4ba.core.storage import ProjectContextService
 
 # Charger les variables d'environnement
@@ -23,6 +23,7 @@ class GraphState(TypedDict):
 
     project_id: str
     user_query: str
+    document_content: str
     intent: dict[str, Any]
     next_node: str
     agent_task: str
@@ -257,10 +258,7 @@ def agent_node(state: GraphState) -> dict[str, Any]:
         }
 
     elif agent_task == "extract_features":
-        return {
-            "status": "completed",
-            "result": "Stub: Extracting features from documents (not yet implemented)",
-        }
+        return document_agent.extract_requirements(state)
 
     elif agent_task == "review_quality":
         return backlog_agent.review_quality(state)

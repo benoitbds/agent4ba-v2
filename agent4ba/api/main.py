@@ -72,6 +72,7 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         initial_state: dict[str, Any] = {
             "project_id": request.project_id,
             "user_query": request.query,
+            "document_content": request.document_content or "",
             "intent": {},
             "next_node": "",
             "agent_task": "",
