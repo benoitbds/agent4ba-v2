@@ -7,10 +7,12 @@ from typing import Any, Literal, TypedDict
 
 import yaml
 from dotenv import load_dotenv
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from litellm import completion
 
 from agent4ba.ai import backlog_agent
+from agent4ba.core.storage import ProjectContextService
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -26,6 +28,7 @@ class GraphState(TypedDict):
     agent_task: str
     impact_plan: dict[str, Any]
     status: str
+    approval_decision: bool | None
     result: str
 
 
@@ -292,19 +295,90 @@ def agent_node(state: GraphState) -> dict[str, Any]:
 
 def approval_node(state: GraphState) -> dict[str, Any]:
     """
-    Point d'interruption pour validation humaine.
+    Traite l'approbation ou le rejet de l'ImpactPlan.
 
-    Ce nœud ne fait rien, mais le graphe s'interrompt avant son exécution
-    grâce à interrupt_before=["approval"] lors de la compilation.
+    Ce nœud est atteint après la reprise du workflow suite à une décision humaine.
+    Il applique les changements de l'ImpactPlan si approuvé, sinon annule.
 
     Args:
         state: État actuel du graphe
 
     Returns:
-        Mise à jour partielle de l'état
+        Mise à jour partielle de l'état avec le résultat final
     """
-    print("[APPROVAL_NODE] Human validation received, continuing workflow...")
-    return {}
+    print("[APPROVAL_NODE] Processing approval decision...")
+
+    approval_decision = state.get("approval_decision")
+    project_id = state.get("project_id", "")
+
+    if approval_decision is None:
+        print("[APPROVAL_NODE] No approval decision found, workflow interrupted")
+        return {
+            "status": "interrupted",
+            "result": "Workflow interrupted, awaiting approval decision",
+        }
+
+    if not approval_decision:
+        print("[APPROVAL_NODE] ImpactPlan rejected by user")
+        return {
+            "status": "rejected",
+            "result": "ImpactPlan rejected. No changes were applied to the backlog.",
+        }
+
+    # L'utilisateur a approuvé, on applique l'ImpactPlan
+    print("[APPROVAL_NODE] ImpactPlan approved by user, applying changes...")
+
+    impact_plan = state.get("impact_plan", {})
+    new_items = impact_plan.get("new_items", [])
+    modified_items = impact_plan.get("modified_items", [])
+    deleted_items = impact_plan.get("deleted_items", [])
+
+    print(f"[APPROVAL_NODE] Changes to apply: {len(new_items)} new, "
+          f"{len(modified_items)} modified, {len(deleted_items)} deleted")
+
+    # Charger le backlog existant
+    storage = ProjectContextService()
+
+    try:
+        existing_items = storage.load_context(project_id)
+        print(f"[APPROVAL_NODE] Loaded {len(existing_items)} existing work items")
+    except FileNotFoundError:
+        existing_items = []
+        print("[APPROVAL_NODE] No existing backlog found, starting fresh")
+
+    # Pour l'instant, on gère uniquement new_items (ajouts simples)
+    # Les modified_items et deleted_items seront gérés dans de futures itérations
+    from agent4ba.core.models import WorkItem
+
+    # Convertir new_items en WorkItem si nécessaire
+    new_work_items = []
+    for item_data in new_items:
+        if isinstance(item_data, dict):
+            new_work_items.append(WorkItem(**item_data))
+        else:
+            new_work_items.append(item_data)
+
+    # Construire le nouveau backlog complet
+    updated_backlog = existing_items + new_work_items
+
+    print(f"[APPROVAL_NODE] New backlog size: {len(updated_backlog)} work items")
+
+    # Sauvegarder le nouveau backlog (crée une nouvelle version)
+    storage.save_backlog(project_id, updated_backlog)
+
+    # Déterminer le numéro de version qui a été créé
+    latest_version = storage._find_latest_backlog_version(project_id)
+
+    print(f"[APPROVAL_NODE] Successfully saved backlog_v{latest_version}.json")
+
+    return {
+        "status": "approved",
+        "result": (
+            f"ImpactPlan approved and applied successfully. "
+            f"Added {len(new_work_items)} new work items. "
+            f"Backlog saved as version {latest_version}."
+        ),
+    }
 
 
 def end_node(state: GraphState) -> dict[str, Any]:
@@ -364,6 +438,10 @@ workflow.add_conditional_edges(
 workflow.add_edge("approval", "end")
 workflow.add_edge("end", END)
 
+# Créer un checkpointer en mémoire pour gérer les états interrompus
+# Cela permet de reprendre l'exécution après une interruption
+checkpointer = MemorySaver()
+
 # Compilation du graphe avec interruption avant le nœud approval
 # Cela permet d'attendre la validation humaine avant de continuer
-app = workflow.compile(interrupt_before=["approval"])
+app = workflow.compile(checkpointer=checkpointer, interrupt_before=["approval"])

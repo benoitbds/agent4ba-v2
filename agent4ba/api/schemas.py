@@ -29,7 +29,27 @@ class ChatResponse(BaseModel):
     result: str = Field(..., description="Résultat de l'exécution")
     project_id: str = Field(..., description="Identifiant du projet")
     status: str | None = Field(None, description="Statut du workflow")
+    thread_id: str | None = Field(
+        None,
+        description="Identifiant de conversation pour reprendre le workflow",
+    )
     impact_plan: dict[str, Any] | None = Field(
         None,
         description="Plan d'impact en attente de validation (si workflow interrompu)",
     )
+
+
+class ApprovalRequest(BaseModel):
+    """Requête d'approbation ou de rejet d'un ImpactPlan."""
+
+    approved: bool = Field(..., description="True pour approuver, False pour rejeter")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "approved": True,
+                }
+            ]
+        }
+    }
