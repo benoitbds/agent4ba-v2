@@ -110,9 +110,10 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                     # Mettre à jour l'état accumulé avec la sortie du nœud
                     if isinstance(output, dict):
                         accumulated_state.update(output)
-
-                    end_event = NodeEndEvent(node_name=node_name, output=output)
-                    yield f"data: {end_event.model_dump_json()}\n\n"
+                        # Ne générer un NodeEndEvent que si la sortie est un dictionnaire
+                        # (les routeurs retournent des strings, on les filtre)
+                        end_event = NodeEndEvent(node_name=node_name, output=output)
+                        yield f"data: {end_event.model_dump_json()}\n\n"
 
         # Après avoir parcouru tous les événements, envoyer l'événement final
         result = accumulated_state.get("result", "")
