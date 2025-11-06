@@ -240,7 +240,7 @@ async def get_project_backlog(project_id: str) -> JSONResponse:
         project_id: Identifiant unique du projet
 
     Returns:
-        JSONResponse contenant la liste des WorkItems du backlog
+        JSONResponse avec la liste des work items du backlog
 
     Raises:
         HTTPException: Si le projet n'existe pas ou n'a pas de backlog
@@ -249,11 +249,11 @@ async def get_project_backlog(project_id: str) -> JSONResponse:
 
     try:
         work_items = storage.load_context(project_id)
-        # Convertir les WorkItems en dictionnaires pour la réponse JSON
-        work_items_data = [item.model_dump() for item in work_items]
-        return JSONResponse(content={"work_items": work_items_data})
+        # Convertir les WorkItem en dictionnaires
+        items_data = [item.model_dump() for item in work_items]
+        return JSONResponse(content=items_data)
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=404,
-            detail=f"Project '{project_id}' not found or has no backlog: {e}",
+            detail=f"Backlog not found for project '{project_id}': {e}",
         ) from e

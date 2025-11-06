@@ -10,6 +10,7 @@ import type { TimelineEvent, ImpactPlan, SSEEvent, WorkItem } from "@/types/even
 
 export default function Home() {
   const [projectId] = useState("diff-test");
+  const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [impactPlan, setImpactPlan] = useState<ImpactPlan | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -34,6 +35,21 @@ export default function Home() {
 
     loadBacklog();
   }, [projectId]);
+
+  // Load backlog on component mount
+  useEffect(() => {
+    const loadBacklog = async () => {
+      try {
+        const items = await getProjectBacklog(projectId);
+        setBacklogItems(items);
+      } catch (error) {
+        console.error("Failed to load backlog:", error);
+        // Optionally set an error state here
+      }
+    };
+
+    loadBacklog();
+  }, [projectId]); // Include projectId in dependencies
 
   const addTimelineEvent = (event: SSEEvent) => {
     const timelineEvent: TimelineEvent = {
@@ -94,12 +110,12 @@ export default function Home() {
       setImpactPlan(null);
       setThreadId(null);
 
-      // Refresh the backlog after approval
+      // Refresh backlog after approval
       try {
         const items = await getProjectBacklog(projectId);
         setBacklogItems(items);
       } catch (error) {
-        console.error("Error refreshing backlog:", error);
+        console.error("Failed to refresh backlog:", error);
       }
     } catch (error) {
       console.error("Error approving plan:", error);
@@ -189,17 +205,18 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right Column: Backlog */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            {isLoadingBacklog ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="flex items-center gap-3">
-                  <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full" />
-                  <p className="text-gray-600">Chargement du backlog...</p>
-                </div>
-              </div>
-            ) : (
+          {/* Right Column: Backlog and Timeline */}
+          <div className="space-y-6">
+            {/* Backlog */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
               <BacklogView items={backlogItems} />
+            </div>
+
+            {/* Timeline - only show if there are events */}
+            {timelineEvents.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <AgentTimeline events={timelineEvents} />
+              </div>
             )}
           </div>
         </div>

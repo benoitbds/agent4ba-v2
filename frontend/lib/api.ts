@@ -117,13 +117,8 @@ export async function getProjectBacklog(
   });
 
   if (!response.ok) {
-    // If project has no backlog yet, return empty array
-    if (response.status === 404) {
-      return [];
-    }
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  const data = await response.json();
-  return data.work_items || [];
+  return response.json();
 }

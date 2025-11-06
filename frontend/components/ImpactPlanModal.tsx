@@ -1,10 +1,7 @@
 "use client";
 
 import type { ImpactPlan, WorkItem, ModifiedItem } from "@/types/events";
-import { useState, useMemo } from "react";
-import { parseDiff, Diff, Hunk } from "react-diff-view";
-import { createPatch } from "diff";
-import "react-diff-view/style/index.css";
+import { useState } from "react";
 
 interface ImpactPlanModalProps {
   impactPlan: ImpactPlan;
@@ -14,27 +11,9 @@ interface ImpactPlanModalProps {
   isOpen: boolean;
 }
 
-// Composant pour afficher un item modifié avec diff visuel
+// Composant pour afficher un item modifié avec diff visuel simple
 function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }) {
   const { before, after } = modifiedItem;
-
-  // Générer le diff pour la description
-  const diffText = useMemo(() => {
-    const oldText = before.description || "";
-    const newText = after.description || "";
-
-    // Créer un diff unifié avec la bibliothèque diff
-    return createPatch("description", oldText, newText, "Avant", "Après");
-  }, [before.description, after.description]);
-
-  const files = useMemo(() => {
-    try {
-      return parseDiff(diffText);
-    } catch (e) {
-      console.error("Error parsing diff:", e);
-      return [];
-    }
-  }, [diffText]);
 
   return (
     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -62,19 +41,28 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }) {
             Modifications de la description
           </span>
         </div>
-        <div className="bg-white overflow-x-auto">
-          {files.map((file, index) => (
-            <Diff
-              key={index}
-              viewType="split"
-              diffType={file.type}
-              hunks={file.hunks}
-            >
-              {(hunks) =>
-                hunks.map((hunk) => <Hunk key={hunk.content} hunk={hunk} />)
-              }
-            </Diff>
-          ))}
+
+        {/* Split view with before/after */}
+        <div className="grid grid-cols-2 divide-x divide-gray-300">
+          {/* Before (left side) */}
+          <div className="bg-red-50">
+            <div className="bg-red-100 px-3 py-1 border-b border-red-200">
+              <span className="text-xs font-semibold text-red-800">Avant</span>
+            </div>
+            <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
+              {before.description || "(vide)"}
+            </div>
+          </div>
+
+          {/* After (right side) */}
+          <div className="bg-green-50">
+            <div className="bg-green-100 px-3 py-1 border-b border-green-200">
+              <span className="text-xs font-semibold text-green-800">Après</span>
+            </div>
+            <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
+              {after.description || "(vide)"}
+            </div>
+          </div>
         </div>
       </div>
 
