@@ -9,7 +9,7 @@ import { streamChatEvents, sendApprovalDecision, getProjectBacklog } from "@/lib
 import type { TimelineEvent, ImpactPlan, SSEEvent, WorkItem } from "@/types/events";
 
 export default function Home() {
-  const [projectId] = useState("demo");
+  const [projectId] = useState("diff-test");
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [impactPlan, setImpactPlan] = useState<ImpactPlan | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
