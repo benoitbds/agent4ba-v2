@@ -19,6 +19,34 @@ Installer les dépendances avec Poetry :
 poetry install
 ```
 
+## Configuration
+
+### Clés API LLM
+
+Le système utilise LiteLLM pour la classification d'intentions. Vous devez configurer une clé API pour utiliser un modèle LLM.
+
+1. Copier le fichier de configuration exemple :
+
+```bash
+cp .env.example .env
+```
+
+2. Éditer `.env` et ajouter votre clé API :
+
+```bash
+# Pour OpenAI (GPT-4o-mini - recommandé)
+OPENAI_API_KEY=sk-votre-clé-api-openai
+
+# OU pour Anthropic (Claude 3 Haiku)
+ANTHROPIC_API_KEY=sk-ant-votre-clé-api-anthropic
+
+# Choisir le modèle
+DEFAULT_LLM_MODEL=gpt-4o-mini  # ou "claude-3-haiku-20240307"
+LLM_TEMPERATURE=0.0
+```
+
+**Note:** Sans clé API valide, le système fonctionnera mais toutes les requêtes de classification échoueront gracieusement avec un message d'erreur approprié.
+
 ## Démarrage du serveur
 
 Lancer le serveur de développement :
@@ -126,15 +154,44 @@ service.save_backlog("demo", work_items)  # Crée backlog_v2.json
 
 ### Workflow LangGraph
 
-Le workflow est composé de 5 nœuds qui s'exécutent séquentiellement :
+Le workflow est composé de 5 nœuds qui s'exécutent de manière intelligente :
 
 1. **entry_node** - Point d'entrée qui reçoit la requête utilisateur
-2. **intent_classifier_node** - Classifie l'intention (stub pour le moment)
-3. **router_node** - Route vers le bon agent (stub pour le moment)
-4. **agent_node** - Exécute la logique métier (stub pour le moment)
+2. **intent_classifier_node** - Classifie l'intention avec un LLM (GPT-4o-mini ou Claude 3 Haiku)
+3. **router_node** - Route vers le bon agent selon l'intention détectée (routage conditionnel)
+4. **agent_node** - Exécute la logique métier appropriée (stub pour le moment)
 5. **end_node** - Point de sortie qui finalise le résultat
 
 Les logs de chaque nœud s'affichent dans la console pour suivre l'exécution.
+
+### Intentions Supportées
+
+Le classificateur d'intentions reconnaît les requêtes suivantes :
+
+| Intention | Description | Exemple de requête |
+|-----------|-------------|-------------------|
+| `generate_spec` | Générer une spécification complète | "Génère une spécification pour la story WI-001" |
+| `extract_features_from_docs` | Extraire des fonctionnalités depuis des documents | "Analyse ce document et extrais-en les fonctionnalités" |
+| `review_backlog_quality` | Revue qualité du backlog | "Fais une revue qualité de mon backlog" |
+| `search_requirements` | Chercher des exigences spécifiques | "Trouve toutes les stories liées à l'authentification" |
+| `decompose_objective` | Décomposer un objectif en user stories | "Décompose 'système de paiement' en user stories" |
+| `estimate_stories` | Estimer les story points | "Estime en story points les items du backlog" |
+| `improve_item_description` | Améliorer une description | "Améliore la description de WI-002" |
+
+**Tester les intentions :**
+
+```bash
+# Démarrer le serveur
+poetry run uvicorn agent4ba.api.main:app --reload
+
+# Dans un autre terminal, tester avec curl
+curl -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"project_id": "demo", "query": "Génère une spécification complète pour la story WI-001"}'
+
+# Ou utiliser le script de test
+poetry run python test_intents.py
+```
 
 ## Développement
 

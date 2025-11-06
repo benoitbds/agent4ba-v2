@@ -42,6 +42,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
         "project_id": request.project_id,
         "user_query": request.query,
         "intent": {},
+        "next_node": "",
+        "agent_task": "",
         "result": "",
     }
 
