@@ -261,10 +261,7 @@ def agent_node(state: GraphState) -> dict[str, Any]:
         return document_agent.extract_requirements(state)
 
     elif agent_task == "review_quality":
-        return {
-            "status": "completed",
-            "result": "Stub: Reviewing backlog quality (not yet implemented)",
-        }
+        return backlog_agent.review_quality(state)
 
     elif agent_task == "search_requirements":
         return {
