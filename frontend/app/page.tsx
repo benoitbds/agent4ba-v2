@@ -189,19 +189,12 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right Column: Backlog and Timeline */}
+          {/* Right Column: Backlog */}
           <div className="space-y-6">
             {/* Backlog */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <BacklogView items={backlogItems} />
             </div>
-
-            {/* Timeline - only show if there are events */}
-            {timelineEvents.length > 0 && (
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <AgentTimeline events={timelineEvents} />
-              </div>
-            )}
           </div>
         </div>
       </main>
