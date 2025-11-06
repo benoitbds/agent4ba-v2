@@ -2,7 +2,7 @@
  * API utilities for communicating with Agent4BA backend
  */
 
-import type { SSEEvent } from "@/types/events";
+import type { SSEEvent, WorkItem } from "@/types/events";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
 
@@ -94,6 +94,26 @@ export async function sendApprovalDecision(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ approved }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get the current backlog for a project
+ */
+export async function getProjectBacklog(
+  projectId: string
+): Promise<WorkItem[]> {
+  const response = await fetch(`${API_URL}/projects/${projectId}/backlog`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
   });
 
   if (!response.ok) {

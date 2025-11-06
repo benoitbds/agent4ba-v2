@@ -1,19 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ChatInput from "@/components/ChatInput";
 import AgentTimeline from "@/components/AgentTimeline";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
-import { streamChatEvents, sendApprovalDecision } from "@/lib/api";
-import type { TimelineEvent, ImpactPlan, SSEEvent } from "@/types/events";
+import BacklogView from "@/components/BacklogView";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog } from "@/lib/api";
+import type { TimelineEvent, ImpactPlan, SSEEvent, WorkItem } from "@/types/events";
 
 export default function Home() {
-  const [projectId] = useState("demo");
+  const [projectId] = useState("diff-test");
+  const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [impactPlan, setImpactPlan] = useState<ImpactPlan | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  // Load backlog on component mount
+  useEffect(() => {
+    const loadBacklog = async () => {
+      try {
+        const items = await getProjectBacklog(projectId);
+        setBacklogItems(items);
+      } catch (error) {
+        console.error("Failed to load backlog:", error);
+        // Optionally set an error state here
+      }
+    };
+
+    loadBacklog();
+  }, [projectId]); // Include projectId in dependencies
 
   const addTimelineEvent = (event: SSEEvent) => {
     const timelineEvent: TimelineEvent = {
@@ -73,6 +90,14 @@ export default function Home() {
       setStatusMessage(`Approuvé: ${response.result}`);
       setImpactPlan(null);
       setThreadId(null);
+
+      // Refresh backlog after approval
+      try {
+        const items = await getProjectBacklog(projectId);
+        setBacklogItems(items);
+      } catch (error) {
+        console.error("Failed to refresh backlog:", error);
+      }
     } catch (error) {
       console.error("Error approving plan:", error);
       setStatusMessage(
@@ -155,9 +180,19 @@ export default function Home() {
             )}
           </div>
 
-          {/* Right Column: Timeline */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <AgentTimeline events={timelineEvents} />
+          {/* Right Column: Backlog and Timeline */}
+          <div className="space-y-6">
+            {/* Backlog */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <BacklogView items={backlogItems} />
+            </div>
+
+            {/* Timeline - only show if there are events */}
+            {timelineEvents.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <AgentTimeline events={timelineEvents} />
+              </div>
+            )}
           </div>
         </div>
       </main>
