@@ -1,5 +1,7 @@
 """API schemas for Agent4BA."""
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -26,3 +28,8 @@ class ChatResponse(BaseModel):
 
     result: str = Field(..., description="Résultat de l'exécution")
     project_id: str = Field(..., description="Identifiant du projet")
+    status: str | None = Field(None, description="Statut du workflow")
+    impact_plan: dict[str, Any] | None = Field(
+        None,
+        description="Plan d'impact en attente de validation (si workflow interrompu)",
+    )

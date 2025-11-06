@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 from langgraph.graph import END, StateGraph
 from litellm import completion
 
+from agent4ba.ai import backlog_agent
+
 # Charger les variables d'environnement
 load_dotenv()
 
@@ -22,6 +24,8 @@ class GraphState(TypedDict):
     intent: dict[str, Any]
     next_node: str
     agent_task: str
+    impact_plan: dict[str, Any]
+    status: str
     result: str
 
 
@@ -190,7 +194,7 @@ def should_continue_to_agent(
     state: GraphState,
 ) -> Literal["agent", "end"]:
     """
-    Fonction de routage conditionnel.
+    Fonction de routage conditionnel depuis le router.
 
     Args:
         state: État actuel du graphe
@@ -200,6 +204,27 @@ def should_continue_to_agent(
     """
     next_node = state.get("next_node", "end")
     return "agent" if next_node == "agent" else "end"
+
+
+def should_continue_after_agent(
+    state: GraphState,
+) -> Literal["approval", "end"]:
+    """
+    Fonction de routage conditionnel après l'agent.
+
+    Si le status est "awaiting_approval", on va vers le nœud approval
+    qui déclenche une interruption pour validation humaine.
+
+    Args:
+        state: État actuel du graphe
+
+    Returns:
+        Nom du prochain nœud
+    """
+    status = state.get("status", "completed")
+    if status == "awaiting_approval":
+        return "approval"
+    return "end"
 
 
 def agent_node(state: GraphState) -> dict[str, Any]:
@@ -213,29 +238,73 @@ def agent_node(state: GraphState) -> dict[str, Any]:
         Mise à jour partielle de l'état avec le résultat
     """
     agent_task = state.get("agent_task", "unknown_task")
-    intent = state.get("intent", {})
 
-    print("[AGENT_NODE] Executing agent logic...")
+    print("[AGENT_NODE] Routing to specific agent...")
     print(f"[AGENT_NODE] Agent task: {agent_task}")
-    print(f"[AGENT_NODE] Processing query: {state['user_query']}")
-    print(f"[AGENT_NODE] Intent args: {intent.get('args', {})}")
 
-    # Stub: génération d'un résultat basé sur la tâche
-    task_descriptions = {
-        "generate_specification": "Generating detailed specification",
-        "extract_features": "Extracting features from documents",
-        "review_quality": "Reviewing backlog quality",
-        "search_requirements": "Searching requirements",
-        "decompose_objective": "Decomposing objective into stories",
-        "estimate_stories": "Estimating story points",
-        "improve_description": "Improving work item description",
-    }
+    # Router vers le bon agent selon la tâche
+    if agent_task == "decompose_objective":
+        return backlog_agent.decompose_objective(state)
 
-    task_desc = task_descriptions.get(agent_task, "Processing request")
-    result = f"{task_desc} for query: '{state['user_query']}' (project: {state['project_id']})"
+    # Stubs pour les autres agents (à implémenter)
+    elif agent_task == "generate_specification":
+        return {
+            "status": "completed",
+            "result": "Stub: Generating detailed specification (not yet implemented)",
+        }
 
-    print(f"[AGENT_NODE] Generated result: {result}")
-    return {"result": result}
+    elif agent_task == "extract_features":
+        return {
+            "status": "completed",
+            "result": "Stub: Extracting features from documents (not yet implemented)",
+        }
+
+    elif agent_task == "review_quality":
+        return {
+            "status": "completed",
+            "result": "Stub: Reviewing backlog quality (not yet implemented)",
+        }
+
+    elif agent_task == "search_requirements":
+        return {
+            "status": "completed",
+            "result": "Stub: Searching requirements (not yet implemented)",
+        }
+
+    elif agent_task == "estimate_stories":
+        return {
+            "status": "completed",
+            "result": "Stub: Estimating story points (not yet implemented)",
+        }
+
+    elif agent_task == "improve_description":
+        return {
+            "status": "completed",
+            "result": "Stub: Improving work item description (not yet implemented)",
+        }
+
+    else:
+        return {
+            "status": "error",
+            "result": f"Unknown agent task: {agent_task}",
+        }
+
+
+def approval_node(state: GraphState) -> dict[str, Any]:
+    """
+    Point d'interruption pour validation humaine.
+
+    Ce nœud ne fait rien, mais le graphe s'interrompt avant son exécution
+    grâce à interrupt_before=["approval"] lors de la compilation.
+
+    Args:
+        state: État actuel du graphe
+
+    Returns:
+        Mise à jour partielle de l'état
+    """
+    print("[APPROVAL_NODE] Human validation received, continuing workflow...")
+    return {}
 
 
 def end_node(state: GraphState) -> dict[str, Any]:
@@ -250,6 +319,7 @@ def end_node(state: GraphState) -> dict[str, Any]:
     """
     print("[END_NODE] Workflow completed")
     print(f"[END_NODE] Final result: {state.get('result', 'No result')}")
+    print(f"[END_NODE] Status: {state.get('status', 'unknown')}")
     return {}
 
 
@@ -261,6 +331,7 @@ workflow.add_node("entry", entry_node)
 workflow.add_node("intent_classifier", intent_classifier_node)
 workflow.add_node("router", router_node)
 workflow.add_node("agent", agent_node)
+workflow.add_node("approval", approval_node)
 workflow.add_node("end", end_node)
 
 # Définition des arêtes (flux)
@@ -278,8 +349,21 @@ workflow.add_conditional_edges(
     },
 )
 
-workflow.add_edge("agent", "end")
+# Routage conditionnel après l'agent
+# Si status == "awaiting_approval", on va vers approval (avec interruption)
+# Sinon, on va directement vers end
+workflow.add_conditional_edges(
+    "agent",
+    should_continue_after_agent,
+    {
+        "approval": "approval",
+        "end": "end",
+    },
+)
+
+workflow.add_edge("approval", "end")
 workflow.add_edge("end", END)
 
-# Compilation du graphe
-app = workflow.compile()
+# Compilation du graphe avec interruption avant le nœud approval
+# Cela permet d'attendre la validation humaine avant de continuer
+app = workflow.compile(interrupt_before=["approval"])

@@ -44,6 +44,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
         "intent": {},
         "next_node": "",
         "agent_task": "",
+        "impact_plan": {},
+        "status": "",
         "result": "",
     }
 
@@ -56,10 +58,24 @@ async def chat(request: ChatRequest) -> ChatResponse:
             if isinstance(node_updates, dict):
                 accumulated_state.update(node_updates)
 
-    # Extraire le résultat final
+    # Extraire les informations finales
     result = accumulated_state.get("result", "")
+    status = accumulated_state.get("status", "completed")
+    impact_plan = accumulated_state.get("impact_plan", {})
 
+    # Si le workflow est en attente de validation, retourner l'ImpactPlan
+    if status == "awaiting_approval" and impact_plan:
+        return ChatResponse(
+            result=result if result else "ImpactPlan generated, awaiting approval",
+            project_id=request.project_id,
+            status=status,
+            impact_plan=impact_plan,
+        )
+
+    # Sinon, retourner le résultat normal
     return ChatResponse(
         result=result if result else "Workflow completed without result",
         project_id=request.project_id,
+        status=status,
+        impact_plan=None,
     )
