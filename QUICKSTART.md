@@ -259,24 +259,20 @@ cat .env
 
 **Erreur:** `Failed to fetch` dans la console
 
-1. Vérifier que le backend est lancé sur le port 8002
+1. Vérifier que le backend est lancé sur le port 8002:
+   ```bash
+   curl http://localhost:8002/health
+   # Devrait retourner: {"status":"ok"}
+   ```
+
 2. Vérifier la configuration dans `frontend/.env.local`:
    ```
    NEXT_PUBLIC_API_URL=http://localhost:8002
    ```
-3. Ajouter les CORS au backend (si nécessaire):
-   ```python
-   # Dans agent4ba/api/main.py
-   from fastapi.middleware.cors import CORSMiddleware
 
-   app.add_middleware(
-       CORSMiddleware,
-       allow_origins=["http://localhost:3000"],
-       allow_credentials=True,
-       allow_methods=["*"],
-       allow_headers=["*"],
-   )
-   ```
+3. Vérifier les logs du backend pour les erreurs CORS ou autres
+   - Le backend est déjà configuré avec CORS pour `http://localhost:3000`
+   - Si vous changez le port du frontend, mettez à jour `allow_origins` dans `agent4ba/api/main.py`
 
 ### Stream SSE s'arrête prématurément
 

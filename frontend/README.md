@@ -167,17 +167,16 @@ Retourne:
 
 ### Erreur CORS
 
-Si vous rencontrez des erreurs CORS, ajouter les headers CORS dans le backend FastAPI:
+Le backend FastAPI est déjà configuré avec CORS pour `http://localhost:3000`.
+
+Si vous changez le port du frontend (par exemple 3001), vous devez mettre à jour la configuration CORS dans `agent4ba/api/main.py`:
 
 ```python
-from fastapi.middleware.cors import CORSMiddleware
-
+# Dans agent4ba/api/main.py, modifier allow_origins:
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["http://localhost:3001"],  # Nouveau port
+    ...
 )
 ```
 
