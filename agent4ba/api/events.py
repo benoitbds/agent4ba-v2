@@ -1,0 +1,90 @@
+"""
+Schémas d'événements pour le streaming SSE.
+
+Ce module définit les structures de données pour les événements
+envoyés au client via Server-Sent Events (SSE).
+"""
+
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+
+class StreamEvent(BaseModel):
+    """Base class pour tous les événements SSE."""
+
+    type: str = Field(..., description="Type de l'événement")
+
+
+class ThreadIdEvent(StreamEvent):
+    """Événement envoyé au début du stream avec l'identifiant de thread."""
+
+    type: str = Field(default="thread_id", description="Type d'événement")
+    thread_id: str = Field(..., description="Identifiant unique du thread de conversation")
+
+
+class NodeStartEvent(StreamEvent):
+    """Événement indiquant le début d'exécution d'un nœud."""
+
+    type: str = Field(default="node_start", description="Type d'événement")
+    node_name: str = Field(..., description="Nom du nœud qui démarre")
+
+
+class NodeEndEvent(StreamEvent):
+    """Événement indiquant la fin d'exécution d'un nœud."""
+
+    type: str = Field(default="node_end", description="Type d'événement")
+    node_name: str = Field(..., description="Nom du nœud qui se termine")
+    output: dict[str, Any] | None = Field(
+        default=None,
+        description="Données de sortie du nœud",
+    )
+
+
+class LLMStartEvent(StreamEvent):
+    """Événement indiquant le début d'un appel LLM."""
+
+    type: str = Field(default="llm_start", description="Type d'événement")
+    model: str | None = Field(None, description="Nom du modèle LLM utilisé")
+
+
+class LLMTokenEvent(StreamEvent):
+    """Événement contenant un token streamé du LLM."""
+
+    type: str = Field(default="llm_token", description="Type d'événement")
+    token: str = Field(..., description="Token généré par le LLM")
+
+
+class LLMEndEvent(StreamEvent):
+    """Événement indiquant la fin d'un appel LLM."""
+
+    type: str = Field(default="llm_end", description="Type d'événement")
+    content: str | None = Field(None, description="Contenu complet généré par le LLM")
+
+
+class ImpactPlanReadyEvent(StreamEvent):
+    """Événement envoyé quand un ImpactPlan est prêt pour validation."""
+
+    type: str = Field(default="impact_plan_ready", description="Type d'événement")
+    impact_plan: dict[str, Any] = Field(..., description="Plan d'impact généré")
+    thread_id: str = Field(..., description="Identifiant du thread pour validation")
+    status: str = Field(
+        default="awaiting_approval",
+        description="Statut du workflow",
+    )
+
+
+class WorkflowCompleteEvent(StreamEvent):
+    """Événement indiquant la fin du workflow."""
+
+    type: str = Field(default="workflow_complete", description="Type d'événement")
+    result: str = Field(..., description="Résultat final du workflow")
+    status: str = Field(..., description="Statut final")
+
+
+class ErrorEvent(StreamEvent):
+    """Événement indiquant une erreur pendant l'exécution."""
+
+    type: str = Field(default="error", description="Type d'événement")
+    error: str = Field(..., description="Message d'erreur")
+    details: str | None = Field(None, description="Détails supplémentaires sur l'erreur")
