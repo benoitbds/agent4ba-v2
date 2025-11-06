@@ -9,6 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
 export interface ChatRequest {
   project_id: string;
   query: string;
+  document_content?: string;
 }
 
 export interface ApprovalRequest {
@@ -110,6 +111,23 @@ export async function getProjectBacklog(
   projectId: string
 ): Promise<WorkItem[]> {
   const response = await fetch(`${API_URL}/projects/${projectId}/backlog`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+/**
+ * Get the list of available projects
+ */
+export async function getProjects(): Promise<string[]> {
+  const response = await fetch(`${API_URL}/projects`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",

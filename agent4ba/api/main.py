@@ -72,6 +72,7 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         initial_state: dict[str, Any] = {
             "project_id": request.project_id,
             "user_query": request.query,
+            "document_content": request.document_content or "",
             "intent": {},
             "next_node": "",
             "agent_task": "",
@@ -229,6 +230,33 @@ async def continue_workflow(thread_id: str, request: ApprovalRequest) -> ChatRes
         thread_id=None,  # Le workflow est terminé, plus besoin du thread_id
         impact_plan=None,
     )
+
+
+@app.get("/projects")
+async def list_projects() -> JSONResponse:
+    """
+    Liste tous les projets disponibles.
+
+    Returns:
+        JSONResponse avec la liste des identifiants de projets
+
+    """
+    storage = ProjectContextService()
+    projects_dir = storage.base_path
+
+    # Créer le répertoire s'il n'existe pas
+    projects_dir.mkdir(parents=True, exist_ok=True)
+
+    # Scanner les sous-répertoires
+    project_ids = []
+    for entry in projects_dir.iterdir():
+        if entry.is_dir():
+            project_ids.append(entry.name)
+
+    # Trier par ordre alphabétique
+    project_ids.sort()
+
+    return JSONResponse(content=project_ids)
 
 
 @app.get("/projects/{project_id}/backlog")

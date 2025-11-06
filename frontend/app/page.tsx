@@ -5,11 +5,13 @@ import ChatInput from "@/components/ChatInput";
 import AgentTimeline from "@/components/AgentTimeline";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
 import BacklogView from "@/components/BacklogView";
-import { streamChatEvents, sendApprovalDecision, getProjectBacklog } from "@/lib/api";
+import ProjectSelector from "@/components/ProjectSelector";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects } from "@/lib/api";
 import type { TimelineEvent, ImpactPlan, SSEEvent, WorkItem } from "@/types/events";
 
 export default function Home() {
-  const [projectId] = useState("diff-test");
+  const [projects, setProjects] = useState<string[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string>("");
   const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [impactPlan, setImpactPlan] = useState<ImpactPlan | null>(null);
@@ -18,22 +20,23 @@ export default function Home() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
 
-  // Load backlog on component mount
+  // Load projects list on component mount
   useEffect(() => {
-    const loadBacklog = async () => {
-      setIsLoadingBacklog(true);
+    const loadProjects = async () => {
       try {
-        const items = await getProjectBacklog(projectId);
-        setBacklogItems(items);
+        const projectsList = await getProjects();
+        setProjects(projectsList);
+        // Initialize with first project if available
+        if (projectsList.length > 0) {
+          setSelectedProject(projectsList[0]);
+        }
       } catch (error) {
-        console.error("Error loading backlog:", error);
-      } finally {
-        setIsLoadingBacklog(false);
+        console.error("Error loading projects:", error);
       }
     };
 
-    loadBacklog();
-  }, [projectId]);
+    loadProjects();
+  }, []);
 
   const addTimelineEvent = (event: SSEEvent) => {
     const timelineEvent: TimelineEvent = {
@@ -44,7 +47,7 @@ export default function Home() {
     setTimelineEvents((prev) => [...prev, timelineEvent]);
   };
 
-  const handleChatSubmit = async (query: string) => {
+  const handleChatSubmit = async (query: string, documentContent?: string) => {
     // Reset state
     setTimelineEvents([]);
     setImpactPlan(null);
@@ -54,7 +57,11 @@ export default function Home() {
 
     try {
       // Stream events from backend
-      for await (const event of streamChatEvents({ project_id: projectId, query })) {
+      for await (const event of streamChatEvents({
+        project_id: selectedProject,
+        query,
+        document_content: documentContent,
+      })) {
         addTimelineEvent(event);
 
         // Handle special events
@@ -96,7 +103,7 @@ export default function Home() {
 
       // Refresh backlog after approval
       try {
-        const items = await getProjectBacklog(projectId);
+        const items = await getProjectBacklog(selectedProject);
         setBacklogItems(items);
       } catch (error) {
         console.error("Failed to refresh backlog:", error);
@@ -134,12 +141,18 @@ export default function Home() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Agent4BA - AI Backlog Assistant
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Projet: <span className="font-semibold">{projectId}</span>
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Agent4BA - AI Backlog Assistant
+              </h1>
+            </div>
+            <ProjectSelector
+              projects={projects}
+              selectedProject={selectedProject}
+              onProjectChange={setSelectedProject}
+            />
+          </div>
         </div>
       </header>
 

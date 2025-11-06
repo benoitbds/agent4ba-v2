@@ -5,7 +5,7 @@
 export interface WorkItem {
   id: string;
   project_id: string;
-  type: "feature" | "user_story" | "task";
+  type: "feature" | "story" | "task";
   title: string;
   description: string;
   parent_id: string | null;

@@ -10,6 +10,9 @@ class ChatRequest(BaseModel):
 
     project_id: str = Field(..., description="Identifiant du projet")
     query: str = Field(..., description="Question ou commande de l'utilisateur")
+    document_content: str | None = Field(
+        None, description="Contenu optionnel d'un document à analyser"
+    )
 
     model_config = {
         "json_schema_extra": {
