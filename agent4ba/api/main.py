@@ -28,7 +28,10 @@ app = FastAPI(
 # Configuration CORS - DOIT être la première chose ajoutée après la création de app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Autorise l'origine du front-end Next.js
+    allow_origins=[
+        "http://localhost:3000",  # Frontend Next.js (port par défaut)
+        "http://localhost:3001",  # Frontend Next.js (port alternatif)
+    ],
     allow_credentials=True,
     allow_methods=["*"],  # Autorise toutes les méthodes (GET, POST, etc.)
     allow_headers=["*"],  # Autorise tous les headers
