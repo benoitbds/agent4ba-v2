@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from agent4ba.ai.graph import app as workflow_app
@@ -22,6 +23,15 @@ app = FastAPI(
     title="Agent4BA V2",
     description="Backend pour la gestion de backlog assistée par IA",
     version="0.1.0",
+)
+
+# Configuration CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Autorise l'origine du front-end Next.js
+    allow_credentials=True,
+    allow_methods=["*"],  # Autorise toutes les méthodes (GET, POST, etc.)
+    allow_headers=["*"],  # Autorise tous les headers
 )
 
 
