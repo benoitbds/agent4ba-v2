@@ -60,7 +60,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }) {
           className={`px-2 py-1 text-xs font-semibold rounded ${
             before.type === "feature"
               ? "bg-purple-200 text-purple-800"
-              : before.type === "user_story"
+              : before.type === "story"
               ? "bg-blue-200 text-blue-800"
               : "bg-green-200 text-green-800"
           }`}
@@ -205,7 +205,7 @@ export default function ImpactPlanModal({
           className={`px-2 py-1 text-xs font-semibold rounded ${
             item.type === "feature"
               ? "bg-purple-200 text-purple-800"
-              : item.type === "user_story"
+              : item.type === "story"
               ? "bg-blue-200 text-blue-800"
               : "bg-green-200 text-green-800"
           }`}

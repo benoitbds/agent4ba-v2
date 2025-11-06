@@ -338,7 +338,7 @@ def review_quality(state: Any) -> dict[str, Any]:
         }
 
     # Filtrer uniquement les stories (pas les features ni les tasks)
-    stories = [item for item in existing_items if item.type == "user_story"]
+    stories = [item for item in existing_items if item.type == "story"]
 
     if len(stories) == 0:
         print("[BACKLOG_AGENT] No user stories found in backlog")

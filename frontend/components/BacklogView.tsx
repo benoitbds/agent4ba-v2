@@ -65,7 +65,7 @@ export default function BacklogView({ items }: BacklogViewProps) {
                   className={`px-2 py-1 text-xs font-semibold rounded ${
                     item.type === "feature"
                       ? "bg-purple-200 text-purple-800"
-                      : item.type === "user_story"
+                      : item.type === "story"
                       ? "bg-blue-200 text-blue-800"
                       : "bg-green-200 text-green-800"
                   }`}
