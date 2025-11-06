@@ -38,26 +38,6 @@ export default function Home() {
     loadProjects();
   }, []);
 
-  // Load backlog when selected project changes
-  useEffect(() => {
-    if (!selectedProject) return;
-
-    const loadBacklog = async () => {
-      setIsLoadingBacklog(true);
-      try {
-        const items = await getProjectBacklog(selectedProject);
-        setBacklogItems(items);
-      } catch (error) {
-        console.error("Error loading backlog:", error);
-        setBacklogItems([]);
-      } finally {
-        setIsLoadingBacklog(false);
-      }
-    };
-
-    loadBacklog();
-  }, [selectedProject]);
-
   const addTimelineEvent = (event: SSEEvent) => {
     const timelineEvent: TimelineEvent = {
       id: `${Date.now()}-${Math.random()}`,
@@ -216,10 +196,12 @@ export default function Home() {
               </div>
             )}
 
-            {/* Agent Timeline */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <AgentTimeline events={timelineEvents} />
-            </div>
+            {/* Agent Timeline - only show if there are events */}
+            {timelineEvents.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <AgentTimeline events={timelineEvents} />
+              </div>
+            )}
           </div>
 
           {/* Right Column: Backlog */}
@@ -227,9 +209,11 @@ export default function Home() {
             {/* Backlog */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               {isLoadingBacklog ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full" />
-                  <p className="ml-3 text-gray-600">Chargement du backlog...</p>
+                <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center gap-3">
+                    <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
+                    <p className="text-gray-600">Chargement du backlog...</p>
+                  </div>
                 </div>
               ) : (
                 <BacklogView items={backlogItems} />
