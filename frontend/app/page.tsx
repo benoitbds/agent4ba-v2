@@ -16,6 +16,25 @@ export default function Home() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
+  const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
+
+  // Load backlog on component mount
+  useEffect(() => {
+    const loadBacklog = async () => {
+      setIsLoadingBacklog(true);
+      try {
+        const items = await getProjectBacklog(projectId);
+        setBacklogItems(items);
+      } catch (error) {
+        console.error("Error loading backlog:", error);
+      } finally {
+        setIsLoadingBacklog(false);
+      }
+    };
+
+    loadBacklog();
+  }, [projectId]);
 
   // Load backlog on component mount
   useEffect(() => {
@@ -143,8 +162,9 @@ export default function Home() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column: Chat Input */}
+          {/* Left Column: Interaction */}
           <div className="space-y-6">
+            {/* Chat Input */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold mb-4">
                 Nouvelle demande
@@ -178,6 +198,11 @@ export default function Home() {
                 </div>
               </div>
             )}
+
+            {/* Agent Timeline */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <AgentTimeline events={timelineEvents} />
+            </div>
           </div>
 
           {/* Right Column: Backlog and Timeline */}
