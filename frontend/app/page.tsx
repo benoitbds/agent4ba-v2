@@ -38,6 +38,26 @@ export default function Home() {
     loadProjects();
   }, []);
 
+  // Load backlog when selected project changes
+  useEffect(() => {
+    if (!selectedProject) return;
+
+    const loadBacklog = async () => {
+      setIsLoadingBacklog(true);
+      try {
+        const items = await getProjectBacklog(selectedProject);
+        setBacklogItems(items);
+      } catch (error) {
+        console.error("Error loading backlog:", error);
+        setBacklogItems([]);
+      } finally {
+        setIsLoadingBacklog(false);
+      }
+    };
+
+    loadBacklog();
+  }, [selectedProject]);
+
   const addTimelineEvent = (event: SSEEvent) => {
     const timelineEvent: TimelineEvent = {
       id: `${Date.now()}-${Math.random()}`,
