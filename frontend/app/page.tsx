@@ -5,11 +5,13 @@ import ChatInput from "@/components/ChatInput";
 import AgentTimeline from "@/components/AgentTimeline";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
 import BacklogView from "@/components/BacklogView";
-import { streamChatEvents, sendApprovalDecision, getProjectBacklog } from "@/lib/api";
+import ProjectSelector from "@/components/ProjectSelector";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects } from "@/lib/api";
 import type { TimelineEvent, ImpactPlan, SSEEvent, WorkItem } from "@/types/events";
 
 export default function Home() {
-  const [projectId] = useState("diff-test");
+  const [projects, setProjects] = useState<string[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string>("");
   const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [impactPlan, setImpactPlan] = useState<ImpactPlan | null>(null);
@@ -18,22 +20,43 @@ export default function Home() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
 
-  // Load backlog on component mount
+  // Load projects list on component mount
   useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const projectsList = await getProjects();
+        setProjects(projectsList);
+        // Initialize with first project if available
+        if (projectsList.length > 0) {
+          setSelectedProject(projectsList[0]);
+        }
+      } catch (error) {
+        console.error("Error loading projects:", error);
+      }
+    };
+
+    loadProjects();
+  }, []);
+
+  // Load backlog when selected project changes
+  useEffect(() => {
+    if (!selectedProject) return;
+
     const loadBacklog = async () => {
       setIsLoadingBacklog(true);
       try {
-        const items = await getProjectBacklog(projectId);
+        const items = await getProjectBacklog(selectedProject);
         setBacklogItems(items);
       } catch (error) {
         console.error("Error loading backlog:", error);
+        setBacklogItems([]);
       } finally {
         setIsLoadingBacklog(false);
       }
     };
 
     loadBacklog();
-  }, [projectId]);
+  }, [selectedProject]);
 
   const addTimelineEvent = (event: SSEEvent) => {
     const timelineEvent: TimelineEvent = {
@@ -55,7 +78,7 @@ export default function Home() {
     try {
       // Stream events from backend
       for await (const event of streamChatEvents({
-        project_id: projectId,
+        project_id: selectedProject,
         query,
         document_content: documentContent,
       })) {
@@ -100,7 +123,7 @@ export default function Home() {
 
       // Refresh backlog after approval
       try {
-        const items = await getProjectBacklog(projectId);
+        const items = await getProjectBacklog(selectedProject);
         setBacklogItems(items);
       } catch (error) {
         console.error("Failed to refresh backlog:", error);
@@ -138,12 +161,18 @@ export default function Home() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Agent4BA - AI Backlog Assistant
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Projet: <span className="font-semibold">{projectId}</span>
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Agent4BA - AI Backlog Assistant
+              </h1>
+            </div>
+            <ProjectSelector
+              projects={projects}
+              selectedProject={selectedProject}
+              onProjectChange={setSelectedProject}
+            />
+          </div>
         </div>
       </header>
 
@@ -193,11 +222,18 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right Column: Backlog and Timeline */}
+          {/* Right Column: Backlog */}
           <div className="space-y-6">
             {/* Backlog */}
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <BacklogView items={backlogItems} />
+              {isLoadingBacklog ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full" />
+                  <p className="ml-3 text-gray-600">Chargement du backlog...</p>
+                </div>
+              ) : (
+                <BacklogView items={backlogItems} />
+              )}
             </div>
 
             {/* Timeline - only show if there are events */}
