@@ -31,6 +31,21 @@ def load_decompose_prompt() -> dict[str, Any]:
         return result
 
 
+def load_improve_description_prompt() -> dict[str, Any]:
+    """
+    Charge le prompt d'amélioration de description depuis le fichier YAML.
+
+    Returns:
+        Dictionnaire contenant le prompt et les exemples
+    """
+    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "improve_description.yaml"
+    with prompt_path.open("r", encoding="utf-8") as f:
+        result = yaml.safe_load(f)
+        if not isinstance(result, dict):
+            raise ValueError("Invalid prompt configuration")
+        return result
+
+
 def decompose_objective(state: Any) -> dict[str, Any]:
     """
     Décompose un objectif métier en work items structurés.
@@ -148,4 +163,134 @@ def decompose_objective(state: Any) -> dict[str, Any]:
         return {
             "status": "error",
             "result": f"Failed to decompose objective: {e}",
+        }
+
+
+def improve_description(state: Any) -> dict[str, Any]:
+    """
+    Améliore la description d'un work item existant.
+
+    Args:
+        state: État actuel du graphe contenant project_id, intent avec item_id
+
+    Returns:
+        Mise à jour de l'état avec impact_plan et status
+    """
+    print("[BACKLOG_AGENT] Improving work item description...")
+
+    # Récupérer l'item_id depuis l'intention
+    intent = state.get("intent", {})
+    item_id = intent.get("args", {}).get("item_id", "")
+
+    if not item_id:
+        print("[BACKLOG_AGENT] No item_id found in intent args")
+        return {
+            "status": "error",
+            "result": "No item_id provided for description improvement",
+        }
+
+    print(f"[BACKLOG_AGENT] Item ID: {item_id}")
+
+    # Charger le contexte du projet
+    project_id = state.get("project_id", "")
+    storage = ProjectContextService()
+
+    try:
+        existing_items = storage.load_context(project_id)
+        print(f"[BACKLOG_AGENT] Loaded {len(existing_items)} existing work items")
+    except FileNotFoundError:
+        print("[BACKLOG_AGENT] No existing backlog found")
+        return {
+            "status": "error",
+            "result": f"No backlog found for project {project_id}",
+        }
+
+    # Trouver l'item correspondant
+    target_item = None
+    for item in existing_items:
+        if item.id == item_id:
+            target_item = item
+            break
+
+    if target_item is None:
+        print(f"[BACKLOG_AGENT] Item {item_id} not found in backlog")
+        return {
+            "status": "error",
+            "result": f"Work item {item_id} not found in backlog",
+        }
+
+    print(f"[BACKLOG_AGENT] Found item: {target_item.type} - {target_item.title}")
+    print(f"[BACKLOG_AGENT] Current description: {target_item.description}")
+
+    # Sauvegarder l'état "before"
+    item_before = target_item.model_copy(deep=True)
+
+    # Charger le prompt
+    prompt_config = load_improve_description_prompt()
+
+    # Préparer le contexte du projet
+    context_summary = f"Projet avec {len(existing_items)} work items dans le backlog"
+
+    # Préparer le prompt utilisateur
+    user_prompt = prompt_config["user_prompt_template"].format(
+        item_type=target_item.type,
+        item_title=target_item.title,
+        current_description=target_item.description or "",
+        context=context_summary,
+    )
+
+    # Récupérer le modèle depuis l'environnement
+    model = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
+    temperature = float(os.getenv("LLM_TEMPERATURE", "0.0"))
+
+    print(f"[BACKLOG_AGENT] Using model: {model}")
+
+    try:
+        # Appeler le LLM
+        response = completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": prompt_config["system_prompt"]},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=temperature,
+        )
+
+        # Extraire la réponse
+        improved_description = response.choices[0].message.content.strip()
+
+        print(f"[BACKLOG_AGENT] LLM response received: {len(improved_description)} characters")
+        print(f"[BACKLOG_AGENT] Improved description: {improved_description}")
+
+        # Créer l'état "after" avec la nouvelle description
+        item_after = target_item.model_copy(deep=True)
+        item_after.description = improved_description
+
+        # Construire l'ImpactPlan avec modified_items au format {before, after}
+        impact_plan = {
+            "new_items": [],
+            "modified_items": [
+                {
+                    "before": item_before.model_dump(),
+                    "after": item_after.model_dump(),
+                }
+            ],
+            "deleted_items": [],
+        }
+
+        print("[BACKLOG_AGENT] ImpactPlan created successfully")
+        print("[BACKLOG_AGENT] - 1 modified item")
+        print("[BACKLOG_AGENT] Workflow paused, awaiting human approval")
+
+        return {
+            "impact_plan": impact_plan,
+            "status": "awaiting_approval",
+            "result": f"Improved description for work item: {item_id}",
+        }
+
+    except Exception as e:
+        print(f"[BACKLOG_AGENT] Error: {e}")
+        return {
+            "status": "error",
+            "result": f"Failed to improve description: {e}",
         }
