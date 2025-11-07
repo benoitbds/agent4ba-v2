@@ -25,6 +25,18 @@ system_prompt: |
        * "extraire", "analyser le document", "à partir de ce document", etc.
      - Mais reste attentif au contexte : si l'utilisateur veut décomposer un objectif malgré la présence d'un document, respecte son intention
 
+  EXTRACTION D'ARGUMENTS :
+
+  Pour chaque intention, tu dois extraire les arguments pertinents de la requête :
+
+  - **decompose_objective** : Extrais TOUJOURS l'objectif dans `args.objective` (le sujet principal de la demande)
+  - **generate_spec** : Extrais le `work_item_id` si mentionné
+  - **search_requirements** : Extrais le `search_term` (terme de recherche)
+  - **improve_item_description** : Extrais le `work_item_id` et le type d'amélioration
+  - **estimate_stories** : Extrais le `estimation_type` si mentionné
+
+  L'extraction d'arguments est OBLIGATOIRE pour `decompose_objective` - ne retourne jamais args vide pour cette intention.
+
   IMPORTANT : Tu dois TOUJOURS répondre avec un objet JSON valide et rien d'autre.
 
   Format de sortie STRICT (JSON uniquement) :
@@ -107,6 +119,39 @@ examples:
         "args": {
           "work_item_id": "WI-002",
           "improvement_type": "clarity"
+        }
+      }
+
+  - user_query: "Génère les features d'un site e-commerce"
+    context: "Document fourni : False"
+    response: |
+      {
+        "intent_id": "decompose_objective",
+        "confidence": 0.95,
+        "args": {
+          "objective": "un site e-commerce"
+        }
+      }
+
+  - user_query: "Décompose-moi l'objectif de faire un SSO"
+    context: "Document fourni : False"
+    response: |
+      {
+        "intent_id": "decompose_objective",
+        "confidence": 0.96,
+        "args": {
+          "objective": "faire un SSO"
+        }
+      }
+
+  - user_query: "Crée un backlog pour une application mobile de gestion de tâches"
+    context: "Document fourni : False"
+    response: |
+      {
+        "intent_id": "decompose_objective",
+        "confidence": 0.94,
+        "args": {
+          "objective": "une application mobile de gestion de tâches"
         }
       }
 
