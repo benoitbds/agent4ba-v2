@@ -247,7 +247,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
         Timeline d&apos;exécution
       </h2>
 
-      <div className="flex flex-col-reverse space-y-3 space-y-reverse">
+      <div className="flex flex-col-reverse space-y-3 space-y-reverse h-[calc(100vh-400px)] overflow-y-auto pr-2">
         {groups.map((group) => {
           const isOpen = openGroups.has(group.id);
 
