@@ -2,6 +2,7 @@
 
 import json
 import os
+import uuid
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
@@ -327,6 +328,26 @@ def approval_node(state: GraphState) -> dict[str, Any]:
 
     print(f"[APPROVAL_NODE] Changes to apply: {len(new_items)} new, "
           f"{len(modified_items)} modified, {len(deleted_items)} deleted")
+
+    # Replace temporary IDs with permanent UUIDs to avoid duplicates
+    print("[APPROVAL_NODE] Replacing temporary IDs with unique UUIDs...")
+    id_map = {}
+
+    # First pass: replace all temporary IDs with new UUIDs
+    for item in new_items:
+        if 'id' in item:
+            temp_id = item['id']
+            new_id = f"WI-{uuid.uuid4()}"
+            id_map[temp_id] = new_id
+            item['id'] = new_id
+            print(f"[APPROVAL_NODE] Replaced {temp_id} with {new_id}")
+
+    # Second pass: update parent_id references to maintain hierarchy
+    for item in new_items:
+        if 'parent_id' in item and item['parent_id'] in id_map:
+            old_parent_id = item['parent_id']
+            item['parent_id'] = id_map[old_parent_id]
+            print(f"[APPROVAL_NODE] Updated parent_id from {old_parent_id} to {item['parent_id']}")
 
     # Charger le backlog existant
     storage = ProjectContextService()
