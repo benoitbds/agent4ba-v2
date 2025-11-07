@@ -17,7 +17,12 @@ from agent4ba.api.events import (
     ThreadIdEvent,
     WorkflowCompleteEvent,
 )
-from agent4ba.api.schemas import ApprovalRequest, ChatRequest, ChatResponse
+from agent4ba.api.schemas import (
+    ApprovalRequest,
+    ChatRequest,
+    ChatResponse,
+    CreateProjectRequest,
+)
 from agent4ba.core.storage import ProjectContextService
 
 # Création de l'application via la factory
@@ -243,6 +248,43 @@ async def list_projects() -> JSONResponse:
     project_ids.sort()
 
     return JSONResponse(content=project_ids)
+
+
+@app.post("/projects")
+async def create_project(request: CreateProjectRequest) -> JSONResponse:
+    """
+    Crée un nouveau projet.
+
+    Args:
+        request: Requête contenant l'identifiant du projet à créer
+
+    Returns:
+        JSONResponse avec l'identifiant du projet créé
+
+    Raises:
+        HTTPException: Si le projet existe déjà
+    """
+    storage = ProjectContextService()
+    projects_dir = storage.base_path
+    project_path = projects_dir / request.project_id
+
+    # Vérifier si le projet existe déjà
+    if project_path.exists():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Project '{request.project_id}' already exists",
+        )
+
+    # Créer le répertoire du projet
+    project_path.mkdir(parents=True, exist_ok=True)
+
+    # Initialiser un backlog vide
+    storage.save_backlog(request.project_id, [])
+
+    return JSONResponse(
+        content={"project_id": request.project_id, "message": "Project created successfully"},
+        status_code=201,
+    )
 
 
 @app.get("/projects/{project_id}/backlog")
