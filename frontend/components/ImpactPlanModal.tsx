@@ -111,11 +111,41 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
       </div>
 
       {/* Diff de description (uniquement si modifiée) */}
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      {renderDescriptionDiff() as any}
+      {descriptionChanged ? (
+        <div className="mt-3 border border-gray-300 rounded overflow-hidden">
+          <div className="bg-gray-100 px-3 py-2 border-b border-gray-300">
+            <span className="text-sm font-semibold text-gray-700">
+              Modifications de la description
+            </span>
+          </div>
+
+          {/* Split view with before/after */}
+          <div className="grid grid-cols-2 divide-x divide-gray-300">
+            {/* Before (left side) */}
+            <div className="bg-red-50">
+              <div className="bg-red-100 px-3 py-1 border-b border-red-200">
+                <span className="text-xs font-semibold text-red-800">Avant</span>
+              </div>
+              <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
+                {before.description || "(vide)"}
+              </div>
+            </div>
+
+            {/* After (right side) */}
+            <div className="bg-green-50">
+              <div className="bg-green-100 px-3 py-1 border-b border-green-200">
+                <span className="text-xs font-semibold text-green-800">Après</span>
+              </div>
+              <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
+                {after.description || "(vide)"}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Analyse INVEST ajoutée */}
-      {hasInvestAnalysis && investAnalysis && (
+      {hasInvestAnalysis && investAnalysis ? (
         <div className="mt-3 border border-green-300 rounded overflow-hidden bg-green-50">
           <div className="bg-green-100 px-3 py-2 border-b border-green-200">
             <span className="text-sm font-semibold text-green-800">
@@ -147,10 +177,10 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Autres attributs */}
-      {after.attributes && (
+      {after.attributes ? (
         <div className="flex gap-2 mt-3 text-xs">
           {after.attributes.priority && (
             <span className="px-2 py-1 bg-gray-200 rounded">
@@ -168,7 +198,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
             </span>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
