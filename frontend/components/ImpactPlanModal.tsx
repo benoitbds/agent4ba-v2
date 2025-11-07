@@ -1,7 +1,7 @@
 "use client";
 
 import type { ImpactPlan, WorkItem, ModifiedItem } from "@/types/events";
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 
 interface ImpactPlanModalProps {
   impactPlan: ImpactPlan;
@@ -43,7 +43,7 @@ const INVEST_LABELS: Record<string, string> = {
 };
 
 // Composant pour afficher un item modifié avec diff visuel simple
-function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }) {
+function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): ReactElement {
   const { before, after } = modifiedItem;
 
   // Détecter si l'analyse INVEST a été ajoutée
@@ -51,7 +51,44 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }) {
   const investAnalysis = after.attributes?.invest_analysis as InvestAnalysis | undefined;
 
   // Détecter si la description a changé
-  const descriptionChanged = before.description !== after.description;
+  const descriptionChanged: boolean = before.description !== after.description;
+
+  const renderDescriptionDiff = (): ReactElement | null => {
+    if (!descriptionChanged) return null;
+
+    return (
+      <div className="mt-3 border border-gray-300 rounded overflow-hidden">
+        <div className="bg-gray-100 px-3 py-2 border-b border-gray-300">
+          <span className="text-sm font-semibold text-gray-700">
+            Modifications de la description
+          </span>
+        </div>
+
+        {/* Split view with before/after */}
+        <div className="grid grid-cols-2 divide-x divide-gray-300">
+          {/* Before (left side) */}
+          <div className="bg-red-50">
+            <div className="bg-red-100 px-3 py-1 border-b border-red-200">
+              <span className="text-xs font-semibold text-red-800">Avant</span>
+            </div>
+            <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
+              {before.description || "(vide)"}
+            </div>
+          </div>
+
+          {/* After (right side) */}
+          <div className="bg-green-50">
+            <div className="bg-green-100 px-3 py-1 border-b border-green-200">
+              <span className="text-xs font-semibold text-green-800">Après</span>
+            </div>
+            <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
+              {after.description || "(vide)"}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -74,38 +111,8 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }) {
       </div>
 
       {/* Diff de description (uniquement si modifiée) */}
-      {descriptionChanged && (
-        <div className="mt-3 border border-gray-300 rounded overflow-hidden">
-          <div className="bg-gray-100 px-3 py-2 border-b border-gray-300">
-            <span className="text-sm font-semibold text-gray-700">
-              Modifications de la description
-            </span>
-          </div>
-
-          {/* Split view with before/after */}
-          <div className="grid grid-cols-2 divide-x divide-gray-300">
-            {/* Before (left side) */}
-            <div className="bg-red-50">
-              <div className="bg-red-100 px-3 py-1 border-b border-red-200">
-                <span className="text-xs font-semibold text-red-800">Avant</span>
-              </div>
-              <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
-                {before.description || "(vide)"}
-              </div>
-            </div>
-
-            {/* After (right side) */}
-            <div className="bg-green-50">
-              <div className="bg-green-100 px-3 py-1 border-b border-green-200">
-                <span className="text-xs font-semibold text-green-800">Après</span>
-              </div>
-              <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
-                {after.description || "(vide)"}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      {renderDescriptionDiff() as any}
 
       {/* Analyse INVEST ajoutée */}
       {hasInvestAnalysis && investAnalysis && (
