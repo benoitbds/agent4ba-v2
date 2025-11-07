@@ -78,9 +78,16 @@ def intent_classifier_node(state: GraphState) -> dict[str, Any]:
     # Charger le prompt
     prompt_config = load_intent_classifier_prompt()
 
+    # Vérifier si un document a été fourni
+    document_content = state.get("document_content", "")
+    document_provided = bool(document_content and document_content.strip())
+
+    print(f"[INTENT_CLASSIFIER_NODE] Document provided: {document_provided}")
+
     # Préparer le prompt utilisateur
     user_prompt = prompt_config["user_prompt_template"].format(
-        user_query=state["user_query"]
+        user_query=state["user_query"],
+        document_provided=document_provided
     )
 
     # Récupérer le modèle depuis l'environnement

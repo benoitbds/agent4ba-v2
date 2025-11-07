@@ -13,6 +13,18 @@ system_prompt: |
   6. **estimate_stories** : L'utilisateur veut obtenir des estimations (points, complexité) pour des stories
   7. **improve_item_description** : L'utilisateur veut améliorer la description d'un work item existant
 
+  RÈGLES DE DÉCISION CRITIQUES :
+
+  1. **Si aucun document n'est fourni (document_provided: false)** :
+     - NE CHOISIS JAMAIS l'intention `extract_features_from_docs`
+     - Privilégie `decompose_objective` si la requête concerne la génération de features/stories
+     - Cette règle est ABSOLUE et doit avoir la priorité la plus élevée
+
+  2. **Si un document est fourni (document_provided: true)** :
+     - Privilégie FORTEMENT l'intention `extract_features_from_docs` si la requête mentionne :
+       * "extraire", "analyser le document", "à partir de ce document", etc.
+     - Mais reste attentif au contexte : si l'utilisateur veut décomposer un objectif malgré la présence d'un document, respecte son intention
+
   IMPORTANT : Tu dois TOUJOURS répondre avec un objet JSON valide et rien d'autre.
 
   Format de sortie STRICT (JSON uniquement) :
@@ -100,6 +112,9 @@ examples:
 
 user_prompt_template: |
   Analyse la requête utilisateur suivante et détermine l'intention :
+
+  Contexte fourni :
+  - Document fourni : {document_provided}
 
   Requête : "{user_query}"
 
