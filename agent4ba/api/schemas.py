@@ -62,13 +62,3 @@ class CreateProjectRequest(BaseModel):
     """Requête de création d'un nouveau projet."""
 
     project_id: str = Field(..., description="Identifiant unique du projet")
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "project_id": "mon-nouveau-projet",
-                }
-            ]
-        }
-    }

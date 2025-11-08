@@ -21,8 +21,12 @@ from agent4ba.api.events import (
     ThreadIdEvent,
     WorkflowCompleteEvent,
 )
-from agent4ba.api.schemas import ApprovalRequest, ChatRequest, ChatResponse
-from agent4ba.core.document_ingestion import DocumentIngestionService
+from agent4ba.api.schemas import (
+    ApprovalRequest,
+    ChatRequest,
+    ChatResponse,
+    CreateProjectRequest,
+)
 from agent4ba.core.storage import ProjectContextService
 
 app = FastAPI(
