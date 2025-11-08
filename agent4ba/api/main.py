@@ -1,10 +1,14 @@
 """FastAPI application for Agent4BA."""
 
+import shutil
 import uuid
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
-from fastapi import HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from agent4ba.ai.graph import app as workflow_app
@@ -17,11 +21,14 @@ from agent4ba.api.events import (
     ThreadIdEvent,
     WorkflowCompleteEvent,
 )
-from agent4ba.api.schemas import (
-    ApprovalRequest,
-    ChatRequest,
-    ChatResponse,
-    CreateProjectRequest,
+from agent4ba.api.schemas import ApprovalRequest, ChatRequest, ChatResponse
+from agent4ba.core.document_ingestion import DocumentIngestionService
+from agent4ba.core.storage import ProjectContextService
+
+app = FastAPI(
+    title="Agent4BA V2",
+    description="Backend pour la gestion de backlog assistée par IA",
+    version="0.1.0",
 )
 from agent4ba.core.storage import ProjectContextService
 
@@ -312,4 +319,60 @@ async def get_project_backlog(project_id: str) -> JSONResponse:
         raise HTTPException(
             status_code=404,
             detail=f"Backlog not found for project '{project_id}': {e}",
+        ) from e
+
+
+@app.post("/projects/{project_id}/documents")
+async def upload_document(project_id: str, file: UploadFile = File(...)) -> JSONResponse:
+    """
+    Upload et ingestion d'un document PDF dans le système RAG.
+
+    Cette route :
+    1. Reçoit un fichier PDF uploadé
+    2. Le sauvegarde dans le répertoire documents du projet
+    3. Lance le processus d'ingestion (extraction, vectorisation, indexation)
+
+    Args:
+        project_id: Identifiant unique du projet
+        file: Fichier PDF uploadé
+
+    Returns:
+        JSONResponse avec les informations sur l'ingestion
+
+    Raises:
+        HTTPException: Si l'upload ou l'ingestion échoue
+    """
+    # Valider que c'est bien un fichier PDF
+    if not file.filename or not file.filename.endswith(".pdf"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF files are supported",
+        )
+
+    try:
+        # Créer le service d'ingestion
+        ingestion_service = DocumentIngestionService(project_id)
+
+        # Définir le chemin de destination du fichier
+        file_path = ingestion_service.documents_dir / file.filename
+
+        # Sauvegarder le fichier uploadé
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Lancer l'ingestion du document
+        result = ingestion_service.ingest_document(file_path, file.filename)
+
+        return JSONResponse(
+            content={
+                "message": "Document ingested successfully",
+                "filename": file.filename,
+                "details": result,
+            }
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to ingest document: {e}",
         ) from e
