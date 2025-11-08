@@ -140,3 +140,25 @@ export async function getProjects(): Promise<string[]> {
 
   return response.json();
 }
+
+/**
+ * Create a new project
+ */
+export async function createProject(
+  projectId: string
+): Promise<{ project_id: string; message: string }> {
+  const response = await fetch(`${API_URL}/projects`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ project_id: projectId }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
