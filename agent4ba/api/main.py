@@ -8,9 +8,11 @@ from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from agent4ba.ai.graph import app as workflow_app
+from agent4ba.api.app_factory import create_app
 from agent4ba.api.events import (
     ErrorEvent,
     ImpactPlanReadyEvent,
@@ -28,18 +30,11 @@ app = FastAPI(
     description="Backend pour la gestion de backlog assistée par IA",
     version="0.1.0",
 )
+from agent4ba.core.storage import ProjectContextService
 
-# Configuration CORS - DOIT être la première chose ajoutée après la création de app
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Frontend Next.js (port par défaut)
-        "http://localhost:3001",  # Frontend Next.js (port alternatif)
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],  # Autorise toutes les méthodes (GET, POST, etc.)
-    allow_headers=["*"],  # Autorise tous les headers
-)
+# Création de l'application via la factory
+# La configuration CORS et autres middlewares sont gérés dans app_factory.py
+app = create_app()
 
 
 @app.get("/health")
@@ -260,6 +255,43 @@ async def list_projects() -> JSONResponse:
     project_ids.sort()
 
     return JSONResponse(content=project_ids)
+
+
+@app.post("/projects")
+async def create_project(request: CreateProjectRequest) -> JSONResponse:
+    """
+    Crée un nouveau projet.
+
+    Args:
+        request: Requête contenant l'identifiant du projet à créer
+
+    Returns:
+        JSONResponse avec l'identifiant du projet créé
+
+    Raises:
+        HTTPException: Si le projet existe déjà
+    """
+    storage = ProjectContextService()
+    projects_dir = storage.base_path
+    project_path = projects_dir / request.project_id
+
+    # Vérifier si le projet existe déjà
+    if project_path.exists():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Project '{request.project_id}' already exists",
+        )
+
+    # Créer le répertoire du projet
+    project_path.mkdir(parents=True, exist_ok=True)
+
+    # Initialiser un backlog vide
+    storage.save_backlog(request.project_id, [])
+
+    return JSONResponse(
+        content={"project_id": request.project_id, "message": "Project created successfully"},
+        status_code=201,
+    )
 
 
 @app.get("/projects/{project_id}/backlog")
