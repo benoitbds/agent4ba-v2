@@ -9,7 +9,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
 export interface ChatRequest {
   project_id: string;
   query: string;
-  document_content?: string;
 }
 
 export interface ApprovalRequest {
@@ -156,8 +155,10 @@ export async function createProject(
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
   }
 
   return response.json();

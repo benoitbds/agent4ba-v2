@@ -8,7 +8,7 @@ import CreateProjectModal from "@/components/CreateProjectModal";
 import BacklogView from "@/components/BacklogView";
 import ProjectSelector from "@/components/ProjectSelector";
 import DocumentManager from "@/components/DocumentManager";
-import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, createProject, getProjectDocuments } from "@/lib/api";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, createProject } from "@/lib/api";
 import type { TimelineEvent, ImpactPlan, SSEEvent, WorkItem } from "@/types/events";
 
 export default function Home() {
@@ -102,7 +102,7 @@ export default function Home() {
     setTimelineEvents((prev) => [...prev, timelineEvent]);
   };
 
-  const handleChatSubmit = async (query: string, documentContent?: string) => {
+  const handleChatSubmit = async (query: string) => {
     // Reset state
     setTimelineEvents([]);
     setImpactPlan(null);
@@ -115,7 +115,6 @@ export default function Home() {
       for await (const event of streamChatEvents({
         project_id: selectedProject,
         query,
-        document_content: documentContent,
       })) {
         addTimelineEvent(event);
 
