@@ -27,7 +27,6 @@ from agent4ba.api.schemas import (
     ChatResponse,
     CreateProjectRequest,
 )
-from agent4ba.core.document_ingestion import DocumentIngestionService
 from agent4ba.core.storage import ProjectContextService
 
 app = FastAPI(
