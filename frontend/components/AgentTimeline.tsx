@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Link2, Brain, MessageSquare, FileText, Flag } from "lucide-react";
 import type { TimelineEvent } from "@/types/events";
 
 interface AgentTimelineProps {
