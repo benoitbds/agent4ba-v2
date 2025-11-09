@@ -7,7 +7,8 @@ import ImpactPlanModal from "@/components/ImpactPlanModal";
 import CreateProjectModal from "@/components/CreateProjectModal";
 import BacklogView from "@/components/BacklogView";
 import ProjectSelector from "@/components/ProjectSelector";
-import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, createProject } from "@/lib/api";
+import DocumentManager from "@/components/DocumentManager";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, createProject, getProjectDocuments } from "@/lib/api";
 import type { TimelineEvent, ImpactPlan, SSEEvent, WorkItem } from "@/types/events";
 
 export default function Home() {
@@ -21,6 +22,7 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
 
   // Load projects list on component mount
