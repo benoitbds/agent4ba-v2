@@ -56,3 +56,9 @@ class ApprovalRequest(BaseModel):
             ]
         }
     }
+
+
+class CreateProjectRequest(BaseModel):
+    """Requête de création d'un nouveau projet."""
+
+    project_id: str = Field(..., description="Identifiant unique du projet")

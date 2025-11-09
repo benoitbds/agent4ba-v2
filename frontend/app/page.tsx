@@ -4,21 +4,25 @@ import { useState, useEffect } from "react";
 import ChatInput from "@/components/ChatInput";
 import AgentTimeline from "@/components/AgentTimeline";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
+import CreateProjectModal from "@/components/CreateProjectModal";
 import BacklogView from "@/components/BacklogView";
 import ProjectSelector from "@/components/ProjectSelector";
-import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects } from "@/lib/api";
+import DocumentManager from "@/components/DocumentManager";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments } from "@/lib/api";
 import type { TimelineEvent, ImpactPlan, SSEEvent, WorkItem } from "@/types/events";
 
 export default function Home() {
   const [projects, setProjects] = useState<string[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
+  const [documents, setDocuments] = useState<string[]>([]);
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [impactPlan, setImpactPlan] = useState<ImpactPlan | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
 
   // Load projects list on component mount
   useEffect(() => {
@@ -57,6 +61,36 @@ export default function Home() {
 
     loadBacklog();
   }, [selectedProject]);
+
+  // Load documents when selected project changes
+  useEffect(() => {
+    if (!selectedProject) return;
+
+    const loadDocuments = async () => {
+      setIsLoadingDocuments(true);
+      try {
+        const docs = await getProjectDocuments(selectedProject);
+        setDocuments(docs);
+      } catch (error) {
+        console.error("Error loading documents:", error);
+        setDocuments([]);
+      } finally {
+        setIsLoadingDocuments(false);
+      }
+    };
+
+    loadDocuments();
+  }, [selectedProject]);
+
+  // Function to refresh documents list after upload
+  const handleDocumentUploadSuccess = async () => {
+    try {
+      const docs = await getProjectDocuments(selectedProject);
+      setDocuments(docs);
+    } catch (error) {
+      console.error("Error refreshing documents:", error);
+    }
+  };
 
   const addTimelineEvent = (event: SSEEvent) => {
     const timelineEvent: TimelineEvent = {
@@ -156,6 +190,32 @@ export default function Home() {
     }
   };
 
+  const handleOpenCreateProjectModal = () => {
+    setIsCreateProjectModalOpen(true);
+  };
+
+  const handleCreateProject = async (projectId: string) => {
+    try {
+      setStatusMessage("Création du projet en cours...");
+      await createProject(projectId);
+
+      // Reload projects list
+      const projectsList = await getProjects();
+      setProjects(projectsList);
+
+      // Select the newly created project
+      setSelectedProject(projectId);
+
+      setStatusMessage(`Projet "${projectId}" créé avec succès`);
+      setIsCreateProjectModalOpen(false);
+    } catch (error) {
+      console.error("Error creating project:", error);
+      setStatusMessage(
+        `Erreur lors de la création du projet: ${error instanceof Error ? error.message : "Erreur inconnue"}`
+      );
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -171,6 +231,7 @@ export default function Home() {
               projects={projects}
               selectedProject={selectedProject}
               onProjectChange={setSelectedProject}
+              onCreateProject={handleOpenCreateProjectModal}
             />
           </div>
         </div>
@@ -224,8 +285,26 @@ export default function Home() {
             )}
           </div>
 
-          {/* Right Column: Backlog */}
+          {/* Right Column: Documents & Backlog */}
           <div className="space-y-6">
+            {/* Document Manager */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              {isLoadingDocuments ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center gap-3">
+                    <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
+                    <p className="text-gray-600">Chargement des documents...</p>
+                  </div>
+                </div>
+              ) : (
+                <DocumentManager
+                  projectId={selectedProject}
+                  documents={documents}
+                  onUploadSuccess={handleDocumentUploadSuccess}
+                />
+              )}
+            </div>
+
             {/* Backlog */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               {isLoadingBacklog ? (
@@ -253,6 +332,13 @@ export default function Home() {
           isOpen={true}
         />
       )}
+
+      {/* Create Project Modal */}
+      <CreateProjectModal
+        isOpen={isCreateProjectModalOpen}
+        onClose={() => setIsCreateProjectModalOpen(false)}
+        onCreateProject={handleCreateProject}
+      />
     </div>
   );
 }

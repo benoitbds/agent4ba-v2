@@ -1,14 +1,18 @@
 """FastAPI application for Agent4BA."""
 
+import shutil
 import uuid
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from agent4ba.ai.graph import app as workflow_app
+from agent4ba.api.app_factory import create_app
 from agent4ba.api.events import (
     ErrorEvent,
     ImpactPlanReadyEvent,
@@ -17,7 +21,13 @@ from agent4ba.api.events import (
     ThreadIdEvent,
     WorkflowCompleteEvent,
 )
-from agent4ba.api.schemas import ApprovalRequest, ChatRequest, ChatResponse
+from agent4ba.api.schemas import (
+    ApprovalRequest,
+    ChatRequest,
+    ChatResponse,
+    CreateProjectRequest,
+)
+from agent4ba.core.document_ingestion import DocumentIngestionService
 from agent4ba.core.storage import ProjectContextService
 
 app = FastAPI(
@@ -25,18 +35,11 @@ app = FastAPI(
     description="Backend pour la gestion de backlog assistée par IA",
     version="0.1.0",
 )
+from agent4ba.core.storage import ProjectContextService
 
-# Configuration CORS - DOIT être la première chose ajoutée après la création de app
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Frontend Next.js (port par défaut)
-        "http://localhost:3001",  # Frontend Next.js (port alternatif)
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],  # Autorise toutes les méthodes (GET, POST, etc.)
-    allow_headers=["*"],  # Autorise tous les headers
-)
+# Création de l'application via la factory
+# La configuration CORS et autres middlewares sont gérés dans app_factory.py
+app = create_app()
 
 
 @app.get("/health")
@@ -259,6 +262,43 @@ async def list_projects() -> JSONResponse:
     return JSONResponse(content=project_ids)
 
 
+@app.post("/projects")
+async def create_project(request: CreateProjectRequest) -> JSONResponse:
+    """
+    Crée un nouveau projet.
+
+    Args:
+        request: Requête contenant l'identifiant du projet à créer
+
+    Returns:
+        JSONResponse avec l'identifiant du projet créé
+
+    Raises:
+        HTTPException: Si le projet existe déjà
+    """
+    storage = ProjectContextService()
+    projects_dir = storage.base_path
+    project_path = projects_dir / request.project_id
+
+    # Vérifier si le projet existe déjà
+    if project_path.exists():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Project '{request.project_id}' already exists",
+        )
+
+    # Créer le répertoire du projet
+    project_path.mkdir(parents=True, exist_ok=True)
+
+    # Initialiser un backlog vide
+    storage.save_backlog(request.project_id, [])
+
+    return JSONResponse(
+        content={"project_id": request.project_id, "message": "Project created successfully"},
+        status_code=201,
+    )
+
+
 @app.get("/projects/{project_id}/backlog")
 async def get_project_backlog(project_id: str) -> JSONResponse:
     """
@@ -284,4 +324,90 @@ async def get_project_backlog(project_id: str) -> JSONResponse:
         raise HTTPException(
             status_code=404,
             detail=f"Backlog not found for project '{project_id}': {e}",
+        ) from e
+
+
+@app.get("/projects/{project_id}/documents")
+async def list_project_documents(project_id: str) -> JSONResponse:
+    """
+    Liste les documents d'un projet.
+
+    Args:
+        project_id: Identifiant unique du projet
+
+    Returns:
+        JSONResponse avec la liste des noms de fichiers
+
+    Raises:
+        HTTPException: Si le projet n'existe pas
+    """
+    storage = ProjectContextService()
+    documents_dir = storage.base_path / project_id / "documents"
+
+    # Créer le répertoire s'il n'existe pas
+    documents_dir.mkdir(parents=True, exist_ok=True)
+
+    # Scanner les fichiers
+    document_names = []
+    for file_path in documents_dir.iterdir():
+        if file_path.is_file():
+            document_names.append(file_path.name)
+
+    # Trier par ordre alphabétique
+    document_names.sort()
+
+    return JSONResponse(content=document_names)
+
+
+@app.post("/projects/{project_id}/documents")
+async def upload_project_document(
+    project_id: str,
+    file: UploadFile = File(...),
+) -> JSONResponse:
+    """
+    Upload un document pour un projet.
+
+    Args:
+        project_id: Identifiant unique du projet
+        file: Fichier à uploader
+
+    Returns:
+        JSONResponse avec le nom du fichier uploadé
+
+    Raises:
+        HTTPException: Si le type de fichier n'est pas supporté
+    """
+    # Vérifier le type de fichier
+    if file.content_type != "application/pdf":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Type de fichier non supporté: {file.content_type}. Seuls les fichiers PDF sont acceptés.",
+        )
+
+    storage = ProjectContextService()
+    documents_dir = storage.base_path / project_id / "documents"
+
+    # Créer le répertoire s'il n'existe pas
+    documents_dir.mkdir(parents=True, exist_ok=True)
+
+    # Sauvegarder le fichier
+    file_path = documents_dir / file.filename
+
+    try:
+        # Lire et écrire le fichier
+        content = await file.read()
+        with file_path.open("wb") as f:
+            f.write(content)
+
+        return JSONResponse(
+            content={
+                "filename": file.filename,
+                "message": f"Fichier '{file.filename}' uploadé avec succès",
+            },
+            status_code=201,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de l'upload du fichier: {e}",
         ) from e

@@ -90,21 +90,21 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
   const getEventIcon = (type: string) => {
     switch (type) {
       case "thread_id":
-        return "🔗";
+        return <Link2 className="w-5 h-5" />;
       case "node_start":
         return "▶";
       case "node_end":
         return "✓";
       case "llm_start":
-        return "🤖";
+        return <Brain className="w-5 h-5" />;
       case "llm_token":
-        return "💬";
+        return <MessageSquare className="w-5 h-5" />;
       case "llm_end":
         return "✓";
       case "impact_plan_ready":
-        return "📋";
+        return <FileText className="w-5 h-5" />;
       case "workflow_complete":
-        return "🏁";
+        return <Flag className="w-5 h-5" />;
       case "error":
         return "⚠";
       default:
