@@ -6,19 +6,22 @@ import AgentTimeline from "@/components/AgentTimeline";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
 import BacklogView from "@/components/BacklogView";
 import ProjectSelector from "@/components/ProjectSelector";
-import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects } from "@/lib/api";
+import DocumentManager from "@/components/DocumentManager";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments } from "@/lib/api";
 import type { TimelineEvent, ImpactPlan, SSEEvent, WorkItem } from "@/types/events";
 
 export default function Home() {
   const [projects, setProjects] = useState<string[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
+  const [documents, setDocuments] = useState<string[]>([]);
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [impactPlan, setImpactPlan] = useState<ImpactPlan | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
 
   // Load projects list on component mount
   useEffect(() => {
@@ -57,6 +60,36 @@ export default function Home() {
 
     loadBacklog();
   }, [selectedProject]);
+
+  // Load documents when selected project changes
+  useEffect(() => {
+    if (!selectedProject) return;
+
+    const loadDocuments = async () => {
+      setIsLoadingDocuments(true);
+      try {
+        const docs = await getProjectDocuments(selectedProject);
+        setDocuments(docs);
+      } catch (error) {
+        console.error("Error loading documents:", error);
+        setDocuments([]);
+      } finally {
+        setIsLoadingDocuments(false);
+      }
+    };
+
+    loadDocuments();
+  }, [selectedProject]);
+
+  // Function to refresh documents list after upload
+  const handleDocumentUploadSuccess = async () => {
+    try {
+      const docs = await getProjectDocuments(selectedProject);
+      setDocuments(docs);
+    } catch (error) {
+      console.error("Error refreshing documents:", error);
+    }
+  };
 
   const addTimelineEvent = (event: SSEEvent) => {
     const timelineEvent: TimelineEvent = {
@@ -224,8 +257,26 @@ export default function Home() {
             )}
           </div>
 
-          {/* Right Column: Backlog */}
+          {/* Right Column: Documents & Backlog */}
           <div className="space-y-6">
+            {/* Document Manager */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              {isLoadingDocuments ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center gap-3">
+                    <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
+                    <p className="text-gray-600">Chargement des documents...</p>
+                  </div>
+                </div>
+              ) : (
+                <DocumentManager
+                  projectId={selectedProject}
+                  documents={documents}
+                  onUploadSuccess={handleDocumentUploadSuccess}
+                />
+              )}
+            </div>
+
             {/* Backlog */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               {isLoadingBacklog ? (
