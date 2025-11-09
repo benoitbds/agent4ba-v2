@@ -190,10 +190,6 @@ export default function Home() {
     }
   };
 
-  const handleOpenCreateProjectModal = () => {
-    setIsCreateProjectModalOpen(true);
-  };
-
   const handleCreateProject = async (projectId: string) => {
     try {
       setStatusMessage("Création du projet en cours...");
@@ -231,7 +227,7 @@ export default function Home() {
               projects={projects}
               selectedProject={selectedProject}
               onProjectChange={setSelectedProject}
-              onCreateProject={handleOpenCreateProjectModal}
+              onCreateProject={() => setIsCreateProjectModalOpen(true)}
             />
           </div>
         </div>
