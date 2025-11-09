@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import ChatInput from "@/components/ChatInput";
 import AgentTimeline from "@/components/AgentTimeline";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
+import CreateProjectModal from "@/components/CreateProjectModal";
 import BacklogView from "@/components/BacklogView";
 import ProjectSelector from "@/components/ProjectSelector";
 import DocumentManager from "@/components/DocumentManager";
@@ -189,6 +190,32 @@ export default function Home() {
     }
   };
 
+  const handleOpenCreateProjectModal = () => {
+    setIsCreateProjectModalOpen(true);
+  };
+
+  const handleCreateProject = async (projectId: string) => {
+    try {
+      setStatusMessage("Création du projet en cours...");
+      await createProject(projectId);
+
+      // Reload projects list
+      const projectsList = await getProjects();
+      setProjects(projectsList);
+
+      // Select the newly created project
+      setSelectedProject(projectId);
+
+      setStatusMessage(`Projet "${projectId}" créé avec succès`);
+      setIsCreateProjectModalOpen(false);
+    } catch (error) {
+      console.error("Error creating project:", error);
+      setStatusMessage(
+        `Erreur lors de la création du projet: ${error instanceof Error ? error.message : "Erreur inconnue"}`
+      );
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -204,6 +231,7 @@ export default function Home() {
               projects={projects}
               selectedProject={selectedProject}
               onProjectChange={setSelectedProject}
+              onCreateProject={handleOpenCreateProjectModal}
             />
           </div>
         </div>
@@ -304,6 +332,13 @@ export default function Home() {
           isOpen={true}
         />
       )}
+
+      {/* Create Project Modal */}
+      <CreateProjectModal
+        isOpen={isCreateProjectModalOpen}
+        onClose={() => setIsCreateProjectModalOpen(false)}
+        onCreateProject={handleCreateProject}
+      />
     </div>
   );
 }
