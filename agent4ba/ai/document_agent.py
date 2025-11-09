@@ -9,6 +9,7 @@ import yaml
 from dotenv import load_dotenv
 from litellm import completion
 
+from agent4ba.core.document_ingestion import DocumentIngestionService
 from agent4ba.core.models import WorkItem
 from agent4ba.core.storage import ProjectContextService
 
@@ -33,48 +34,97 @@ def load_extract_requirements_prompt() -> dict[str, Any]:
 
 def extract_requirements(state: Any) -> dict[str, Any]:
     """
-    Extrait les exigences d'un document texte non structuré et les transforme en work items.
+    Extrait les exigences en utilisant RAG (Retrieval-Augmented Generation).
+
+    Cette fonction :
+    1. Charge la Vector Store FAISS du projet
+    2. Utilise la requête utilisateur pour rechercher les documents pertinents
+    3. Injecte ces documents comme contexte dans le prompt au LLM
 
     Args:
-        state: État actuel du graphe contenant project_id et document_content
+        state: État actuel du graphe contenant project_id et user_query
 
     Returns:
         Mise à jour de l'état avec impact_plan et status
     """
-    print("[DOCUMENT_AGENT] Extracting requirements from document...")
+    print("[DOCUMENT_AGENT] Extracting requirements using RAG...")
 
-    # Récupérer le contenu du document depuis l'état
-    document_content = state.get("document_content", "")
+    # Récupérer le project_id et la requête utilisateur
+    project_id = state.get("project_id", "")
+    user_query = state.get("user_query", "")
 
-    if not document_content or not document_content.strip():
-        print("[DOCUMENT_AGENT] No document content provided")
+    if not user_query or not user_query.strip():
+        print("[DOCUMENT_AGENT] No user query provided")
         return {
             "status": "error",
-            "result": "No document content provided for requirement extraction",
+            "result": "No user query provided for requirement extraction",
         }
 
-    print(f"[DOCUMENT_AGENT] Document length: {len(document_content)} characters")
+    print(f"[DOCUMENT_AGENT] User query: {user_query}")
 
-    # Charger le contexte du projet
-    project_id = state.get("project_id", "")
+    # Initialiser le service d'ingestion pour accéder au vectorstore
+    try:
+        ingestion_service = DocumentIngestionService(project_id)
+        vectorstore = ingestion_service.get_vectorstore()
+        print("[DOCUMENT_AGENT] Vector store loaded successfully")
+    except FileNotFoundError as e:
+        print(f"[DOCUMENT_AGENT] No vectorstore found: {e}")
+        return {
+            "status": "error",
+            "result": "Aucun document n'a été analysé pour ce projet. Veuillez d'abord uploader des documents.",
+        }
+    except Exception as e:
+        print(f"[DOCUMENT_AGENT] Error loading vectorstore: {e}")
+        return {
+            "status": "error",
+            "result": f"Erreur lors du chargement du vectorstore: {e}",
+        }
+
+    # Créer un retriever pour rechercher les documents pertinents
+    # k=3 signifie qu'on récupère les 3 chunks les plus pertinents
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    print("[DOCUMENT_AGENT] Retriever created with k=3")
+
+    # Récupérer les documents pertinents
+    try:
+        retrieved_docs = retriever.invoke(user_query)
+        print(f"[DOCUMENT_AGENT] Retrieved {len(retrieved_docs)} relevant chunks")
+    except Exception as e:
+        print(f"[DOCUMENT_AGENT] Error retrieving documents: {e}")
+        return {
+            "status": "error",
+            "result": f"Erreur lors de la récupération des documents: {e}",
+        }
+
+    # Formater le contexte récupéré
+    context_chunks = []
+    for i, doc in enumerate(retrieved_docs, 1):
+        source = doc.metadata.get("source", "Unknown")
+        page = doc.metadata.get("page", "?")
+        context_chunks.append(f"[Chunk {i} - Source: {source}, Page: {page}]\n{doc.page_content}")
+
+    context = "\n\n---\n\n".join(context_chunks)
+    print(f"[DOCUMENT_AGENT] Context prepared: {len(context)} characters")
+
+    # Charger le contexte du projet (backlog existant)
     storage = ProjectContextService()
-
     try:
         existing_items = storage.load_context(project_id)
-        context_summary = f"Backlog actuel avec {len(existing_items)} work items"
+        backlog_summary = f"Backlog actuel avec {len(existing_items)} work items"
         print(f"[DOCUMENT_AGENT] Loaded {len(existing_items)} existing work items")
     except FileNotFoundError:
         existing_items = []
-        context_summary = "Nouveau projet sans backlog existant"
+        backlog_summary = "Nouveau projet sans backlog existant"
         print("[DOCUMENT_AGENT] No existing backlog found")
 
     # Charger le prompt
     prompt_config = load_extract_requirements_prompt()
 
-    # Préparer le prompt utilisateur
+    # Préparer le prompt utilisateur avec le contexte récupéré
     user_prompt = prompt_config["user_prompt_template"].format(
-        document_content=document_content,
-        context=context_summary,
+        context=context,
+        query=user_query,
+        backlog_summary=backlog_summary,
     )
 
     # Récupérer le modèle depuis l'environnement
