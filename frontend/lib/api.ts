@@ -9,7 +9,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
 export interface ChatRequest {
   project_id: string;
   query: string;
-  document_content?: string;
 }
 
 export interface ApprovalRequest {
@@ -136,6 +135,30 @@ export async function getProjects(): Promise<string[]> {
 
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Create a new project
+ */
+export async function createProject(
+  projectId: string
+): Promise<{ project_id: string; message: string }> {
+  const response = await fetch(`${API_URL}/projects`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ project_id: projectId }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
   }
 
   return response.json();
