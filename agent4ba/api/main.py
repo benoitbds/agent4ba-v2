@@ -327,57 +327,87 @@ async def get_project_backlog(project_id: str) -> JSONResponse:
         ) from e
 
 
-@app.post("/projects/{project_id}/documents")
-async def upload_document(project_id: str, file: UploadFile = File(...)) -> JSONResponse:
+@app.get("/projects/{project_id}/documents")
+async def list_project_documents(project_id: str) -> JSONResponse:
     """
-    Upload et ingestion d'un document PDF dans le système RAG.
-
-    Cette route :
-    1. Reçoit un fichier PDF uploadé
-    2. Le sauvegarde dans le répertoire documents du projet
-    3. Lance le processus d'ingestion (extraction, vectorisation, indexation)
+    Liste les documents d'un projet.
 
     Args:
         project_id: Identifiant unique du projet
-        file: Fichier PDF uploadé
 
     Returns:
-        JSONResponse avec les informations sur l'ingestion
+        JSONResponse avec la liste des noms de fichiers
 
     Raises:
-        HTTPException: Si l'upload ou l'ingestion échoue
+        HTTPException: Si le projet n'existe pas
     """
-    # Valider que c'est bien un fichier PDF
-    if not file.filename or not file.filename.endswith(".pdf"):
+    storage = ProjectContextService()
+    documents_dir = storage.base_path / project_id / "documents"
+
+    # Créer le répertoire s'il n'existe pas
+    documents_dir.mkdir(parents=True, exist_ok=True)
+
+    # Scanner les fichiers
+    document_names = []
+    for file_path in documents_dir.iterdir():
+        if file_path.is_file():
+            document_names.append(file_path.name)
+
+    # Trier par ordre alphabétique
+    document_names.sort()
+
+    return JSONResponse(content=document_names)
+
+
+@app.post("/projects/{project_id}/documents")
+async def upload_project_document(
+    project_id: str,
+    file: UploadFile = File(...),
+) -> JSONResponse:
+    """
+    Upload un document pour un projet.
+
+    Args:
+        project_id: Identifiant unique du projet
+        file: Fichier à uploader
+
+    Returns:
+        JSONResponse avec le nom du fichier uploadé
+
+    Raises:
+        HTTPException: Si le type de fichier n'est pas supporté
+    """
+    # Vérifier le type de fichier
+    if file.content_type != "application/pdf":
         raise HTTPException(
             status_code=400,
-            detail="Only PDF files are supported",
+            detail=f"Type de fichier non supporté: {file.content_type}. Seuls les fichiers PDF sont acceptés.",
         )
 
+    storage = ProjectContextService()
+    documents_dir = storage.base_path / project_id / "documents"
+
+    # Créer le répertoire s'il n'existe pas
+    documents_dir.mkdir(parents=True, exist_ok=True)
+
+    # Sauvegarder le fichier
+    file_path = documents_dir / file.filename
+
     try:
-        # Créer le service d'ingestion
-        ingestion_service = DocumentIngestionService(project_id)
-
-        # Définir le chemin de destination du fichier
-        file_path = ingestion_service.documents_dir / file.filename
-
-        # Sauvegarder le fichier uploadé
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        # Lancer l'ingestion du document
-        result = ingestion_service.ingest_document(file_path, file.filename)
+        # Lire et écrire le fichier
+        content = await file.read()
+        with file_path.open("wb") as f:
+            f.write(content)
 
         return JSONResponse(
             content={
-                "message": "Document ingested successfully",
                 "filename": file.filename,
-                "details": result,
-            }
+                "message": f"Fichier '{file.filename}' uploadé avec succès",
+            },
+            status_code=201,
         )
-
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to ingest document: {e}",
+            detail=f"Erreur lors de l'upload du fichier: {e}",
         ) from e

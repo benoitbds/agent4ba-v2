@@ -142,22 +142,45 @@ export async function getProjects(): Promise<string[]> {
 }
 
 /**
- * Create a new project
+ * Get the list of documents for a project
  */
-export async function createProject(
+export async function getProjectDocuments(
   projectId: string
-): Promise<{ project_id: string; message: string }> {
-  const response = await fetch(`${API_URL}/projects`, {
-    method: "POST",
+): Promise<string[]> {
+  const response = await fetch(`${API_URL}/projects/${projectId}/documents`, {
+    method: "GET",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ project_id: projectId }),
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Upload a document to a project
+ */
+export async function uploadDocument(
+  projectId: string,
+  file: File
+): Promise<{ filename: string; message: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_URL}/projects/${projectId}/documents`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
   }
 
   return response.json();
