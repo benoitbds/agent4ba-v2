@@ -23,6 +23,7 @@ from agent4ba.api.events import (
     NodeEndEvent,
     NodeStartEvent,
     ThreadIdEvent,
+    ToolUsedEvent,
     UserRequestEvent,
     WorkflowCompleteEvent,
 )
