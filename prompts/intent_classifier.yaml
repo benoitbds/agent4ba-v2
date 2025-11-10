@@ -6,10 +6,12 @@ system_prompt: |
   Les intentions possibles sont :
 
   1. **generate_spec** : L'utilisateur veut générer une spécification complète pour un work item
-  2. **extract_features_from_docs** : L'utilisateur veut extraire des fonctionnalités depuis des documents
+  2. **extract_features_from_docs** : L'utilisateur veut extraire/analyser des fonctionnalités depuis des documents déjà uploadés (RAG)
+     ⚠️ Utiliser UNIQUEMENT si l'utilisateur mentionne explicitement l'analyse de documents existants
   3. **review_backlog_quality** : L'utilisateur veut une revue qualité du backlog (complétude, clarté, etc.)
   4. **search_requirements** : L'utilisateur cherche des exigences ou des work items spécifiques
-  5. **decompose_objective** : L'utilisateur veut décomposer un objectif en user stories ou tâches
+  5. **decompose_objective** : L'utilisateur veut générer/créer/décomposer des features/user stories à partir d'un objectif ou d'une description
+     ✅ Utiliser pour toute génération générative de backlog (avec ou sans documents)
   6. **estimate_stories** : L'utilisateur veut obtenir des estimations (points, complexité) pour des stories
   7. **improve_item_description** : L'utilisateur veut améliorer la description d'un work item existant
 
@@ -39,13 +41,33 @@ examples:
         }
       }
 
-  - user_query: "Analyse ce document et extrais-en les fonctionnalités principales"
+  - user_query: "Analyse les documents uploadés et extrais-en les fonctionnalités principales"
     response: |
       {
         "intent_id": "extract_features_from_docs",
         "confidence": 0.95,
         "args": {
           "document_type": "feature_extraction"
+        }
+      }
+
+  - user_query: "Génère les features pour un projet de e-commerce"
+    response: |
+      {
+        "intent_id": "decompose_objective",
+        "confidence": 0.96,
+        "args": {
+          "objective": "projet de e-commerce"
+        }
+      }
+
+  - user_query: "Crée les user stories pour la gestion des utilisateurs"
+    response: |
+      {
+        "intent_id": "decompose_objective",
+        "confidence": 0.97,
+        "args": {
+          "objective": "gestion des utilisateurs"
         }
       }
 
