@@ -8,7 +8,7 @@ import CreateProjectModal from "@/components/CreateProjectModal";
 import BacklogView from "@/components/BacklogView";
 import ProjectSelector from "@/components/ProjectSelector";
 import DocumentManager from "@/components/DocumentManager";
-import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments } from "@/lib/api";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, createProject } from "@/lib/api";
 import type { TimelineEvent, ImpactPlan, SSEEvent, WorkItem } from "@/types/events";
 
 export default function Home() {
@@ -23,6 +23,7 @@ export default function Home() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
+  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
 
   // Load projects list on component mount
   useEffect(() => {
@@ -101,7 +102,7 @@ export default function Home() {
     setTimelineEvents((prev) => [...prev, timelineEvent]);
   };
 
-  const handleChatSubmit = async (query: string, documentContent?: string) => {
+  const handleChatSubmit = async (query: string) => {
     // Reset state
     setTimelineEvents([]);
     setImpactPlan(null);
@@ -114,7 +115,6 @@ export default function Home() {
       for await (const event of streamChatEvents({
         project_id: selectedProject,
         query,
-        document_content: documentContent,
       })) {
         addTimelineEvent(event);
 
@@ -190,10 +190,6 @@ export default function Home() {
     }
   };
 
-  const handleOpenCreateProjectModal = () => {
-    setIsCreateProjectModalOpen(true);
-  };
-
   const handleCreateProject = async (projectId: string) => {
     try {
       setStatusMessage("Création du projet en cours...");
@@ -231,7 +227,7 @@ export default function Home() {
               projects={projects}
               selectedProject={selectedProject}
               onProjectChange={setSelectedProject}
-              onCreateProject={handleOpenCreateProjectModal}
+              onCreateProject={() => setIsCreateProjectModalOpen(true)}
             />
           </div>
         </div>

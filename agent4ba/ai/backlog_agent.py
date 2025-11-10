@@ -9,6 +9,7 @@ import yaml
 from dotenv import load_dotenv
 from litellm import completion
 
+from agent4ba.api.event_queue import get_event_queue
 from agent4ba.core.models import WorkItem
 from agent4ba.core.storage import ProjectContextService
 
@@ -86,18 +87,73 @@ def decompose_objective(state: Any) -> dict[str, Any]:
 
     print(f"[BACKLOG_AGENT] Objective: {objective}")
 
+    # Récupérer le thread_id et la queue d'événements
+    thread_id = state.get("thread_id", "")
+    event_queue = get_event_queue(thread_id) if thread_id else None
+
+    # Initialiser la liste d'événements (pour compatibilité)
+    agent_events = []
+
+    # Émettre l'événement AgentStart avec la reformulation
+    start_event = {
+        "type": "agent_start",
+        "thought": f"Parfait ! Je vais décomposer l'objectif « {objective} » en une structure hiérarchique de fonctionnalités et user stories.",
+        "agent_name": "BacklogAgent",
+    }
+    agent_events.append(start_event)
+    if event_queue:
+        event_queue.put(start_event)
+
+    # Émettre le plan d'action
+    plan_event = {
+        "type": "agent_plan",
+        "steps": [
+            "Chargement du contexte du projet",
+            "Analyse de l'objectif métier",
+            "Génération de la structure (Features & Stories)",
+            "Validation et construction de l'ImpactPlan",
+        ],
+        "agent_name": "BacklogAgent",
+    }
+    agent_events.append(plan_event)
+    if event_queue:
+        event_queue.put(plan_event)
+
     # Charger le contexte du projet
     project_id = state.get("project_id", "")
     storage = ProjectContextService()
+
+    # Émettre l'événement de chargement du contexte
+    load_event = {
+        "type": "tool_used",
+        "tool_name": "Chargement du contexte",
+        "tool_icon": "📚",
+        "description": "Chargement du backlog existant du projet",
+        "status": "running",
+    }
+    agent_events.append(load_event)
+    if event_queue:
+        event_queue.put(load_event)
 
     try:
         existing_items = storage.load_context(project_id)
         context_summary = f"Backlog actuel avec {len(existing_items)} work items"
         print(f"[BACKLOG_AGENT] Loaded {len(existing_items)} existing work items")
+        # Mettre à jour le statut
+        load_event["status"] = "completed"
+        load_event["details"] = {"items_count": len(existing_items)}
+        agent_events[-1] = load_event
+        if event_queue:
+            event_queue.put(load_event)
     except FileNotFoundError:
         existing_items = []
         context_summary = "Nouveau projet sans backlog existant"
         print("[BACKLOG_AGENT] No existing backlog found")
+        load_event["status"] = "completed"
+        load_event["details"] = {"items_count": 0}
+        agent_events[-1] = load_event
+        if event_queue:
+            event_queue.put(load_event)
 
     # Charger le prompt
     prompt_config = load_decompose_prompt()
@@ -114,6 +170,19 @@ def decompose_objective(state: Any) -> dict[str, Any]:
 
     print(f"[BACKLOG_AGENT] Using model: {model}")
 
+    # Émettre l'événement d'appel LLM
+    llm_event = {
+        "type": "tool_used",
+        "tool_name": "Appel LLM",
+        "tool_icon": "🧠",
+        "description": f"Génération de la décomposition avec {model}",
+        "status": "running",
+        "details": {"model": model},
+    }
+    agent_events.append(llm_event)
+    if event_queue:
+        event_queue.put(llm_event)
+
     try:
         # Appeler le LLM
         response = completion(
@@ -129,6 +198,13 @@ def decompose_objective(state: Any) -> dict[str, Any]:
         response_text = response.choices[0].message.content
 
         print(f"[BACKLOG_AGENT] LLM response received: {len(response_text)} characters")
+
+        # Mettre à jour le statut
+        llm_event["status"] = "completed"
+        llm_event["details"]["response_length"] = len(response_text)
+        agent_events[-1] = llm_event
+        if event_queue:
+            event_queue.put(llm_event)
 
         # Parser la réponse JSON
         work_items_data = json.loads(response_text)
@@ -161,23 +237,51 @@ def decompose_objective(state: Any) -> dict[str, Any]:
         print(f"[BACKLOG_AGENT] - {len(new_items)} new items")
         print("[BACKLOG_AGENT] Workflow paused, awaiting human approval")
 
+        # Émettre l'événement de construction de l'ImpactPlan
+        plan_build_event = {
+            "type": "tool_used",
+            "tool_name": "Construction ImpactPlan",
+            "tool_icon": "📋",
+            "description": "Création du plan d'impact avec les work items générés",
+            "status": "completed",
+            "details": {"new_items_count": len(new_items)},
+        }
+        agent_events.append(plan_build_event)
+        if event_queue:
+            event_queue.put(plan_build_event)
+
         return {
             "impact_plan": impact_plan,
             "status": "awaiting_approval",
             "result": f"Generated {len(new_items)} work items for objective: {objective}",
+            "agent_events": agent_events,
         }
 
     except json.JSONDecodeError as e:
         print(f"[BACKLOG_AGENT] Error parsing JSON: {e}")
+        llm_event["status"] = "error"
+        llm_event["details"]["error"] = str(e)
+        agent_events[-1] = llm_event
+        if event_queue:
+            event_queue.put(llm_event)
         return {
             "status": "error",
             "result": f"Failed to parse LLM response as JSON: {e}",
+            "agent_events": agent_events,
         }
     except Exception as e:
         print(f"[BACKLOG_AGENT] Error: {e}")
+        if agent_events and agent_events[-1].get("status") == "running":
+            error_event = agent_events[-1]
+            error_event["status"] = "error"
+            error_event["details"] = error_event.get("details", {})
+            error_event["details"]["error"] = str(e)
+            if event_queue:
+                event_queue.put(error_event)
         return {
             "status": "error",
             "result": f"Failed to decompose objective: {e}",
+            "agent_events": agent_events,
         }
 
 

@@ -1,5 +1,6 @@
 """FastAPI application for Agent4BA."""
 
+import asyncio
 import shutil
 import uuid
 from collections.abc import AsyncIterator
@@ -13,7 +14,10 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from agent4ba.ai.graph import app as workflow_app
 from agent4ba.api.app_factory import create_app
+from agent4ba.api.event_queue import cleanup_event_queue, get_event_queue
 from agent4ba.api.events import (
+    AgentPlanEvent,
+    AgentStartEvent,
     ErrorEvent,
     ImpactPlanReadyEvent,
     NodeEndEvent,
@@ -67,10 +71,19 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
     # Générer un thread_id unique pour cette conversation
     thread_id = str(uuid.uuid4())
 
+    print(f"[STREAMING] Starting stream for thread_id: {thread_id}")
+    print(f"[STREAMING] Project: {request.project_id}, Query: {request.query}")
+
     try:
         # Envoyer immédiatement le thread_id au client
         thread_id_event = ThreadIdEvent(thread_id=thread_id)
         yield f"data: {thread_id_event.model_dump_json()}\n\n"
+        print(f"[STREAMING] Sent thread_id event")
+
+        # Créer la queue d'événements pour ce thread
+        loop = asyncio.get_running_loop()
+        event_queue = get_event_queue(thread_id, loop)
+        print(f"[STREAMING] Created event queue")
 
         # Envoyer la requête de l'utilisateur comme premier événement
         user_request_event = UserRequestEvent(query=request.query)
@@ -88,6 +101,8 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
             "status": "",
             "approval_decision": None,
             "result": "",
+            "agent_events": [],
+            "thread_id": thread_id,  # Passer le thread_id dans le state
         }
 
         # Configuration pour LangGraph avec thread_id
@@ -96,39 +111,104 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         # Variables pour accumuler l'état
         accumulated_state: dict[str, Any] = initial_state.copy()
 
-        # Utiliser astream_events pour obtenir tous les événements du graphe
-        async for event in workflow_app.astream_events(
-            initial_state,
-            config,  # type: ignore[arg-type]
-            version="v2",
-        ):
-            event_kind = event.get("event")
-            event_data: dict[str, Any] = event.get("data", {})  # type: ignore[assignment]
+        print(f"[STREAMING] Starting workflow execution")
 
-            # Événement de début de nœud
-            if event_kind == "on_chain_start":
-                node_name = event.get("name", "")
-                if node_name and node_name != "LangGraph":
-                    start_event = NodeStartEvent(node_name=node_name)
-                    yield f"data: {start_event.model_dump_json()}\n\n"
+        # Générateur pour streamer les événements de la queue
+        async def stream_queue_events():
+            """Stream les événements de la queue au fur et à mesure."""
+            print(f"[STREAMING] stream_queue_events started")
+            event_count = 0
+            async for agent_event_data in event_queue.get_events():
+                event_count += 1
+                event_type = agent_event_data.get("type")
+                print(f"[STREAMING] Received event #{event_count}: {event_type}")
 
-            # Événement de fin de nœud avec output
-            elif event_kind == "on_chain_end":
-                node_name = event.get("name", "")
-                output = event_data.get("output")
-                if node_name and node_name != "LangGraph":
-                    # Mettre à jour l'état accumulé avec la sortie du nœud
-                    if isinstance(output, dict):
-                        accumulated_state.update(output)
-                        # Ne générer un NodeEndEvent que si la sortie est un dictionnaire
-                        # (les routeurs retournent des strings, on les filtre)
-                        end_event = NodeEndEvent(node_name=node_name, output=output)
-                        yield f"data: {end_event.model_dump_json()}\n\n"
+                if event_type == "agent_start":
+                    agent_start_event = AgentStartEvent(
+                        thought=agent_event_data["thought"],
+                        agent_name=agent_event_data["agent_name"],
+                    )
+                    yield f"data: {agent_start_event.model_dump_json()}\n\n"
+
+                elif event_type == "agent_plan":
+                    agent_plan_event = AgentPlanEvent(
+                        steps=agent_event_data["steps"],
+                        agent_name=agent_event_data["agent_name"],
+                    )
+                    yield f"data: {agent_plan_event.model_dump_json()}\n\n"
+
+                elif event_type == "tool_used":
+                    tool_used_event = ToolUsedEvent(
+                        tool_name=agent_event_data["tool_name"],
+                        tool_icon=agent_event_data["tool_icon"],
+                        description=agent_event_data["description"],
+                        status=agent_event_data["status"],
+                        details=agent_event_data.get("details"),
+                    )
+                    yield f"data: {tool_used_event.model_dump_json()}\n\n"
+            print(f"[STREAMING] stream_queue_events finished with {event_count} events")
+
+        # Tâche pour exécuter le workflow LangGraph en arrière-plan
+        async def run_langgraph_workflow():
+            """Exécute le workflow LangGraph et met à jour l'état accumulé."""
+            nonlocal accumulated_state
+            print(f"[STREAMING] run_langgraph_workflow started")
+
+            try:
+                event_count = 0
+                async for event in workflow_app.astream_events(
+                    initial_state,
+                    config,  # type: ignore[arg-type]
+                    version="v2",
+                ):
+                    event_count += 1
+                    event_kind = event.get("event")
+                    event_data: dict[str, Any] = event.get("data", {})  # type: ignore[assignment]
+
+                    if event_count % 10 == 0:
+                        print(f"[STREAMING] Processed {event_count} LangGraph events")
+
+                    # Événement de fin de nœud avec output
+                    if event_kind == "on_chain_end":
+                        node_name = event.get("name", "")
+                        output = event_data.get("output")
+                        if node_name and node_name != "LangGraph":
+                            print(f"[STREAMING] Node finished: {node_name}")
+                            # Mettre à jour l'état accumulé avec la sortie du nœud
+                            if isinstance(output, dict):
+                                accumulated_state.update(output)
+
+                print(f"[STREAMING] run_langgraph_workflow finished with {event_count} events")
+            except Exception as e:
+                print(f"[STREAMING] Error in run_langgraph_workflow: {e}")
+                import traceback
+                traceback.print_exc()
+                raise
+            finally:
+                # Signaler la fin du workflow à la queue
+                print(f"[STREAMING] Signaling queue done")
+                event_queue.done()
+
+        # Lancer le workflow en tâche de fond
+        print(f"[STREAMING] Starting LangGraph workflow task")
+        workflow_task = asyncio.create_task(run_langgraph_workflow())
+
+        # Streamer les événements de la queue au fur et à mesure
+        print(f"[STREAMING] Starting to stream queue events")
+        async for event_data in stream_queue_events():
+            yield event_data
+
+        # Attendre que le workflow soit terminé
+        print(f"[STREAMING] Waiting for workflow task to complete")
+        await workflow_task
+        print(f"[STREAMING] Workflow task completed")
 
         # Après avoir parcouru tous les événements, envoyer l'événement final
         result = accumulated_state.get("result", "")
         status = accumulated_state.get("status", "completed")
         impact_plan = accumulated_state.get("impact_plan", {})
+
+        print(f"[STREAMING] Final status: {status}")
 
         # Si le workflow attend une approbation, envoyer ImpactPlanReadyEvent
         if status == "awaiting_approval" and impact_plan:
@@ -138,6 +218,7 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                 status=status,
             )
             yield f"data: {impact_plan_event.model_dump_json()}\n\n"
+            print(f"[STREAMING] Sent impact_plan_ready event")
         else:
             # Sinon, envoyer WorkflowCompleteEvent
             complete_event = WorkflowCompleteEvent(
@@ -145,14 +226,25 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                 status=status,
             )
             yield f"data: {complete_event.model_dump_json()}\n\n"
+            print(f"[STREAMING] Sent workflow_complete event")
+
+        print(f"[STREAMING] Stream completed successfully")
 
     except Exception as e:
         # En cas d'erreur, envoyer un ErrorEvent
+        print(f"[STREAMING] Error occurred: {e}")
+        import traceback
+        traceback.print_exc()
+
         error_event = ErrorEvent(
             error=str(e),
             details="An error occurred during workflow execution",
         )
         yield f"data: {error_event.model_dump_json()}\n\n"
+    finally:
+        # Nettoyer la queue d'événements
+        print(f"[STREAMING] Cleaning up queue for thread_id: {thread_id}")
+        cleanup_event_queue(thread_id)
 
 
 @app.post("/chat")
@@ -370,17 +462,17 @@ async def upload_project_document(
     file: UploadFile = File(...),
 ) -> JSONResponse:
     """
-    Upload un document pour un projet.
+    Upload un document pour un projet et le vectorise automatiquement.
 
     Args:
         project_id: Identifiant unique du projet
         file: Fichier à uploader
 
     Returns:
-        JSONResponse avec le nom du fichier uploadé
+        JSONResponse avec les détails de l'upload et de la vectorisation
 
     Raises:
-        HTTPException: Si le type de fichier n'est pas supporté
+        HTTPException: Si le type de fichier n'est pas supporté ou si la vectorisation échoue
     """
     # Vérifier le type de fichier
     if file.content_type != "application/pdf":
@@ -404,15 +496,27 @@ async def upload_project_document(
         with file_path.open("wb") as f:
             f.write(content)
 
+        # Vectoriser le document automatiquement
+        ingestion_service = DocumentIngestionService(project_id)
+        ingestion_result = ingestion_service.ingest_document(file_path, file.filename)
+
         return JSONResponse(
             content={
                 "filename": file.filename,
-                "message": f"Fichier '{file.filename}' uploadé avec succès",
+                "message": f"Fichier '{file.filename}' uploadé et vectorisé avec succès",
+                "vectorization": {
+                    "num_chunks": ingestion_result["num_chunks"],
+                    "num_pages": ingestion_result["num_pages"],
+                    "status": ingestion_result["status"],
+                },
             },
             status_code=201,
         )
     except Exception as e:
+        # Si la vectorisation échoue, supprimer le fichier uploadé
+        if file_path.exists():
+            file_path.unlink()
         raise HTTPException(
             status_code=500,
-            detail=f"Erreur lors de l'upload du fichier: {e}",
+            detail=f"Erreur lors de l'upload ou de la vectorisation du fichier: {e}",
         ) from e

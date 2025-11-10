@@ -95,3 +95,30 @@ class ErrorEvent(StreamEvent):
     type: str = Field(default="error", description="Type d'événement")
     error: str = Field(..., description="Message d'erreur")
     details: str | None = Field(None, description="Détails supplémentaires sur l'erreur")
+
+
+class AgentStartEvent(StreamEvent):
+    """Événement émis au début de l'exécution d'un agent avec sa reformulation."""
+
+    type: str = Field(default="agent_start", description="Type d'événement")
+    thought: str = Field(..., description="Reformulation de ce que l'agent a compris et va faire")
+    agent_name: str = Field(..., description="Nom de l'agent qui démarre")
+
+
+class AgentPlanEvent(StreamEvent):
+    """Événement contenant le plan d'action de l'agent."""
+
+    type: str = Field(default="agent_plan", description="Type d'événement")
+    steps: list[str] = Field(..., description="Liste des étapes prévues par l'agent")
+    agent_name: str = Field(..., description="Nom de l'agent")
+
+
+class ToolUsedEvent(StreamEvent):
+    """Événement indiquant l'utilisation d'un outil par l'agent."""
+
+    type: str = Field(default="tool_used", description="Type d'événement")
+    tool_name: str = Field(..., description="Nom de l'outil utilisé")
+    tool_icon: str = Field(..., description="Emoji/icône représentant l'outil")
+    description: str = Field(..., description="Description de ce que fait l'outil")
+    status: str = Field(default="running", description="Statut: running, completed, error")
+    details: dict[str, Any] | None = Field(None, description="Détails additionnels sur l'utilisation de l'outil")

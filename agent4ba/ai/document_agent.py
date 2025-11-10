@@ -9,6 +9,7 @@ import yaml
 from dotenv import load_dotenv
 from litellm import completion
 
+from agent4ba.api.event_queue import get_event_queue
 from agent4ba.core.document_ingestion import DocumentIngestionService
 from agent4ba.core.models import WorkItem
 from agent4ba.core.storage import ProjectContextService
@@ -62,22 +63,81 @@ def extract_requirements(state: Any) -> dict[str, Any]:
 
     print(f"[DOCUMENT_AGENT] User query: {user_query}")
 
+    # Récupérer le thread_id et la queue d'événements
+    thread_id = state.get("thread_id", "")
+    event_queue = get_event_queue(thread_id) if thread_id else None
+
+    # Initialiser la liste d'événements
+    agent_events = []
+
+    # Émettre l'événement AgentStart avec la reformulation
+    start_event = {
+        "type": "agent_start",
+        "thought": f"Compris ! Je vais extraire les exigences pertinentes des documents en me basant sur votre recherche : « {user_query} ».",
+        "agent_name": "DocumentAgent",
+    }
+    agent_events.append(start_event)
+    if event_queue:
+        event_queue.put(start_event)
+
+    # Émettre le plan d'action
+    plan_event = {
+        "type": "agent_plan",
+        "steps": [
+            "Chargement de la Vector Store du projet",
+            "Recherche des documents pertinents (RAG)",
+            "Extraction des exigences via LLM",
+            "Validation et construction de l'ImpactPlan",
+        ],
+        "agent_name": "DocumentAgent",
+    }
+    agent_events.append(plan_event)
+    if event_queue:
+        event_queue.put(plan_event)
+
     # Initialiser le service d'ingestion pour accéder au vectorstore
+    vectorstore_event = {
+        "type": "tool_used",
+        "tool_name": "Chargement Vector Store",
+        "tool_icon": "🗄️",
+        "description": "Chargement de la base vectorielle des documents",
+        "status": "running",
+    }
+    agent_events.append(vectorstore_event)
+    if event_queue:
+        event_queue.put(vectorstore_event)
+
     try:
         ingestion_service = DocumentIngestionService(project_id)
         vectorstore = ingestion_service.get_vectorstore()
         print("[DOCUMENT_AGENT] Vector store loaded successfully")
+        vectorstore_event["status"] = "completed"
+        agent_events[-1] = vectorstore_event
+        if event_queue:
+            event_queue.put(vectorstore_event)
     except FileNotFoundError as e:
         print(f"[DOCUMENT_AGENT] No vectorstore found: {e}")
+        vectorstore_event["status"] = "error"
+        vectorstore_event["details"] = {"error": str(e)}
+        agent_events[-1] = vectorstore_event
+        if event_queue:
+            event_queue.put(vectorstore_event)
         return {
             "status": "error",
             "result": "Aucun document n'a été analysé pour ce projet. Veuillez d'abord uploader des documents.",
+            "agent_events": agent_events,
         }
     except Exception as e:
         print(f"[DOCUMENT_AGENT] Error loading vectorstore: {e}")
+        vectorstore_event["status"] = "error"
+        vectorstore_event["details"] = {"error": str(e)}
+        agent_events[-1] = vectorstore_event
+        if event_queue:
+            event_queue.put(vectorstore_event)
         return {
             "status": "error",
             "result": f"Erreur lors du chargement du vectorstore: {e}",
+            "agent_events": agent_events,
         }
 
     # Créer un retriever pour rechercher les documents pertinents
@@ -85,15 +145,38 @@ def extract_requirements(state: Any) -> dict[str, Any]:
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
     print("[DOCUMENT_AGENT] Retriever created with k=3")
 
+    # Émettre l'événement de recherche RAG
+    rag_event = {
+        "type": "tool_used",
+        "tool_name": "Recherche RAG",
+        "tool_icon": "🔍",
+        "description": "Recherche des chunks de documents pertinents",
+        "status": "running",
+    }
+    agent_events.append(rag_event)
+    if event_queue:
+        event_queue.put(rag_event)
+
     # Récupérer les documents pertinents
     try:
         retrieved_docs = retriever.invoke(user_query)
         print(f"[DOCUMENT_AGENT] Retrieved {len(retrieved_docs)} relevant chunks")
+        rag_event["status"] = "completed"
+        rag_event["details"] = {"chunks_retrieved": len(retrieved_docs)}
+        agent_events[-1] = rag_event
+        if event_queue:
+            event_queue.put(rag_event)
     except Exception as e:
         print(f"[DOCUMENT_AGENT] Error retrieving documents: {e}")
+        rag_event["status"] = "error"
+        rag_event["details"] = {"error": str(e)}
+        agent_events[-1] = rag_event
+        if event_queue:
+            event_queue.put(rag_event)
         return {
             "status": "error",
             "result": f"Erreur lors de la récupération des documents: {e}",
+            "agent_events": agent_events,
         }
 
     # Formater le contexte récupéré
@@ -133,6 +216,19 @@ def extract_requirements(state: Any) -> dict[str, Any]:
 
     print(f"[DOCUMENT_AGENT] Using model: {model}")
 
+    # Émettre l'événement d'appel LLM
+    llm_event = {
+        "type": "tool_used",
+        "tool_name": "Appel LLM",
+        "tool_icon": "🧠",
+        "description": f"Extraction des exigences avec {model}",
+        "status": "running",
+        "details": {"model": model},
+    }
+    agent_events.append(llm_event)
+    if event_queue:
+        event_queue.put(llm_event)
+
     try:
         # Appeler le LLM
         response = completion(
@@ -148,6 +244,13 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         response_text = response.choices[0].message.content
 
         print(f"[DOCUMENT_AGENT] LLM response received: {len(response_text)} characters")
+
+        # Mettre à jour le statut
+        llm_event["status"] = "completed"
+        llm_event["details"]["response_length"] = len(response_text)
+        agent_events[-1] = llm_event
+        if event_queue:
+            event_queue.put(llm_event)
 
         # Parser la réponse JSON
         work_items_data = json.loads(response_text)
@@ -180,21 +283,49 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         print(f"[DOCUMENT_AGENT] - {len(new_items)} new items")
         print("[DOCUMENT_AGENT] Workflow paused, awaiting human approval")
 
+        # Émettre l'événement de construction de l'ImpactPlan
+        plan_build_event = {
+            "type": "tool_used",
+            "tool_name": "Construction ImpactPlan",
+            "tool_icon": "📋",
+            "description": "Création du plan d'impact avec les exigences extraites",
+            "status": "completed",
+            "details": {"new_items_count": len(new_items)},
+        }
+        agent_events.append(plan_build_event)
+        if event_queue:
+            event_queue.put(plan_build_event)
+
         return {
             "impact_plan": impact_plan,
             "status": "awaiting_approval",
             "result": f"Extracted {len(new_items)} work items from document",
+            "agent_events": agent_events,
         }
 
     except json.JSONDecodeError as e:
         print(f"[DOCUMENT_AGENT] Error parsing JSON: {e}")
+        llm_event["status"] = "error"
+        llm_event["details"]["error"] = str(e)
+        agent_events[-1] = llm_event
+        if event_queue:
+            event_queue.put(llm_event)
         return {
             "status": "error",
             "result": f"Failed to parse LLM response as JSON: {e}",
+            "agent_events": agent_events,
         }
     except Exception as e:
         print(f"[DOCUMENT_AGENT] Error: {e}")
+        if agent_events and agent_events[-1].get("status") == "running":
+            error_event = agent_events[-1]
+            error_event["status"] = "error"
+            error_event["details"] = error_event.get("details", {})
+            error_event["details"]["error"] = str(e)
+            if event_queue:
+                event_queue.put(error_event)
         return {
             "status": "error",
             "result": f"Failed to extract requirements: {e}",
+            "agent_events": agent_events,
         }
