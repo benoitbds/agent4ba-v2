@@ -75,10 +75,14 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
     print(f"[STREAMING] Starting stream for thread_id: {thread_id}")
     print(f"[STREAMING] Project: {request.project_id}, Query: {request.query}")
 
+    # Liste pour accumuler tous les événements de cette session pour l'historique
+    timeline_events: list[dict[str, Any]] = []
+
     try:
         # Envoyer immédiatement le thread_id au client
         thread_id_event = ThreadIdEvent(thread_id=thread_id)
         yield f"data: {thread_id_event.model_dump_json()}\n\n"
+        timeline_events.append(thread_id_event.model_dump())
         print(f"[STREAMING] Sent thread_id event")
 
         # Créer la queue d'événements pour ce thread
@@ -89,6 +93,7 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         # Envoyer la requête de l'utilisateur comme premier événement
         user_request_event = UserRequestEvent(query=request.query)
         yield f"data: {user_request_event.model_dump_json()}\n\n"
+        timeline_events.append(user_request_event.model_dump())
 
         # Préparer l'état initial pour le graphe
         initial_state: dict[str, Any] = {
@@ -129,14 +134,18 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                         thought=agent_event_data["thought"],
                         agent_name=agent_event_data["agent_name"],
                     )
-                    yield f"data: {agent_start_event.model_dump_json()}\n\n"
+                    event_str = f"data: {agent_start_event.model_dump_json()}\n\n"
+                    yield event_str
+                    timeline_events.append(agent_start_event.model_dump())
 
                 elif event_type == "agent_plan":
                     agent_plan_event = AgentPlanEvent(
                         steps=agent_event_data["steps"],
                         agent_name=agent_event_data["agent_name"],
                     )
-                    yield f"data: {agent_plan_event.model_dump_json()}\n\n"
+                    event_str = f"data: {agent_plan_event.model_dump_json()}\n\n"
+                    yield event_str
+                    timeline_events.append(agent_plan_event.model_dump())
 
                 elif event_type == "tool_used":
                     tool_used_event = ToolUsedEvent(
@@ -146,7 +155,9 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                         status=agent_event_data["status"],
                         details=agent_event_data.get("details"),
                     )
-                    yield f"data: {tool_used_event.model_dump_json()}\n\n"
+                    event_str = f"data: {tool_used_event.model_dump_json()}\n\n"
+                    yield event_str
+                    timeline_events.append(tool_used_event.model_dump())
             print(f"[STREAMING] stream_queue_events finished with {event_count} events")
 
         # Tâche pour exécuter le workflow LangGraph en arrière-plan
@@ -219,6 +230,7 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                 status=status,
             )
             yield f"data: {impact_plan_event.model_dump_json()}\n\n"
+            timeline_events.append(impact_plan_event.model_dump())
             print(f"[STREAMING] Sent impact_plan_ready event")
         else:
             # Sinon, envoyer WorkflowCompleteEvent
@@ -227,7 +239,13 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                 status=status,
             )
             yield f"data: {complete_event.model_dump_json()}\n\n"
+            timeline_events.append(complete_event.model_dump())
             print(f"[STREAMING] Sent workflow_complete event")
+
+        # Sauvegarder les événements dans l'historique de la timeline
+        storage = ProjectContextService()
+        storage.save_timeline_events(request.project_id, timeline_events)
+        print(f"[STREAMING] Saved {len(timeline_events)} events to timeline history")
 
         print(f"[STREAMING] Stream completed successfully")
 
@@ -242,6 +260,16 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
             details="An error occurred during workflow execution",
         )
         yield f"data: {error_event.model_dump_json()}\n\n"
+        timeline_events.append(error_event.model_dump())
+
+        # Même en cas d'erreur, sauvegarder les événements
+        try:
+            storage = ProjectContextService()
+            storage.save_timeline_events(request.project_id, timeline_events)
+            print(f"[STREAMING] Saved {len(timeline_events)} events to timeline history (after error)")
+        except Exception as save_error:
+            # Log l'erreur mais ne pas interrompre le flux
+            print(f"Failed to save timeline events: {save_error}")
     finally:
         # Nettoyer la queue d'événements
         print(f"[STREAMING] Cleaning up queue for thread_id: {thread_id}")
@@ -422,6 +450,32 @@ async def get_project_backlog(project_id: str) -> JSONResponse:
         raise HTTPException(
             status_code=404,
             detail=f"Backlog not found for project '{project_id}': {e}",
+        ) from e
+
+
+@app.get("/projects/{project_id}/timeline")
+async def get_project_timeline(project_id: str) -> JSONResponse:
+    """
+    Récupère l'historique complet de la timeline d'un projet.
+
+    Args:
+        project_id: Identifiant unique du projet
+
+    Returns:
+        JSONResponse avec l'historique des sessions d'événements
+
+    Raises:
+        HTTPException: Si le projet n'existe pas
+    """
+    storage = ProjectContextService()
+
+    try:
+        history = storage.load_timeline_history(project_id)
+        return JSONResponse(content=history)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error loading timeline history for project '{project_id}': {e}",
         ) from e
 
 
