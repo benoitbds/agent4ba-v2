@@ -26,7 +26,6 @@ from agent4ba.api.events import (
     ToolUsedEvent,
     WorkflowCompleteEvent,
 )
-from agent4ba.api.main_streaming import merge_streams
 from agent4ba.api.schemas import (
     ApprovalRequest,
     ChatRequest,
@@ -145,11 +144,11 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                     yield f"data: {tool_used_event.model_dump_json()}\n\n"
             print(f"[STREAMING] stream_queue_events finished with {event_count} events")
 
-        # Générateur pour streamer les événements LangGraph
-        async def stream_langgraph_events():
-            """Stream les événements du workflow LangGraph."""
+        # Tâche pour exécuter le workflow LangGraph en arrière-plan
+        async def run_langgraph_workflow():
+            """Exécute le workflow LangGraph et met à jour l'état accumulé."""
             nonlocal accumulated_state
-            print(f"[STREAMING] stream_langgraph_events started")
+            print(f"[STREAMING] run_langgraph_workflow started")
 
             try:
                 event_count = 0
@@ -175,9 +174,9 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                             if isinstance(output, dict):
                                 accumulated_state.update(output)
 
-                print(f"[STREAMING] stream_langgraph_events finished with {event_count} events")
+                print(f"[STREAMING] run_langgraph_workflow finished with {event_count} events")
             except Exception as e:
-                print(f"[STREAMING] Error in stream_langgraph_events: {e}")
+                print(f"[STREAMING] Error in run_langgraph_workflow: {e}")
                 import traceback
                 traceback.print_exc()
                 raise
@@ -186,15 +185,19 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                 print(f"[STREAMING] Signaling queue done")
                 event_queue.done()
 
-        # Merger les deux streams et les yielder
-        print(f"[STREAMING] Starting merge_streams")
-        async for event_data in merge_streams(
-            stream_queue_events(),
-            stream_langgraph_events(),
-        ):
+        # Lancer le workflow en tâche de fond
+        print(f"[STREAMING] Starting LangGraph workflow task")
+        workflow_task = asyncio.create_task(run_langgraph_workflow())
+
+        # Streamer les événements de la queue au fur et à mesure
+        print(f"[STREAMING] Starting to stream queue events")
+        async for event_data in stream_queue_events():
             yield event_data
 
-        print(f"[STREAMING] Merge complete, sending final events")
+        # Attendre que le workflow soit terminé
+        print(f"[STREAMING] Waiting for workflow task to complete")
+        await workflow_task
+        print(f"[STREAMING] Workflow task completed")
 
         # Après avoir parcouru tous les événements, envoyer l'événement final
         result = accumulated_state.get("result", "")
