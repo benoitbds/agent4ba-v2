@@ -8,12 +8,17 @@ interface AgentTimelineProps {
   events: TimelineEvent[];
 }
 
-export default function AgentTimeline({ events }: AgentTimelineProps) {
-  // État pour gérer l'ouverture/fermeture des accordéons
-  const [openItems, setOpenItems] = useState<Set<string>>(new Set());
+interface EventGroup {
+  id: string;
+  type: "node" | "standalone";
+  nodeName?: string;
+  events: TimelineEvent[];
+  status?: "running" | "completed" | "error";
+}
 
-  // État pour suivre les étapes du plan complétées
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+export default function AgentTimeline({ events }: AgentTimelineProps) {
+  // État pour gérer l'ouverture/fermeture de chaque groupe
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
   // Référence pour le scroll automatique
   const timelineEndRef = useRef<HTMLDivElement | null>(null);
@@ -30,19 +35,67 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
 
   if (events.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500">
+      <div className="flex items-center justify-center h-64 text-gray-400">
         <p>En attente d&apos;événements...</p>
       </div>
     );
   }
 
-  const toggleItem = (itemId: string) => {
-    setOpenItems((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId);
+  // Fonction pour regrouper les événements par nœud
+  const groupEvents = (events: TimelineEvent[]): EventGroup[] => {
+    const groups: EventGroup[] = [];
+    let currentNodeGroup: EventGroup | null = null;
+
+    events.forEach((event) => {
+      const { type } = event.event;
+
+      if (type === "node_start") {
+        // Démarrer un nouveau groupe de nœud
+        const nodeName = "node_name" in event.event ? event.event.node_name : "Unknown";
+        currentNodeGroup = {
+          id: `node-${event.id}`,
+          type: "node",
+          nodeName,
+          events: [event],
+          status: "running",
+        };
+      } else if (type === "node_end" && currentNodeGroup) {
+        // Terminer le groupe de nœud actuel
+        currentNodeGroup.events.push(event);
+        currentNodeGroup.status = "completed";
+        groups.push(currentNodeGroup);
+        currentNodeGroup = null;
+      } else if (currentNodeGroup) {
+        // Ajouter l'événement au groupe actuel
+        currentNodeGroup.events.push(event);
+        if (type === "error") {
+          currentNodeGroup.status = "error";
+        }
       } else {
-        newSet.add(itemId);
+        // Événement standalone (pas dans un nœud)
+        groups.push({
+          id: `standalone-${event.id}`,
+          type: "standalone",
+          events: [event],
+        });
+      }
+    });
+
+    // Si un groupe de nœud est encore ouvert, l'ajouter
+    if (currentNodeGroup) {
+      groups.push(currentNodeGroup);
+    }
+
+    return groups;
+  };
+
+  const toggleGroup = (groupId: string) => {
+    setOpenGroups((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupId)) {
+        newSet.delete(groupId);
+      } else {
+        newSet.add(groupId);
       }
       return newSet;
     });
@@ -73,8 +126,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
       default:
         return "•";
     }
-    return null;
-  }, [events]);
+  };
 
   // Nouvelle fonction pour obtenir la couleur de bordure gauche (design clair)
   const getBorderColor = (status?: string, type?: string) => {
@@ -88,39 +140,19 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
     return "border-l-gray-300";
   };
 
-    const toolEvents = events.filter((e) => e.event.type === "tool_used");
-    const completedToolsCount = toolEvents.filter(
-      (e) => "status" in e.event && e.event.status === "completed"
-    ).length;
-
-    // Marquer les étapes comme complétées au fur et à mesure
-    const newCompleted = new Set<number>();
-    for (let i = 0; i < Math.min(completedToolsCount, agentPlan.length); i++) {
-      newCompleted.add(i);
-    }
-    setCompletedSteps(newCompleted);
-  }, [events, agentPlan]);
-
-  const renderEvent = (event: TimelineEvent) => {
+  const formatEventDetails = (event: TimelineEvent, compact = false) => {
     const { type } = event.event;
 
-    // Session initialisée
-    if (type === "thread_id" && "thread_id" in event.event) {
-      return (
-        <div
-          key={event.id}
-          className="bg-white border-l-4 border-l-purple-400 rounded-lg p-5 shadow-sm"
-        >
-          <div className="flex items-start gap-4">
-            <span className="text-2xl">🔗</span>
-            <div className="flex-1">
-              <p className="font-semibold text-gray-900 text-lg">
-                Session initialisée
-              </p>
-              <p className="text-sm text-gray-500 font-mono mt-1">
+    switch (type) {
+      case "thread_id":
+        return (
+          <div>
+            <p className="font-semibold text-gray-900">Session initialisée</p>
+            {!compact && (
+              <p className="text-sm text-gray-500 font-mono truncate mt-1">
                 Thread: {event.event.thread_id}
               </p>
-            </div>
+            )}
           </div>
         );
       case "user_request":
@@ -140,193 +172,104 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
               <p className="text-xs text-gray-500 mt-1">
                 {event.timestamp.toLocaleTimeString()}
               </p>
-              <p className="text-gray-800 text-base leading-relaxed">
-                {event.event.thought}
-              </p>
-            </div>
+            )}
           </div>
-        </div>
-      );
-    }
-
-    // Plan d'action (AgentPlan)
-    if (type === "agent_plan" && "steps" in event.event) {
-      return (
-        <div
-          key={event.id}
-          className="bg-white border-l-4 border-l-amber-400 rounded-lg p-6 shadow-sm"
-        >
-          <div className="flex items-start gap-4">
-            <span className="text-3xl">📋</span>
-            <div className="flex-1">
-              <p className="font-semibold text-gray-900 text-lg mb-4">
-                Plan d&apos;action
+        );
+      case "node_end":
+        return (
+          <div>
+            <p className="text-sm text-gray-900">Terminé</p>
+            {!compact && event.event.output && (
+              <details className="mt-2 text-xs">
+                <summary className="cursor-pointer text-gray-600 hover:text-gray-900 font-medium">
+                  Voir la sortie
+                </summary>
+                <pre className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded text-xs overflow-x-auto">
+                  {JSON.stringify(event.event.output, null, 2)}
+                </pre>
+              </details>
+            )}
+            {!compact && (
+              <p className="text-xs text-gray-500 mt-1">
+                {event.timestamp.toLocaleTimeString()}
               </p>
-              <ul className="space-y-2">
-                {event.event.steps.map((step: string, index: number) => (
-                  <li key={index} className="flex items-start gap-3">
-                    <span className="text-xl flex-shrink-0 mt-0.5">
-                      {completedSteps.has(index) ? "✅" : "⬜"}
-                    </span>
-                    <span
-                      className={`${
-                        completedSteps.has(index)
-                          ? "text-gray-900 font-medium"
-                          : "text-gray-600"
-                      }`}
-                    >
-                      {step}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            )}
           </div>
-        </div>
-      );
-    }
-
-    // Outil utilisé (ToolUsed)
-    if (type === "tool_used" && "tool_name" in event.event) {
-      const isOpen = openItems.has(event.id);
-      const statusColor =
-        event.event.status === "completed"
-          ? "border-l-green-400"
-          : event.event.status === "error"
-          ? "border-l-red-400"
-          : "border-l-blue-400";
-
-      const statusIcon =
-        event.event.status === "completed"
-          ? "✓"
-          : event.event.status === "error"
-          ? "⚠"
-          : "⏳";
-
-      return (
-        <div
-          key={event.id}
-          className={`bg-white border border-gray-200 ${statusColor} border-l-4 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow`}
-        >
-          {/* Header cliquable */}
-          <button
-            onClick={() => toggleItem(event.id)}
-            className="w-full px-5 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors text-left"
-          >
-            {/* Chevron */}
-            <span className="text-gray-500 text-sm flex-shrink-0">
-              {isOpen ? "▼" : "▶"}
-            </span>
-
-            {/* Icône de l'outil */}
-            <span className="text-2xl flex-shrink-0">
-              {event.event.tool_icon}
-            </span>
-
-            {/* Nom et description */}
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900">
-                {event.event.tool_name}
+        );
+      case "llm_start":
+        return (
+          <div>
+            <p className="text-sm text-gray-700">LLM démarré</p>
+            {!compact && "model" in event.event && event.event.model && (
+              <p className="text-xs text-gray-500 mt-1">
+                Modèle: {event.event.model}
               </p>
-              <p className="text-sm text-gray-600 mt-0.5">
-                {event.event.description}
+            )}
+          </div>
+        );
+      case "llm_end":
+        return (
+          <div>
+            <p className="text-sm text-gray-700">LLM terminé</p>
+            {!compact && "content" in event.event && event.event.content && (
+              <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                {event.event.content}
               </p>
-            </div>
-
-            {/* Badge de statut */}
-            <span className="text-xl flex-shrink-0">{statusIcon}</span>
-          </button>
-
-          {/* Contenu dépliable (détails) */}
-          {isOpen && event.event.details && (
-            <div className="border-t border-gray-100 bg-gray-50 px-5 py-4">
-              <p className="text-xs font-medium text-gray-700 mb-2">
-                Détails :
-              </p>
-              <pre className="text-xs text-gray-700 bg-white border border-gray-200 rounded p-3 overflow-x-auto">
-                {JSON.stringify(event.event.details, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // ImpactPlan prêt
-    if (type === "impact_plan_ready" && "impact_plan" in event.event) {
-      return (
-        <div
-          key={event.id}
-          className="bg-white border-l-4 border-l-yellow-400 rounded-lg p-5 shadow-sm"
-        >
-          <div className="flex items-start gap-4">
-            <span className="text-2xl">📄</span>
-            <div className="flex-1">
-              <p className="font-semibold text-gray-900 text-lg">
-                ImpactPlan prêt pour validation
-              </p>
+            )}
+          </div>
+        );
+      case "llm_token":
+        return (
+          <div>
+            <p className="text-xs text-gray-600">Token: {event.event.token}</p>
+          </div>
+        );
+      case "impact_plan_ready":
+        return (
+          <div>
+            <p className="font-semibold text-gray-900">
+              ImpactPlan prêt pour validation
+            </p>
+            {!compact && (
               <p className="text-sm text-gray-600 mt-1">
                 {event.event.impact_plan.new_items.length} nouveaux items
               </p>
-            </div>
+            )}
           </div>
-        </div>
-      );
-    }
-
-    // Workflow terminé
-    if (type === "workflow_complete" && "result" in event.event) {
-      return (
-        <div
-          key={event.id}
-          className="bg-white border-l-4 border-l-emerald-400 rounded-lg p-5 shadow-sm"
-        >
-          <div className="flex items-start gap-4">
-            <span className="text-2xl">🏁</span>
-            <div className="flex-1">
-              <p className="font-semibold text-gray-900 text-lg">
-                Workflow terminé
-              </p>
-              <p className="text-sm text-gray-700 mt-1">
-                {event.event.result}
-              </p>
-            </div>
+        );
+      case "workflow_complete":
+        return (
+          <div>
+            <p className="font-semibold text-gray-900">Workflow terminé</p>
+            {!compact && (
+              <p className="text-sm text-gray-600 mt-1">{event.event.result}</p>
+            )}
           </div>
-        </div>
-      );
-    }
-
-    // Erreur
-    if (type === "error" && "error" in event.event) {
-      return (
-        <div
-          key={event.id}
-          className="bg-white border-l-4 border-l-red-500 rounded-lg p-5 shadow-sm"
-        >
-          <div className="flex items-start gap-4">
-            <span className="text-2xl">⚠️</span>
-            <div className="flex-1">
-              <p className="font-semibold text-red-900 text-lg">Erreur</p>
-              <p className="text-sm text-red-700 mt-1">{event.event.error}</p>
-              {event.event.details && (
-                <p className="text-xs text-gray-600 mt-1">
-                  {event.event.details}
-                </p>
-              )}
-            </div>
+        );
+      case "error":
+        return (
+          <div>
+            <p className="font-semibold text-red-700">Erreur</p>
+            <p className="text-sm text-gray-700 mt-1">{event.event.error}</p>
+            {!compact && event.event.details && (
+              <p className="text-xs text-gray-600 mt-1">{event.event.details}</p>
+            )}
           </div>
-        </div>
-      );
+        );
+      default:
+        return (
+          <div>
+            <p className="font-medium text-gray-900">{type}</p>
+          </div>
+        );
     }
-
-    // Événements ignorés (node_start, node_end, llm_start, llm_end, etc.)
-    // On ne les affiche plus dans le nouveau design narratif
-    return null;
   };
+
+  const groups = groupEvents(events);
 
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">
+      <h2 className="text-xl font-semibold text-gray-900 mb-6">
         Timeline d&apos;exécution
       </h2>
 
