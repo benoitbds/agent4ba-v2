@@ -117,6 +117,7 @@ class ToolUsedEvent(StreamEvent):
     """Événement indiquant l'utilisation d'un outil par l'agent."""
 
     type: str = Field(default="tool_used", description="Type d'événement")
+    tool_run_id: str = Field(..., description="Identifiant unique de cette exécution d'outil (UUID)")
     tool_name: str = Field(..., description="Nom de l'outil utilisé")
     tool_icon: str = Field(..., description="Emoji/icône représentant l'outil")
     description: str = Field(..., description="Description de ce que fait l'outil")

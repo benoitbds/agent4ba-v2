@@ -102,11 +102,34 @@ export interface AgentPlanEvent extends BaseEvent {
 
 export interface ToolUsedEvent extends BaseEvent {
   type: "tool_used";
+  tool_run_id: string;
   tool_name: string;
   tool_icon: string;
   description: string;
   status: "running" | "completed" | "error";
   details?: Record<string, unknown>;
+}
+
+// Structure pour organiser les événements par session
+export interface TimelineSession {
+  id: string;
+  user_query: string;
+  timestamp: Date;
+  tool_runs: Map<string, ToolRunState>;
+  agent_events: TimelineEvent[];
+  is_expanded: boolean;
+}
+
+// État d'une exécution d'outil avec ses mises à jour
+export interface ToolRunState {
+  tool_run_id: string;
+  tool_name: string;
+  tool_icon: string;
+  description: string;
+  status: "running" | "completed" | "error";
+  details: Record<string, string | number | boolean | null | undefined>;
+  started_at: Date;
+  completed_at?: Date;
 }
 
 // Union type of all possible events

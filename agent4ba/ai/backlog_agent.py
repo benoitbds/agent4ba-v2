@@ -2,6 +2,7 @@
 
 import json
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -124,12 +125,15 @@ def decompose_objective(state: Any) -> dict[str, Any]:
     storage = ProjectContextService()
 
     # Émettre l'événement de chargement du contexte
+    load_run_id = str(uuid.uuid4())
     load_event = {
         "type": "tool_used",
+        "tool_run_id": load_run_id,
         "tool_name": "Chargement du contexte",
         "tool_icon": "📚",
         "description": "Chargement du backlog existant du projet",
         "status": "running",
+        "details": {},
     }
     agent_events.append(load_event)
     if event_queue:
@@ -140,20 +144,34 @@ def decompose_objective(state: Any) -> dict[str, Any]:
         context_summary = f"Backlog actuel avec {len(existing_items)} work items"
         print(f"[BACKLOG_AGENT] Loaded {len(existing_items)} existing work items")
         # Mettre à jour le statut
-        load_event["status"] = "completed"
-        load_event["details"] = {"items_count": len(existing_items)}
-        agent_events[-1] = load_event
+        load_event_completed = {
+            "type": "tool_used",
+            "tool_run_id": load_run_id,
+            "tool_name": "Chargement du contexte",
+            "tool_icon": "📚",
+            "description": "Chargement du backlog existant du projet",
+            "status": "completed",
+            "details": {"items_count": len(existing_items)},
+        }
+        agent_events[-1] = load_event_completed
         if event_queue:
-            event_queue.put(load_event)
+            event_queue.put(load_event_completed)
     except FileNotFoundError:
         existing_items = []
         context_summary = "Nouveau projet sans backlog existant"
         print("[BACKLOG_AGENT] No existing backlog found")
-        load_event["status"] = "completed"
-        load_event["details"] = {"items_count": 0}
-        agent_events[-1] = load_event
+        load_event_completed = {
+            "type": "tool_used",
+            "tool_run_id": load_run_id,
+            "tool_name": "Chargement du contexte",
+            "tool_icon": "📚",
+            "description": "Chargement du backlog existant du projet",
+            "status": "completed",
+            "details": {"items_count": 0},
+        }
+        agent_events[-1] = load_event_completed
         if event_queue:
-            event_queue.put(load_event)
+            event_queue.put(load_event_completed)
 
     # Charger le prompt
     prompt_config = load_decompose_prompt()
@@ -171,13 +189,15 @@ def decompose_objective(state: Any) -> dict[str, Any]:
     print(f"[BACKLOG_AGENT] Using model: {model}")
 
     # Émettre l'événement d'appel LLM
+    llm_run_id = str(uuid.uuid4())
     llm_event = {
         "type": "tool_used",
+        "tool_run_id": llm_run_id,
         "tool_name": "Appel LLM",
         "tool_icon": "🧠",
         "description": f"Génération de la décomposition avec {model}",
         "status": "running",
-        "details": {"model": model},
+        "details": {"model": model, "temperature": temperature},
     }
     agent_events.append(llm_event)
     if event_queue:
@@ -200,11 +220,22 @@ def decompose_objective(state: Any) -> dict[str, Any]:
         print(f"[BACKLOG_AGENT] LLM response received: {len(response_text)} characters")
 
         # Mettre à jour le statut
-        llm_event["status"] = "completed"
-        llm_event["details"]["response_length"] = len(response_text)
-        agent_events[-1] = llm_event
+        llm_event_completed = {
+            "type": "tool_used",
+            "tool_run_id": llm_run_id,
+            "tool_name": "Appel LLM",
+            "tool_icon": "🧠",
+            "description": f"Génération de la décomposition avec {model}",
+            "status": "completed",
+            "details": {
+                "model": model,
+                "temperature": temperature,
+                "response_length": len(response_text),
+            },
+        }
+        agent_events[-1] = llm_event_completed
         if event_queue:
-            event_queue.put(llm_event)
+            event_queue.put(llm_event_completed)
 
         # Parser la réponse JSON
         work_items_data = json.loads(response_text)
@@ -238,8 +269,10 @@ def decompose_objective(state: Any) -> dict[str, Any]:
         print("[BACKLOG_AGENT] Workflow paused, awaiting human approval")
 
         # Émettre l'événement de construction de l'ImpactPlan
+        plan_build_run_id = str(uuid.uuid4())
         plan_build_event = {
             "type": "tool_used",
+            "tool_run_id": plan_build_run_id,
             "tool_name": "Construction ImpactPlan",
             "tool_icon": "📋",
             "description": "Création du plan d'impact avec les work items générés",
@@ -259,11 +292,21 @@ def decompose_objective(state: Any) -> dict[str, Any]:
 
     except json.JSONDecodeError as e:
         print(f"[BACKLOG_AGENT] Error parsing JSON: {e}")
-        llm_event["status"] = "error"
-        llm_event["details"]["error"] = str(e)
-        agent_events[-1] = llm_event
+        llm_event_error = {
+            "type": "tool_used",
+            "tool_run_id": llm_run_id,
+            "tool_name": "Appel LLM",
+            "tool_icon": "🧠",
+            "description": f"Génération de la décomposition avec {model}",
+            "status": "error",
+            "details": {
+                "model": model,
+                "error": str(e),
+            },
+        }
+        agent_events[-1] = llm_event_error
         if event_queue:
-            event_queue.put(llm_event)
+            event_queue.put(llm_event_error)
         return {
             "status": "error",
             "result": f"Failed to parse LLM response as JSON: {e}",
@@ -272,10 +315,11 @@ def decompose_objective(state: Any) -> dict[str, Any]:
     except Exception as e:
         print(f"[BACKLOG_AGENT] Error: {e}")
         if agent_events and agent_events[-1].get("status") == "running":
-            error_event = agent_events[-1]
+            error_event = agent_events[-1].copy()
             error_event["status"] = "error"
             error_event["details"] = error_event.get("details", {})
             error_event["details"]["error"] = str(e)
+            agent_events[-1] = error_event
             if event_queue:
                 event_queue.put(error_event)
         return {
@@ -310,18 +354,90 @@ def improve_description(state: Any) -> dict[str, Any]:
 
     print(f"[BACKLOG_AGENT] Item ID: {item_id}")
 
+    # Récupérer le thread_id et la queue d'événements
+    thread_id = state.get("thread_id", "")
+    event_queue = get_event_queue(thread_id) if thread_id else None
+
+    # Initialiser la liste d'événements
+    agent_events = []
+
+    # Émettre l'événement AgentStart
+    start_event = {
+        "type": "agent_start",
+        "thought": f"Je vais améliorer la description du work item {item_id}.",
+        "agent_name": "BacklogAgent",
+    }
+    agent_events.append(start_event)
+    if event_queue:
+        event_queue.put(start_event)
+
+    # Émettre le plan d'action
+    plan_event = {
+        "type": "agent_plan",
+        "steps": [
+            "Chargement du contexte du projet",
+            "Recherche du work item",
+            "Amélioration de la description via LLM",
+            "Construction de l'ImpactPlan",
+        ],
+        "agent_name": "BacklogAgent",
+    }
+    agent_events.append(plan_event)
+    if event_queue:
+        event_queue.put(plan_event)
+
     # Charger le contexte du projet
     project_id = state.get("project_id", "")
     storage = ProjectContextService()
 
+    # Émettre l'événement de chargement du contexte
+    load_run_id = str(uuid.uuid4())
+    load_event = {
+        "type": "tool_used",
+        "tool_run_id": load_run_id,
+        "tool_name": "Chargement du contexte",
+        "tool_icon": "📚",
+        "description": "Chargement du backlog existant du projet",
+        "status": "running",
+        "details": {},
+    }
+    agent_events.append(load_event)
+    if event_queue:
+        event_queue.put(load_event)
+
     try:
         existing_items = storage.load_context(project_id)
         print(f"[BACKLOG_AGENT] Loaded {len(existing_items)} existing work items")
+        load_event_completed = {
+            "type": "tool_used",
+            "tool_run_id": load_run_id,
+            "tool_name": "Chargement du contexte",
+            "tool_icon": "📚",
+            "description": "Chargement du backlog existant du projet",
+            "status": "completed",
+            "details": {"items_count": len(existing_items)},
+        }
+        agent_events[-1] = load_event_completed
+        if event_queue:
+            event_queue.put(load_event_completed)
     except FileNotFoundError:
         print("[BACKLOG_AGENT] No existing backlog found")
+        load_event_error = {
+            "type": "tool_used",
+            "tool_run_id": load_run_id,
+            "tool_name": "Chargement du contexte",
+            "tool_icon": "📚",
+            "description": "Chargement du backlog existant du projet",
+            "status": "error",
+            "details": {"error": f"No backlog found for project {project_id}"},
+        }
+        agent_events[-1] = load_event_error
+        if event_queue:
+            event_queue.put(load_event_error)
         return {
             "status": "error",
             "result": f"No backlog found for project {project_id}",
+            "agent_events": agent_events,
         }
 
     # Trouver l'item correspondant
@@ -336,6 +452,7 @@ def improve_description(state: Any) -> dict[str, Any]:
         return {
             "status": "error",
             "result": f"Work item {item_id} not found in backlog",
+            "agent_events": agent_events,
         }
 
     print(f"[BACKLOG_AGENT] Found item: {target_item.type} - {target_item.title}")
@@ -364,6 +481,21 @@ def improve_description(state: Any) -> dict[str, Any]:
 
     print(f"[BACKLOG_AGENT] Using model: {model}")
 
+    # Émettre l'événement d'appel LLM
+    llm_run_id = str(uuid.uuid4())
+    llm_event = {
+        "type": "tool_used",
+        "tool_run_id": llm_run_id,
+        "tool_name": "Appel LLM",
+        "tool_icon": "🧠",
+        "description": f"Amélioration de la description avec {model}",
+        "status": "running",
+        "details": {"model": model, "temperature": temperature, "item_id": item_id},
+    }
+    agent_events.append(llm_event)
+    if event_queue:
+        event_queue.put(llm_event)
+
     try:
         # Appeler le LLM
         response = completion(
@@ -380,6 +512,25 @@ def improve_description(state: Any) -> dict[str, Any]:
 
         print(f"[BACKLOG_AGENT] LLM response received: {len(improved_description)} characters")
         print(f"[BACKLOG_AGENT] Improved description: {improved_description}")
+
+        # Mettre à jour le statut
+        llm_event_completed = {
+            "type": "tool_used",
+            "tool_run_id": llm_run_id,
+            "tool_name": "Appel LLM",
+            "tool_icon": "🧠",
+            "description": f"Amélioration de la description avec {model}",
+            "status": "completed",
+            "details": {
+                "model": model,
+                "temperature": temperature,
+                "item_id": item_id,
+                "response_length": len(improved_description),
+            },
+        }
+        agent_events[-1] = llm_event_completed
+        if event_queue:
+            event_queue.put(llm_event_completed)
 
         # Créer l'état "after" avec la nouvelle description
         item_after = target_item.model_copy(deep=True)
@@ -401,17 +552,49 @@ def improve_description(state: Any) -> dict[str, Any]:
         print("[BACKLOG_AGENT] - 1 modified item")
         print("[BACKLOG_AGENT] Workflow paused, awaiting human approval")
 
+        # Émettre l'événement de construction de l'ImpactPlan
+        plan_build_run_id = str(uuid.uuid4())
+        plan_build_event = {
+            "type": "tool_used",
+            "tool_run_id": plan_build_run_id,
+            "tool_name": "Construction ImpactPlan",
+            "tool_icon": "📋",
+            "description": "Création du plan d'impact avec la description améliorée",
+            "status": "completed",
+            "details": {"modified_items_count": 1},
+        }
+        agent_events.append(plan_build_event)
+        if event_queue:
+            event_queue.put(plan_build_event)
+
         return {
             "impact_plan": impact_plan,
             "status": "awaiting_approval",
             "result": f"Improved description for work item: {item_id}",
+            "agent_events": agent_events,
         }
 
     except Exception as e:
         print(f"[BACKLOG_AGENT] Error: {e}")
+        llm_event_error = {
+            "type": "tool_used",
+            "tool_run_id": llm_run_id,
+            "tool_name": "Appel LLM",
+            "tool_icon": "🧠",
+            "description": f"Amélioration de la description avec {model}",
+            "status": "error",
+            "details": {
+                "model": model,
+                "error": str(e),
+            },
+        }
+        agent_events[-1] = llm_event_error
+        if event_queue:
+            event_queue.put(llm_event_error)
         return {
             "status": "error",
             "result": f"Failed to improve description: {e}",
+            "agent_events": agent_events,
         }
 
 
@@ -427,18 +610,90 @@ def review_quality(state: Any) -> dict[str, Any]:
     """
     print("[BACKLOG_AGENT] Reviewing backlog quality with INVEST criteria...")
 
+    # Récupérer le thread_id et la queue d'événements
+    thread_id = state.get("thread_id", "")
+    event_queue = get_event_queue(thread_id) if thread_id else None
+
+    # Initialiser la liste d'événements
+    agent_events = []
+
+    # Émettre l'événement AgentStart
+    start_event = {
+        "type": "agent_start",
+        "thought": "Je vais analyser la qualité des User Stories du backlog selon les critères INVEST.",
+        "agent_name": "BacklogAgent",
+    }
+    agent_events.append(start_event)
+    if event_queue:
+        event_queue.put(start_event)
+
+    # Émettre le plan d'action
+    plan_event = {
+        "type": "agent_plan",
+        "steps": [
+            "Chargement du contexte du projet",
+            "Filtrage des User Stories",
+            "Analyse INVEST de chaque story",
+            "Construction de l'ImpactPlan",
+        ],
+        "agent_name": "BacklogAgent",
+    }
+    agent_events.append(plan_event)
+    if event_queue:
+        event_queue.put(plan_event)
+
     # Charger le contexte du projet
     project_id = state.get("project_id", "")
     storage = ProjectContextService()
 
+    # Émettre l'événement de chargement du contexte
+    load_run_id = str(uuid.uuid4())
+    load_event = {
+        "type": "tool_used",
+        "tool_run_id": load_run_id,
+        "tool_name": "Chargement du contexte",
+        "tool_icon": "📚",
+        "description": "Chargement du backlog existant du projet",
+        "status": "running",
+        "details": {},
+    }
+    agent_events.append(load_event)
+    if event_queue:
+        event_queue.put(load_event)
+
     try:
         existing_items = storage.load_context(project_id)
         print(f"[BACKLOG_AGENT] Loaded {len(existing_items)} existing work items")
+        load_event_completed = {
+            "type": "tool_used",
+            "tool_run_id": load_run_id,
+            "tool_name": "Chargement du contexte",
+            "tool_icon": "📚",
+            "description": "Chargement du backlog existant du projet",
+            "status": "completed",
+            "details": {"items_count": len(existing_items)},
+        }
+        agent_events[-1] = load_event_completed
+        if event_queue:
+            event_queue.put(load_event_completed)
     except FileNotFoundError:
         print("[BACKLOG_AGENT] No existing backlog found")
+        load_event_error = {
+            "type": "tool_used",
+            "tool_run_id": load_run_id,
+            "tool_name": "Chargement du contexte",
+            "tool_icon": "📚",
+            "description": "Chargement du backlog existant du projet",
+            "status": "error",
+            "details": {"error": f"No backlog found for project {project_id}"},
+        }
+        agent_events[-1] = load_event_error
+        if event_queue:
+            event_queue.put(load_event_error)
         return {
             "status": "error",
             "result": f"No backlog found for project {project_id}",
+            "agent_events": agent_events,
         }
 
     # Filtrer uniquement les stories (pas les features ni les tasks)
@@ -449,6 +704,7 @@ def review_quality(state: Any) -> dict[str, Any]:
         return {
             "status": "completed",
             "result": "No user stories found in backlog to analyze",
+            "agent_events": agent_events,
         }
 
     print(f"[BACKLOG_AGENT] Found {len(stories)} user stories to analyze")
@@ -481,6 +737,21 @@ def review_quality(state: Any) -> dict[str, Any]:
             context=context_summary,
         )
 
+        # Émettre l'événement d'appel LLM pour cette story
+        llm_run_id = str(uuid.uuid4())
+        llm_event = {
+            "type": "tool_used",
+            "tool_run_id": llm_run_id,
+            "tool_name": "Analyse INVEST",
+            "tool_icon": "🔍",
+            "description": f"Analyse de la story: {story.title[:50]}...",
+            "status": "running",
+            "details": {"model": model, "story_id": story.id},
+        }
+        agent_events.append(llm_event)
+        if event_queue:
+            event_queue.put(llm_event)
+
         try:
             # Appeler le LLM
             response = completion(
@@ -502,6 +773,22 @@ def review_quality(state: Any) -> dict[str, Any]:
 
             if "invest_analysis" not in analysis_result:
                 print(f"[BACKLOG_AGENT] Warning: No 'invest_analysis' in response for {story.id}")
+                llm_event_error = {
+                    "type": "tool_used",
+                    "tool_run_id": llm_run_id,
+                    "tool_name": "Analyse INVEST",
+                    "tool_icon": "🔍",
+                    "description": f"Analyse de la story: {story.title[:50]}...",
+                    "status": "error",
+                    "details": {
+                        "model": model,
+                        "story_id": story.id,
+                        "error": "No 'invest_analysis' in response",
+                    },
+                }
+                agent_events[-1] = llm_event_error
+                if event_queue:
+                    event_queue.put(llm_event_error)
                 continue
 
             invest_analysis = analysis_result["invest_analysis"]
@@ -509,6 +796,27 @@ def review_quality(state: Any) -> dict[str, Any]:
             print(f"[BACKLOG_AGENT] INVEST scores for {story.id}:")
             for criterion, data in invest_analysis.items():
                 print(f"[BACKLOG_AGENT]   {criterion}: {data['score']:.2f} - {data['reason']}")
+
+            # Calculer le score moyen
+            avg_score = sum(data["score"] for data in invest_analysis.values()) / len(invest_analysis)
+
+            # Mettre à jour le statut de l'événement
+            llm_event_completed = {
+                "type": "tool_used",
+                "tool_run_id": llm_run_id,
+                "tool_name": "Analyse INVEST",
+                "tool_icon": "🔍",
+                "description": f"Analyse de la story: {story.title[:50]}...",
+                "status": "completed",
+                "details": {
+                    "model": model,
+                    "story_id": story.id,
+                    "average_score": round(avg_score, 2),
+                },
+            }
+            agent_events[-1] = llm_event_completed
+            if event_queue:
+                event_queue.put(llm_event_completed)
 
             # Créer l'état "after" avec l'analyse INVEST dans les attributes
             item_after = story.model_copy(deep=True)
@@ -522,9 +830,41 @@ def review_quality(state: Any) -> dict[str, Any]:
 
         except json.JSONDecodeError as e:
             print(f"[BACKLOG_AGENT] Error parsing JSON for {story.id}: {e}")
+            llm_event_error = {
+                "type": "tool_used",
+                "tool_run_id": llm_run_id,
+                "tool_name": "Analyse INVEST",
+                "tool_icon": "🔍",
+                "description": f"Analyse de la story: {story.title[:50]}...",
+                "status": "error",
+                "details": {
+                    "model": model,
+                    "story_id": story.id,
+                    "error": f"JSON parsing error: {str(e)}",
+                },
+            }
+            agent_events[-1] = llm_event_error
+            if event_queue:
+                event_queue.put(llm_event_error)
             continue
         except Exception as e:
             print(f"[BACKLOG_AGENT] Error analyzing {story.id}: {e}")
+            llm_event_error = {
+                "type": "tool_used",
+                "tool_run_id": llm_run_id,
+                "tool_name": "Analyse INVEST",
+                "tool_icon": "🔍",
+                "description": f"Analyse de la story: {story.title[:50]}...",
+                "status": "error",
+                "details": {
+                    "model": model,
+                    "story_id": story.id,
+                    "error": str(e),
+                },
+            }
+            agent_events[-1] = llm_event_error
+            if event_queue:
+                event_queue.put(llm_event_error)
             continue
 
     if len(modified_items) == 0:
@@ -532,6 +872,7 @@ def review_quality(state: Any) -> dict[str, Any]:
         return {
             "status": "error",
             "result": "Failed to analyze any stories",
+            "agent_events": agent_events,
         }
 
     # Construire l'ImpactPlan avec modified_items
@@ -545,8 +886,24 @@ def review_quality(state: Any) -> dict[str, Any]:
     print(f"[BACKLOG_AGENT] - {len(modified_items)} stories analyzed with INVEST criteria")
     print("[BACKLOG_AGENT] Workflow paused, awaiting human approval")
 
+    # Émettre l'événement de construction de l'ImpactPlan
+    plan_build_run_id = str(uuid.uuid4())
+    plan_build_event = {
+        "type": "tool_used",
+        "tool_run_id": plan_build_run_id,
+        "tool_name": "Construction ImpactPlan",
+        "tool_icon": "📋",
+        "description": "Création du plan d'impact avec les analyses INVEST",
+        "status": "completed",
+        "details": {"analyzed_stories_count": len(modified_items)},
+    }
+    agent_events.append(plan_build_event)
+    if event_queue:
+        event_queue.put(plan_build_event)
+
     return {
         "impact_plan": impact_plan,
         "status": "awaiting_approval",
         "result": f"Analyzed {len(modified_items)} user stories with INVEST criteria",
+        "agent_events": agent_events,
     }

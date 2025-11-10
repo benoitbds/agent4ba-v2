@@ -2,6 +2,7 @@
 
 import json
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -96,12 +97,15 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         event_queue.put(plan_event)
 
     # Initialiser le service d'ingestion pour accéder au vectorstore
+    vectorstore_run_id = str(uuid.uuid4())
     vectorstore_event = {
         "type": "tool_used",
-        "tool_name": "Chargement Vector Store",
+        "tool_run_id": vectorstore_run_id,
+        "tool_name": "Chargement du contexte",
         "tool_icon": "🗄️",
         "description": "Chargement de la base vectorielle des documents",
         "status": "running",
+        "details": {},
     }
     agent_events.append(vectorstore_event)
     if event_queue:
@@ -110,18 +114,37 @@ def extract_requirements(state: Any) -> dict[str, Any]:
     try:
         ingestion_service = DocumentIngestionService(project_id)
         vectorstore = ingestion_service.get_vectorstore()
-        print("[DOCUMENT_AGENT] Vector store loaded successfully")
-        vectorstore_event["status"] = "completed"
-        agent_events[-1] = vectorstore_event
+
+        # Compter le nombre de documents dans le vectorstore
+        doc_count = len(vectorstore.docstore._dict) if hasattr(vectorstore, 'docstore') else 0
+        print(f"[DOCUMENT_AGENT] Vector store loaded successfully with {doc_count} documents")
+
+        vectorstore_event_completed = {
+            "type": "tool_used",
+            "tool_run_id": vectorstore_run_id,
+            "tool_name": "Chargement du contexte",
+            "tool_icon": "🗄️",
+            "description": "Chargement de la base vectorielle des documents",
+            "status": "completed",
+            "details": {"documents_loaded": doc_count},
+        }
+        agent_events[-1] = vectorstore_event_completed
         if event_queue:
-            event_queue.put(vectorstore_event)
+            event_queue.put(vectorstore_event_completed)
     except FileNotFoundError as e:
         print(f"[DOCUMENT_AGENT] No vectorstore found: {e}")
-        vectorstore_event["status"] = "error"
-        vectorstore_event["details"] = {"error": str(e)}
-        agent_events[-1] = vectorstore_event
+        vectorstore_event_error = {
+            "type": "tool_used",
+            "tool_run_id": vectorstore_run_id,
+            "tool_name": "Chargement du contexte",
+            "tool_icon": "🗄️",
+            "description": "Chargement de la base vectorielle des documents",
+            "status": "error",
+            "details": {"error": str(e)},
+        }
+        agent_events[-1] = vectorstore_event_error
         if event_queue:
-            event_queue.put(vectorstore_event)
+            event_queue.put(vectorstore_event_error)
         return {
             "status": "error",
             "result": "Aucun document n'a été analysé pour ce projet. Veuillez d'abord uploader des documents.",
@@ -129,11 +152,18 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         }
     except Exception as e:
         print(f"[DOCUMENT_AGENT] Error loading vectorstore: {e}")
-        vectorstore_event["status"] = "error"
-        vectorstore_event["details"] = {"error": str(e)}
-        agent_events[-1] = vectorstore_event
+        vectorstore_event_error = {
+            "type": "tool_used",
+            "tool_run_id": vectorstore_run_id,
+            "tool_name": "Chargement du contexte",
+            "tool_icon": "🗄️",
+            "description": "Chargement de la base vectorielle des documents",
+            "status": "error",
+            "details": {"error": str(e)},
+        }
+        agent_events[-1] = vectorstore_event_error
         if event_queue:
-            event_queue.put(vectorstore_event)
+            event_queue.put(vectorstore_event_error)
         return {
             "status": "error",
             "result": f"Erreur lors du chargement du vectorstore: {e}",
@@ -146,12 +176,15 @@ def extract_requirements(state: Any) -> dict[str, Any]:
     print("[DOCUMENT_AGENT] Retriever created with k=3")
 
     # Émettre l'événement de recherche RAG
+    rag_run_id = str(uuid.uuid4())
     rag_event = {
         "type": "tool_used",
+        "tool_run_id": rag_run_id,
         "tool_name": "Recherche RAG",
         "tool_icon": "🔍",
         "description": "Recherche des chunks de documents pertinents",
         "status": "running",
+        "details": {},
     }
     agent_events.append(rag_event)
     if event_queue:
@@ -161,18 +194,32 @@ def extract_requirements(state: Any) -> dict[str, Any]:
     try:
         retrieved_docs = retriever.invoke(user_query)
         print(f"[DOCUMENT_AGENT] Retrieved {len(retrieved_docs)} relevant chunks")
-        rag_event["status"] = "completed"
-        rag_event["details"] = {"chunks_retrieved": len(retrieved_docs)}
-        agent_events[-1] = rag_event
+        rag_event_completed = {
+            "type": "tool_used",
+            "tool_run_id": rag_run_id,
+            "tool_name": "Recherche RAG",
+            "tool_icon": "🔍",
+            "description": "Recherche des chunks de documents pertinents",
+            "status": "completed",
+            "details": {"chunks_retrieved": len(retrieved_docs)},
+        }
+        agent_events[-1] = rag_event_completed
         if event_queue:
-            event_queue.put(rag_event)
+            event_queue.put(rag_event_completed)
     except Exception as e:
         print(f"[DOCUMENT_AGENT] Error retrieving documents: {e}")
-        rag_event["status"] = "error"
-        rag_event["details"] = {"error": str(e)}
-        agent_events[-1] = rag_event
+        rag_event_error = {
+            "type": "tool_used",
+            "tool_run_id": rag_run_id,
+            "tool_name": "Recherche RAG",
+            "tool_icon": "🔍",
+            "description": "Recherche des chunks de documents pertinents",
+            "status": "error",
+            "details": {"error": str(e)},
+        }
+        agent_events[-1] = rag_event_error
         if event_queue:
-            event_queue.put(rag_event)
+            event_queue.put(rag_event_error)
         return {
             "status": "error",
             "result": f"Erreur lors de la récupération des documents: {e}",
@@ -217,13 +264,21 @@ def extract_requirements(state: Any) -> dict[str, Any]:
     print(f"[DOCUMENT_AGENT] Using model: {model}")
 
     # Émettre l'événement d'appel LLM
+    llm_run_id = str(uuid.uuid4())
+    # Créer un résumé court du prompt pour les détails
+    prompt_preview = user_prompt[:200] + "..." if len(user_prompt) > 200 else user_prompt
     llm_event = {
         "type": "tool_used",
+        "tool_run_id": llm_run_id,
         "tool_name": "Appel LLM",
         "tool_icon": "🧠",
         "description": f"Extraction des exigences avec {model}",
         "status": "running",
-        "details": {"model": model},
+        "details": {
+            "model": model,
+            "temperature": temperature,
+            "prompt_preview": prompt_preview,
+        },
     }
     agent_events.append(llm_event)
     if event_queue:
@@ -245,12 +300,28 @@ def extract_requirements(state: Any) -> dict[str, Any]:
 
         print(f"[DOCUMENT_AGENT] LLM response received: {len(response_text)} characters")
 
+        # Créer un résumé de la réponse
+        response_preview = response_text[:300] + "..." if len(response_text) > 300 else response_text
+
         # Mettre à jour le statut
-        llm_event["status"] = "completed"
-        llm_event["details"]["response_length"] = len(response_text)
-        agent_events[-1] = llm_event
+        llm_event_completed = {
+            "type": "tool_used",
+            "tool_run_id": llm_run_id,
+            "tool_name": "Appel LLM",
+            "tool_icon": "🧠",
+            "description": f"Extraction des exigences avec {model}",
+            "status": "completed",
+            "details": {
+                "model": model,
+                "temperature": temperature,
+                "prompt_preview": prompt_preview,
+                "response_length": len(response_text),
+                "response_preview": response_preview,
+            },
+        }
+        agent_events[-1] = llm_event_completed
         if event_queue:
-            event_queue.put(llm_event)
+            event_queue.put(llm_event_completed)
 
         # Parser la réponse JSON
         work_items_data = json.loads(response_text)
@@ -284,8 +355,10 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         print("[DOCUMENT_AGENT] Workflow paused, awaiting human approval")
 
         # Émettre l'événement de construction de l'ImpactPlan
+        plan_build_run_id = str(uuid.uuid4())
         plan_build_event = {
             "type": "tool_used",
+            "tool_run_id": plan_build_run_id,
             "tool_name": "Construction ImpactPlan",
             "tool_icon": "📋",
             "description": "Création du plan d'impact avec les exigences extraites",
@@ -305,11 +378,21 @@ def extract_requirements(state: Any) -> dict[str, Any]:
 
     except json.JSONDecodeError as e:
         print(f"[DOCUMENT_AGENT] Error parsing JSON: {e}")
-        llm_event["status"] = "error"
-        llm_event["details"]["error"] = str(e)
-        agent_events[-1] = llm_event
+        llm_event_error = {
+            "type": "tool_used",
+            "tool_run_id": llm_run_id,
+            "tool_name": "Appel LLM",
+            "tool_icon": "🧠",
+            "description": f"Extraction des exigences avec {model}",
+            "status": "error",
+            "details": {
+                "model": model,
+                "error": str(e),
+            },
+        }
+        agent_events[-1] = llm_event_error
         if event_queue:
-            event_queue.put(llm_event)
+            event_queue.put(llm_event_error)
         return {
             "status": "error",
             "result": f"Failed to parse LLM response as JSON: {e}",
