@@ -19,6 +19,7 @@ from agent4ba.api.events import (
     NodeEndEvent,
     NodeStartEvent,
     ThreadIdEvent,
+    UserRequestEvent,
     WorkflowCompleteEvent,
 )
 from agent4ba.api.schemas import (
@@ -70,6 +71,10 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         # Envoyer immédiatement le thread_id au client
         thread_id_event = ThreadIdEvent(thread_id=thread_id)
         yield f"data: {thread_id_event.model_dump_json()}\n\n"
+
+        # Envoyer la requête de l'utilisateur comme premier événement
+        user_request_event = UserRequestEvent(query=request.query)
+        yield f"data: {user_request_event.model_dump_json()}\n\n"
 
         # Préparer l'état initial pour le graphe
         initial_state: dict[str, Any] = {

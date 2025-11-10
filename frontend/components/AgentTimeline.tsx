@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { Link2, Brain, MessageSquare, FileText, Flag } from "lucide-react";
 import type { TimelineEvent } from "@/types/events";
 
 interface AgentTimelineProps {
@@ -18,6 +19,19 @@ interface EventGroup {
 export default function AgentTimeline({ events }: AgentTimelineProps) {
   // État pour gérer l'ouverture/fermeture de chaque groupe
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+
+  // Référence pour le scroll automatique
+  const timelineEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Fonction pour scroller vers le bas
+  const scrollToBottom = () => {
+    timelineEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Effet pour scroller automatiquement quand les événements changent
+  useEffect(() => {
+    scrollToBottom();
+  }, [events]);
 
   if (events.length === 0) {
     return (
@@ -91,6 +105,8 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
     switch (type) {
       case "thread_id":
         return <Link2 className="w-5 h-5" />;
+      case "user_request":
+        return "👤";
       case "node_start":
         return "▶";
       case "node_end":
@@ -120,6 +136,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
     if (type === "impact_plan_ready") return "border-l-amber-400";
     if (type === "workflow_complete") return "border-l-emerald-400";
     if (type === "thread_id") return "border-l-purple-400";
+    if (type === "user_request") return "border-l-indigo-400";
     return "border-l-gray-300";
   };
 
@@ -136,6 +153,15 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
                 Thread: {event.event.thread_id}
               </p>
             )}
+          </div>
+        );
+      case "user_request":
+        return (
+          <div>
+            <p className="font-semibold text-gray-900">Requête utilisateur</p>
+            <p className="text-sm text-gray-700 mt-2 italic">
+              &quot;{event.event.query}&quot;
+            </p>
           </div>
         );
       case "node_start":
@@ -353,6 +379,8 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
             );
           }
         })}
+        {/* Élément de référence pour le scroll automatique */}
+        <div ref={timelineEndRef} />
       </div>
     </div>
   );

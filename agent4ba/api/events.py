@@ -23,6 +23,13 @@ class ThreadIdEvent(StreamEvent):
     thread_id: str = Field(..., description="Identifiant unique du thread de conversation")
 
 
+class UserRequestEvent(StreamEvent):
+    """Événement contenant la requête initiale de l'utilisateur."""
+
+    type: str = Field(default="user_request", description="Type d'événement")
+    query: str = Field(..., description="Requête de l'utilisateur")
+
+
 class NodeStartEvent(StreamEvent):
     """Événement indiquant le début d'exécution d'un nœud."""
 
