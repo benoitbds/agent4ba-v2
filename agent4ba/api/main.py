@@ -82,7 +82,8 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         print(f"[STREAMING] Sent thread_id event")
 
         # Créer la queue d'événements pour ce thread
-        event_queue = get_event_queue(thread_id)
+        loop = asyncio.get_running_loop()
+        event_queue = get_event_queue(thread_id, loop)
         print(f"[STREAMING] Created event queue")
 
         # Préparer l'état initial pour le graphe
