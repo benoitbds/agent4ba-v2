@@ -41,8 +41,10 @@ export default function ToolRunView({ toolRun }: ToolRunViewProps) {
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start gap-3">
-        {/* Icône */}
-        <div className="text-2xl flex-shrink-0">{toolRun.tool_icon}</div>
+        {/* Icône - forcer le support des émojis */}
+        <div className="text-2xl flex-shrink-0" style={{ fontFamily: 'system-ui, -apple-system, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif' }}>
+          {toolRun.tool_icon}
+        </div>
 
         {/* Contenu principal */}
         <div className="flex-1 min-w-0">

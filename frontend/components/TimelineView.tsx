@@ -10,18 +10,18 @@ interface TimelineViewProps {
 }
 
 export default function TimelineView({ sessions, onToggleSession }: TimelineViewProps) {
-  // Référence pour le scroll automatique
-  const timelineEndRef = useRef<HTMLDivElement | null>(null);
+  // Référence pour le scroll automatique vers le haut (nouvelle session)
+  const timelineTopRef = useRef<HTMLDivElement | null>(null);
 
-  // Fonction pour scroller vers le bas
-  const scrollToBottom = () => {
-    timelineEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // Fonction pour scroller vers le haut (où se trouve la nouvelle session)
+  const scrollToTop = () => {
+    timelineTopRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   // Effet pour scroller automatiquement quand les sessions changent
   useEffect(() => {
-    scrollToBottom();
-  }, [sessions]);
+    scrollToTop();
+  }, [sessions.length]); // Déclencher uniquement quand le nombre de sessions change
 
   if (sessions.length === 0) {
     return (
@@ -31,23 +31,26 @@ export default function TimelineView({ sessions, onToggleSession }: TimelineView
     );
   }
 
+  // Inverser l'ordre des sessions pour afficher les plus récentes en haut
+  const reversedSessions = [...sessions].reverse();
+
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">
+    <div className="flex flex-col h-full">
+      <h2 className="text-xl font-semibold text-gray-900 mb-4 flex-shrink-0">
         Timeline d&apos;exécution
       </h2>
 
-      <div className="space-y-3">
-        {sessions.map((session, index) => (
+      <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+        {/* Élément de référence pour le scroll automatique vers le haut */}
+        <div ref={timelineTopRef} />
+        {reversedSessions.map((session, index) => (
           <SessionView
             key={session.id}
             session={session}
-            isLastSession={index === sessions.length - 1}
+            isLastSession={index === 0} // La première session affichée (plus récente)
             onToggle={onToggleSession}
           />
         ))}
-        {/* Élément de référence pour le scroll automatique */}
-        <div ref={timelineEndRef} />
       </div>
     </div>
   );

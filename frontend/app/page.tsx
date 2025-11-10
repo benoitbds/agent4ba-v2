@@ -375,10 +375,10 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" style={{ height: 'calc(100vh - 140px)' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
           {/* Left Column: Interaction */}
-          <div className="space-y-6">
+          <div className="flex flex-col space-y-6 h-full overflow-hidden">
             {/* Chat Input */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold mb-4">
@@ -416,7 +416,7 @@ export default function Home() {
 
             {/* Timeline View - only show if there are sessions */}
             {sessions.length > 0 && (
-              <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="bg-white rounded-lg shadow-sm p-6 flex-1 overflow-hidden flex flex-col">
                 <TimelineView
                   sessions={sessions}
                   onToggleSession={handleToggleSession}
@@ -426,7 +426,7 @@ export default function Home() {
           </div>
 
           {/* Right Column: Documents & Backlog */}
-          <div className="space-y-6">
+          <div className="flex flex-col space-y-6 h-full overflow-hidden">
             {/* Document Manager */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               {isLoadingDocuments ? (
@@ -446,7 +446,7 @@ export default function Home() {
             </div>
 
             {/* Backlog */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-white rounded-lg shadow-sm p-6 flex-1 overflow-hidden flex flex-col">
               {isLoadingBacklog ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="flex items-center gap-3">
