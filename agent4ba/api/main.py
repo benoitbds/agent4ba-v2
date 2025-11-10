@@ -1,5 +1,6 @@
 """FastAPI application for Agent4BA."""
 
+import asyncio
 import shutil
 import uuid
 from collections.abc import AsyncIterator
@@ -13,6 +14,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from agent4ba.ai.graph import app as workflow_app
 from agent4ba.api.app_factory import create_app
+from agent4ba.api.event_queue import cleanup_event_queue, get_event_queue
 from agent4ba.api.events import (
     AgentPlanEvent,
     AgentStartEvent,
@@ -24,6 +26,7 @@ from agent4ba.api.events import (
     ToolUsedEvent,
     WorkflowCompleteEvent,
 )
+from agent4ba.api.main_streaming import merge_streams
 from agent4ba.api.schemas import (
     ApprovalRequest,
     ChatRequest,
@@ -74,6 +77,9 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         thread_id_event = ThreadIdEvent(thread_id=thread_id)
         yield f"data: {thread_id_event.model_dump_json()}\n\n"
 
+        # Créer la queue d'événements pour ce thread
+        event_queue = get_event_queue(thread_id)
+
         # Préparer l'état initial pour le graphe
         initial_state: dict[str, Any] = {
             "project_id": request.project_id,
@@ -87,6 +93,7 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
             "approval_decision": None,
             "result": "",
             "agent_events": [],
+            "thread_id": thread_id,  # Passer le thread_id dans le state
         }
 
         # Configuration pour LangGraph avec thread_id
@@ -95,65 +102,70 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         # Variables pour accumuler l'état
         accumulated_state: dict[str, Any] = initial_state.copy()
 
-        # Utiliser astream_events pour obtenir tous les événements du graphe
-        async for event in workflow_app.astream_events(
-            initial_state,
-            config,  # type: ignore[arg-type]
-            version="v2",
+        # Flag pour savoir si le workflow est terminé
+        workflow_done = False
+
+        # Générateur pour streamer les événements de la queue
+        async def stream_queue_events():
+            """Stream les événements de la queue au fur et à mesure."""
+            async for agent_event_data in event_queue.get_events():
+                event_type = agent_event_data.get("type")
+
+                if event_type == "agent_start":
+                    agent_start_event = AgentStartEvent(
+                        thought=agent_event_data["thought"],
+                        agent_name=agent_event_data["agent_name"],
+                    )
+                    yield f"data: {agent_start_event.model_dump_json()}\n\n"
+
+                elif event_type == "agent_plan":
+                    agent_plan_event = AgentPlanEvent(
+                        steps=agent_event_data["steps"],
+                        agent_name=agent_event_data["agent_name"],
+                    )
+                    yield f"data: {agent_plan_event.model_dump_json()}\n\n"
+
+                elif event_type == "tool_used":
+                    tool_used_event = ToolUsedEvent(
+                        tool_name=agent_event_data["tool_name"],
+                        tool_icon=agent_event_data["tool_icon"],
+                        description=agent_event_data["description"],
+                        status=agent_event_data["status"],
+                        details=agent_event_data.get("details"),
+                    )
+                    yield f"data: {tool_used_event.model_dump_json()}\n\n"
+
+        # Générateur pour streamer les événements LangGraph
+        async def stream_langgraph_events():
+            """Stream les événements du workflow LangGraph."""
+            nonlocal accumulated_state
+
+            async for event in workflow_app.astream_events(
+                initial_state,
+                config,  # type: ignore[arg-type]
+                version="v2",
+            ):
+                event_kind = event.get("event")
+                event_data: dict[str, Any] = event.get("data", {})  # type: ignore[assignment]
+
+                # Événement de fin de nœud avec output
+                if event_kind == "on_chain_end":
+                    node_name = event.get("name", "")
+                    output = event_data.get("output")
+                    if node_name and node_name != "LangGraph":
+                        # Mettre à jour l'état accumulé avec la sortie du nœud
+                        if isinstance(output, dict):
+                            accumulated_state.update(output)
+
+            # Signaler la fin du workflow à la queue
+            event_queue.done()
+
+        # Merger les deux streams et les yielder
+        async for event_data in merge_streams(
+            stream_queue_events(),
+            stream_langgraph_events(),
         ):
-            event_kind = event.get("event")
-            event_data: dict[str, Any] = event.get("data", {})  # type: ignore[assignment]
-
-            # Événement de début de nœud
-            if event_kind == "on_chain_start":
-                node_name = event.get("name", "")
-                if node_name and node_name != "LangGraph":
-                    start_event = NodeStartEvent(node_name=node_name)
-                    yield f"data: {start_event.model_dump_json()}\n\n"
-
-            # Événement de fin de nœud avec output
-            elif event_kind == "on_chain_end":
-                node_name = event.get("name", "")
-                output = event_data.get("output")
-                if node_name and node_name != "LangGraph":
-                    # Mettre à jour l'état accumulé avec la sortie du nœud
-                    if isinstance(output, dict):
-                        accumulated_state.update(output)
-
-                        # Si le nœud a retourné des agent_events, les streamer
-                        if "agent_events" in output:
-                            agent_events_list = output.get("agent_events", [])
-                            for agent_event_data in agent_events_list:
-                                event_type = agent_event_data.get("type")
-
-                                if event_type == "agent_start":
-                                    agent_start_event = AgentStartEvent(
-                                        thought=agent_event_data["thought"],
-                                        agent_name=agent_event_data["agent_name"],
-                                    )
-                                    yield f"data: {agent_start_event.model_dump_json()}\n\n"
-
-                                elif event_type == "agent_plan":
-                                    agent_plan_event = AgentPlanEvent(
-                                        steps=agent_event_data["steps"],
-                                        agent_name=agent_event_data["agent_name"],
-                                    )
-                                    yield f"data: {agent_plan_event.model_dump_json()}\n\n"
-
-                                elif event_type == "tool_used":
-                                    tool_used_event = ToolUsedEvent(
-                                        tool_name=agent_event_data["tool_name"],
-                                        tool_icon=agent_event_data["tool_icon"],
-                                        description=agent_event_data["description"],
-                                        status=agent_event_data["status"],
-                                        details=agent_event_data.get("details"),
-                                    )
-                                    yield f"data: {tool_used_event.model_dump_json()}\n\n"
-
-                        # Ne générer un NodeEndEvent que si la sortie est un dictionnaire
-                        # (les routeurs retournent des strings, on les filtre)
-                        end_event = NodeEndEvent(node_name=node_name, output=output)
-                        yield f"data: {end_event.model_dump_json()}\n\n"
+            yield event_data
 
         # Après avoir parcouru tous les événements, envoyer l'événement final
         result = accumulated_state.get("result", "")
@@ -183,6 +195,9 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
             details="An error occurred during workflow execution",
         )
         yield f"data: {error_event.model_dump_json()}\n\n"
+    finally:
+        # Nettoyer la queue d'événements
+        cleanup_event_queue(thread_id)
 
 
 @app.post("/chat")

@@ -9,6 +9,7 @@ import yaml
 from dotenv import load_dotenv
 from litellm import completion
 
+from agent4ba.api.event_queue import get_event_queue
 from agent4ba.core.document_ingestion import DocumentIngestionService
 from agent4ba.core.models import WorkItem
 from agent4ba.core.storage import ProjectContextService
@@ -62,18 +63,25 @@ def extract_requirements(state: Any) -> dict[str, Any]:
 
     print(f"[DOCUMENT_AGENT] User query: {user_query}")
 
+    # Récupérer le thread_id et la queue d'événements
+    thread_id = state.get("thread_id", "")
+    event_queue = get_event_queue(thread_id) if thread_id else None
+
     # Initialiser la liste d'événements
     agent_events = []
 
     # Émettre l'événement AgentStart avec la reformulation
-    agent_events.append({
+    start_event = {
         "type": "agent_start",
         "thought": f"Compris ! Je vais extraire les exigences pertinentes des documents en me basant sur votre recherche : « {user_query} ».",
         "agent_name": "DocumentAgent",
-    })
+    }
+    agent_events.append(start_event)
+    if event_queue:
+        event_queue.put(start_event)
 
     # Émettre le plan d'action
-    agent_events.append({
+    plan_event = {
         "type": "agent_plan",
         "steps": [
             "Chargement de la Vector Store du projet",
@@ -82,26 +90,38 @@ def extract_requirements(state: Any) -> dict[str, Any]:
             "Validation et construction de l'ImpactPlan",
         ],
         "agent_name": "DocumentAgent",
-    })
+    }
+    agent_events.append(plan_event)
+    if event_queue:
+        event_queue.put(plan_event)
 
     # Initialiser le service d'ingestion pour accéder au vectorstore
-    agent_events.append({
+    vectorstore_event = {
         "type": "tool_used",
         "tool_name": "Chargement Vector Store",
         "tool_icon": "🗄️",
         "description": "Chargement de la base vectorielle des documents",
         "status": "running",
-    })
+    }
+    agent_events.append(vectorstore_event)
+    if event_queue:
+        event_queue.put(vectorstore_event)
 
     try:
         ingestion_service = DocumentIngestionService(project_id)
         vectorstore = ingestion_service.get_vectorstore()
         print("[DOCUMENT_AGENT] Vector store loaded successfully")
-        agent_events[-1]["status"] = "completed"
+        vectorstore_event["status"] = "completed"
+        agent_events[-1] = vectorstore_event
+        if event_queue:
+            event_queue.put(vectorstore_event)
     except FileNotFoundError as e:
         print(f"[DOCUMENT_AGENT] No vectorstore found: {e}")
-        agent_events[-1]["status"] = "error"
-        agent_events[-1]["details"] = {"error": str(e)}
+        vectorstore_event["status"] = "error"
+        vectorstore_event["details"] = {"error": str(e)}
+        agent_events[-1] = vectorstore_event
+        if event_queue:
+            event_queue.put(vectorstore_event)
         return {
             "status": "error",
             "result": "Aucun document n'a été analysé pour ce projet. Veuillez d'abord uploader des documents.",
@@ -109,8 +129,11 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         }
     except Exception as e:
         print(f"[DOCUMENT_AGENT] Error loading vectorstore: {e}")
-        agent_events[-1]["status"] = "error"
-        agent_events[-1]["details"] = {"error": str(e)}
+        vectorstore_event["status"] = "error"
+        vectorstore_event["details"] = {"error": str(e)}
+        agent_events[-1] = vectorstore_event
+        if event_queue:
+            event_queue.put(vectorstore_event)
         return {
             "status": "error",
             "result": f"Erreur lors du chargement du vectorstore: {e}",

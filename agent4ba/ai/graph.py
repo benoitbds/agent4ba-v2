@@ -32,6 +32,7 @@ class GraphState(TypedDict):
     approval_decision: bool | None
     result: str
     agent_events: list[dict[str, Any]]
+    thread_id: str  # Ajout du thread_id pour accéder à la queue
 
 
 def load_intent_classifier_prompt() -> dict[str, Any]:
