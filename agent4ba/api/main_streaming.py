@@ -23,24 +23,23 @@ async def merge_streams(
         Éléments de tous les streams au fur et à mesure qu'ils arrivent
     """
     queue: asyncio.Queue[str | None] = asyncio.Queue()
-    tasks = []
+    remaining_tasks = len(streams)
 
     async def consume(stream: AsyncIterator[str]) -> None:
         """Consomme un stream et met les éléments dans la queue."""
+        nonlocal remaining_tasks
         try:
             async for item in stream:
                 await queue.put(item)
         finally:
-            # Signaler la fin de ce stream
-            tasks.remove(asyncio.current_task())  # type: ignore
-            if not tasks:
-                # Si tous les streams sont terminés, signaler la fin
+            # Décrémenter le compteur de tâches restantes
+            remaining_tasks -= 1
+            # Si c'était la dernière tâche, signaler la fin
+            if remaining_tasks == 0:
                 await queue.put(None)
 
     # Lancer une tâche pour chaque stream
-    for stream in streams:
-        task = asyncio.create_task(consume(stream))
-        tasks.append(task)
+    tasks = [asyncio.create_task(consume(stream)) for stream in streams]
 
     # Yielder les éléments au fur et à mesure qu'ils arrivent
     while True:
@@ -48,3 +47,7 @@ async def merge_streams(
         if item is None:
             break
         yield item
+
+    # Attendre que toutes les tâches soient terminées
+    await asyncio.gather(*tasks, return_exceptions=True)
+

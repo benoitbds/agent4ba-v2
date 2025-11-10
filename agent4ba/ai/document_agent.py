@@ -146,24 +146,33 @@ def extract_requirements(state: Any) -> dict[str, Any]:
     print("[DOCUMENT_AGENT] Retriever created with k=3")
 
     # Émettre l'événement de recherche RAG
-    agent_events.append({
+    rag_event = {
         "type": "tool_used",
         "tool_name": "Recherche RAG",
         "tool_icon": "🔍",
         "description": "Recherche des chunks de documents pertinents",
         "status": "running",
-    })
+    }
+    agent_events.append(rag_event)
+    if event_queue:
+        event_queue.put(rag_event)
 
     # Récupérer les documents pertinents
     try:
         retrieved_docs = retriever.invoke(user_query)
         print(f"[DOCUMENT_AGENT] Retrieved {len(retrieved_docs)} relevant chunks")
-        agent_events[-1]["status"] = "completed"
-        agent_events[-1]["details"] = {"chunks_retrieved": len(retrieved_docs)}
+        rag_event["status"] = "completed"
+        rag_event["details"] = {"chunks_retrieved": len(retrieved_docs)}
+        agent_events[-1] = rag_event
+        if event_queue:
+            event_queue.put(rag_event)
     except Exception as e:
         print(f"[DOCUMENT_AGENT] Error retrieving documents: {e}")
-        agent_events[-1]["status"] = "error"
-        agent_events[-1]["details"] = {"error": str(e)}
+        rag_event["status"] = "error"
+        rag_event["details"] = {"error": str(e)}
+        agent_events[-1] = rag_event
+        if event_queue:
+            event_queue.put(rag_event)
         return {
             "status": "error",
             "result": f"Erreur lors de la récupération des documents: {e}",
@@ -208,14 +217,17 @@ def extract_requirements(state: Any) -> dict[str, Any]:
     print(f"[DOCUMENT_AGENT] Using model: {model}")
 
     # Émettre l'événement d'appel LLM
-    agent_events.append({
+    llm_event = {
         "type": "tool_used",
         "tool_name": "Appel LLM",
         "tool_icon": "🧠",
         "description": f"Extraction des exigences avec {model}",
         "status": "running",
         "details": {"model": model},
-    })
+    }
+    agent_events.append(llm_event)
+    if event_queue:
+        event_queue.put(llm_event)
 
     try:
         # Appeler le LLM
@@ -234,8 +246,11 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         print(f"[DOCUMENT_AGENT] LLM response received: {len(response_text)} characters")
 
         # Mettre à jour le statut
-        agent_events[-1]["status"] = "completed"
-        agent_events[-1]["details"]["response_length"] = len(response_text)
+        llm_event["status"] = "completed"
+        llm_event["details"]["response_length"] = len(response_text)
+        agent_events[-1] = llm_event
+        if event_queue:
+            event_queue.put(llm_event)
 
         # Parser la réponse JSON
         work_items_data = json.loads(response_text)
@@ -269,14 +284,17 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         print("[DOCUMENT_AGENT] Workflow paused, awaiting human approval")
 
         # Émettre l'événement de construction de l'ImpactPlan
-        agent_events.append({
+        plan_build_event = {
             "type": "tool_used",
             "tool_name": "Construction ImpactPlan",
             "tool_icon": "📋",
             "description": "Création du plan d'impact avec les exigences extraites",
             "status": "completed",
             "details": {"new_items_count": len(new_items)},
-        })
+        }
+        agent_events.append(plan_build_event)
+        if event_queue:
+            event_queue.put(plan_build_event)
 
         return {
             "impact_plan": impact_plan,
@@ -287,8 +305,11 @@ def extract_requirements(state: Any) -> dict[str, Any]:
 
     except json.JSONDecodeError as e:
         print(f"[DOCUMENT_AGENT] Error parsing JSON: {e}")
-        agent_events[-1]["status"] = "error"
-        agent_events[-1]["details"]["error"] = str(e)
+        llm_event["status"] = "error"
+        llm_event["details"]["error"] = str(e)
+        agent_events[-1] = llm_event
+        if event_queue:
+            event_queue.put(llm_event)
         return {
             "status": "error",
             "result": f"Failed to parse LLM response as JSON: {e}",
@@ -296,9 +317,13 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         }
     except Exception as e:
         print(f"[DOCUMENT_AGENT] Error: {e}")
-        if agent_events and agent_events[-1]["status"] == "running":
-            agent_events[-1]["status"] = "error"
-            agent_events[-1]["details"]["error"] = str(e)
+        if agent_events and agent_events[-1].get("status") == "running":
+            error_event = agent_events[-1]
+            error_event["status"] = "error"
+            error_event["details"] = error_event.get("details", {})
+            error_event["details"]["error"] = str(e)
+            if event_queue:
+                event_queue.put(error_event)
         return {
             "status": "error",
             "result": f"Failed to extract requirements: {e}",
