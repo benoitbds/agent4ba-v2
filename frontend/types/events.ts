@@ -83,6 +83,27 @@ export interface ErrorEvent extends BaseEvent {
   details?: string;
 }
 
+export interface AgentStartEvent extends BaseEvent {
+  type: "agent_start";
+  thought: string;
+  agent_name: string;
+}
+
+export interface AgentPlanEvent extends BaseEvent {
+  type: "agent_plan";
+  steps: string[];
+  agent_name: string;
+}
+
+export interface ToolUsedEvent extends BaseEvent {
+  type: "tool_used";
+  tool_name: string;
+  tool_icon: string;
+  description: string;
+  status: "running" | "completed" | "error";
+  details?: Record<string, unknown>;
+}
+
 // Union type of all possible events
 export type SSEEvent =
   | ThreadIdEvent
@@ -93,7 +114,10 @@ export type SSEEvent =
   | LLMEndEvent
   | ImpactPlanReadyEvent
   | WorkflowCompleteEvent
-  | ErrorEvent;
+  | ErrorEvent
+  | AgentStartEvent
+  | AgentPlanEvent
+  | ToolUsedEvent;
 
 // For timeline display
 export interface TimelineEvent {

@@ -62,22 +62,59 @@ def extract_requirements(state: Any) -> dict[str, Any]:
 
     print(f"[DOCUMENT_AGENT] User query: {user_query}")
 
+    # Initialiser la liste d'événements
+    agent_events = []
+
+    # Émettre l'événement AgentStart avec la reformulation
+    agent_events.append({
+        "type": "agent_start",
+        "thought": f"Compris ! Je vais extraire les exigences pertinentes des documents en me basant sur votre recherche : « {user_query} ».",
+        "agent_name": "DocumentAgent",
+    })
+
+    # Émettre le plan d'action
+    agent_events.append({
+        "type": "agent_plan",
+        "steps": [
+            "Chargement de la Vector Store du projet",
+            "Recherche des documents pertinents (RAG)",
+            "Extraction des exigences via LLM",
+            "Validation et construction de l'ImpactPlan",
+        ],
+        "agent_name": "DocumentAgent",
+    })
+
     # Initialiser le service d'ingestion pour accéder au vectorstore
+    agent_events.append({
+        "type": "tool_used",
+        "tool_name": "Chargement Vector Store",
+        "tool_icon": "🗄️",
+        "description": "Chargement de la base vectorielle des documents",
+        "status": "running",
+    })
+
     try:
         ingestion_service = DocumentIngestionService(project_id)
         vectorstore = ingestion_service.get_vectorstore()
         print("[DOCUMENT_AGENT] Vector store loaded successfully")
+        agent_events[-1]["status"] = "completed"
     except FileNotFoundError as e:
         print(f"[DOCUMENT_AGENT] No vectorstore found: {e}")
+        agent_events[-1]["status"] = "error"
+        agent_events[-1]["details"] = {"error": str(e)}
         return {
             "status": "error",
             "result": "Aucun document n'a été analysé pour ce projet. Veuillez d'abord uploader des documents.",
+            "agent_events": agent_events,
         }
     except Exception as e:
         print(f"[DOCUMENT_AGENT] Error loading vectorstore: {e}")
+        agent_events[-1]["status"] = "error"
+        agent_events[-1]["details"] = {"error": str(e)}
         return {
             "status": "error",
             "result": f"Erreur lors du chargement du vectorstore: {e}",
+            "agent_events": agent_events,
         }
 
     # Créer un retriever pour rechercher les documents pertinents
@@ -85,15 +122,29 @@ def extract_requirements(state: Any) -> dict[str, Any]:
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
     print("[DOCUMENT_AGENT] Retriever created with k=3")
 
+    # Émettre l'événement de recherche RAG
+    agent_events.append({
+        "type": "tool_used",
+        "tool_name": "Recherche RAG",
+        "tool_icon": "🔍",
+        "description": "Recherche des chunks de documents pertinents",
+        "status": "running",
+    })
+
     # Récupérer les documents pertinents
     try:
         retrieved_docs = retriever.invoke(user_query)
         print(f"[DOCUMENT_AGENT] Retrieved {len(retrieved_docs)} relevant chunks")
+        agent_events[-1]["status"] = "completed"
+        agent_events[-1]["details"] = {"chunks_retrieved": len(retrieved_docs)}
     except Exception as e:
         print(f"[DOCUMENT_AGENT] Error retrieving documents: {e}")
+        agent_events[-1]["status"] = "error"
+        agent_events[-1]["details"] = {"error": str(e)}
         return {
             "status": "error",
             "result": f"Erreur lors de la récupération des documents: {e}",
+            "agent_events": agent_events,
         }
 
     # Formater le contexte récupéré
@@ -133,6 +184,16 @@ def extract_requirements(state: Any) -> dict[str, Any]:
 
     print(f"[DOCUMENT_AGENT] Using model: {model}")
 
+    # Émettre l'événement d'appel LLM
+    agent_events.append({
+        "type": "tool_used",
+        "tool_name": "Appel LLM",
+        "tool_icon": "🧠",
+        "description": f"Extraction des exigences avec {model}",
+        "status": "running",
+        "details": {"model": model},
+    })
+
     try:
         # Appeler le LLM
         response = completion(
@@ -148,6 +209,10 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         response_text = response.choices[0].message.content
 
         print(f"[DOCUMENT_AGENT] LLM response received: {len(response_text)} characters")
+
+        # Mettre à jour le statut
+        agent_events[-1]["status"] = "completed"
+        agent_events[-1]["details"]["response_length"] = len(response_text)
 
         # Parser la réponse JSON
         work_items_data = json.loads(response_text)
@@ -180,21 +245,39 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         print(f"[DOCUMENT_AGENT] - {len(new_items)} new items")
         print("[DOCUMENT_AGENT] Workflow paused, awaiting human approval")
 
+        # Émettre l'événement de construction de l'ImpactPlan
+        agent_events.append({
+            "type": "tool_used",
+            "tool_name": "Construction ImpactPlan",
+            "tool_icon": "📋",
+            "description": "Création du plan d'impact avec les exigences extraites",
+            "status": "completed",
+            "details": {"new_items_count": len(new_items)},
+        })
+
         return {
             "impact_plan": impact_plan,
             "status": "awaiting_approval",
             "result": f"Extracted {len(new_items)} work items from document",
+            "agent_events": agent_events,
         }
 
     except json.JSONDecodeError as e:
         print(f"[DOCUMENT_AGENT] Error parsing JSON: {e}")
+        agent_events[-1]["status"] = "error"
+        agent_events[-1]["details"]["error"] = str(e)
         return {
             "status": "error",
             "result": f"Failed to parse LLM response as JSON: {e}",
+            "agent_events": agent_events,
         }
     except Exception as e:
         print(f"[DOCUMENT_AGENT] Error: {e}")
+        if agent_events and agent_events[-1]["status"] == "running":
+            agent_events[-1]["status"] = "error"
+            agent_events[-1]["details"]["error"] = str(e)
         return {
             "status": "error",
             "result": f"Failed to extract requirements: {e}",
+            "agent_events": agent_events,
         }

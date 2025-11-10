@@ -86,18 +86,54 @@ def decompose_objective(state: Any) -> dict[str, Any]:
 
     print(f"[BACKLOG_AGENT] Objective: {objective}")
 
+    # Initialiser la liste d'événements
+    agent_events = []
+
+    # Émettre l'événement AgentStart avec la reformulation
+    agent_events.append({
+        "type": "agent_start",
+        "thought": f"Parfait ! Je vais décomposer l'objectif « {objective} » en une structure hiérarchique de fonctionnalités et user stories.",
+        "agent_name": "BacklogAgent",
+    })
+
+    # Émettre le plan d'action
+    agent_events.append({
+        "type": "agent_plan",
+        "steps": [
+            "Chargement du contexte du projet",
+            "Analyse de l'objectif métier",
+            "Génération de la structure (Features & Stories)",
+            "Validation et construction de l'ImpactPlan",
+        ],
+        "agent_name": "BacklogAgent",
+    })
+
     # Charger le contexte du projet
     project_id = state.get("project_id", "")
     storage = ProjectContextService()
+
+    # Émettre l'événement de chargement du contexte
+    agent_events.append({
+        "type": "tool_used",
+        "tool_name": "Chargement du contexte",
+        "tool_icon": "📚",
+        "description": "Chargement du backlog existant du projet",
+        "status": "running",
+    })
 
     try:
         existing_items = storage.load_context(project_id)
         context_summary = f"Backlog actuel avec {len(existing_items)} work items"
         print(f"[BACKLOG_AGENT] Loaded {len(existing_items)} existing work items")
+        # Mettre à jour le statut
+        agent_events[-1]["status"] = "completed"
+        agent_events[-1]["details"] = {"items_count": len(existing_items)}
     except FileNotFoundError:
         existing_items = []
         context_summary = "Nouveau projet sans backlog existant"
         print("[BACKLOG_AGENT] No existing backlog found")
+        agent_events[-1]["status"] = "completed"
+        agent_events[-1]["details"] = {"items_count": 0}
 
     # Charger le prompt
     prompt_config = load_decompose_prompt()
@@ -114,6 +150,16 @@ def decompose_objective(state: Any) -> dict[str, Any]:
 
     print(f"[BACKLOG_AGENT] Using model: {model}")
 
+    # Émettre l'événement d'appel LLM
+    agent_events.append({
+        "type": "tool_used",
+        "tool_name": "Appel LLM",
+        "tool_icon": "🧠",
+        "description": f"Génération de la décomposition avec {model}",
+        "status": "running",
+        "details": {"model": model},
+    })
+
     try:
         # Appeler le LLM
         response = completion(
@@ -129,6 +175,10 @@ def decompose_objective(state: Any) -> dict[str, Any]:
         response_text = response.choices[0].message.content
 
         print(f"[BACKLOG_AGENT] LLM response received: {len(response_text)} characters")
+
+        # Mettre à jour le statut
+        agent_events[-1]["status"] = "completed"
+        agent_events[-1]["details"]["response_length"] = len(response_text)
 
         # Parser la réponse JSON
         work_items_data = json.loads(response_text)
@@ -161,23 +211,41 @@ def decompose_objective(state: Any) -> dict[str, Any]:
         print(f"[BACKLOG_AGENT] - {len(new_items)} new items")
         print("[BACKLOG_AGENT] Workflow paused, awaiting human approval")
 
+        # Émettre l'événement de construction de l'ImpactPlan
+        agent_events.append({
+            "type": "tool_used",
+            "tool_name": "Construction ImpactPlan",
+            "tool_icon": "📋",
+            "description": "Création du plan d'impact avec les work items générés",
+            "status": "completed",
+            "details": {"new_items_count": len(new_items)},
+        })
+
         return {
             "impact_plan": impact_plan,
             "status": "awaiting_approval",
             "result": f"Generated {len(new_items)} work items for objective: {objective}",
+            "agent_events": agent_events,
         }
 
     except json.JSONDecodeError as e:
         print(f"[BACKLOG_AGENT] Error parsing JSON: {e}")
+        agent_events[-1]["status"] = "error"
+        agent_events[-1]["details"]["error"] = str(e)
         return {
             "status": "error",
             "result": f"Failed to parse LLM response as JSON: {e}",
+            "agent_events": agent_events,
         }
     except Exception as e:
         print(f"[BACKLOG_AGENT] Error: {e}")
+        if agent_events and agent_events[-1]["status"] == "running":
+            agent_events[-1]["status"] = "error"
+            agent_events[-1]["details"]["error"] = str(e)
         return {
             "status": "error",
             "result": f"Failed to decompose objective: {e}",
+            "agent_events": agent_events,
         }
 
 
