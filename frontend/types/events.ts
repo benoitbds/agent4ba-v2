@@ -38,6 +38,11 @@ export interface ThreadIdEvent extends BaseEvent {
   thread_id: string;
 }
 
+export interface UserRequestEvent extends BaseEvent {
+  type: "user_request";
+  query: string;
+}
+
 export interface NodeStartEvent extends BaseEvent {
   type: "node_start";
   node_name: string;
@@ -107,6 +112,7 @@ export interface ToolUsedEvent extends BaseEvent {
 // Union type of all possible events
 export type SSEEvent =
   | ThreadIdEvent
+  | UserRequestEvent
   | NodeStartEvent
   | NodeEndEvent
   | LLMStartEvent

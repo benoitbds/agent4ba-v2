@@ -23,7 +23,7 @@ from agent4ba.api.events import (
     NodeEndEvent,
     NodeStartEvent,
     ThreadIdEvent,
-    ToolUsedEvent,
+    UserRequestEvent,
     WorkflowCompleteEvent,
 )
 from agent4ba.api.schemas import (
@@ -84,6 +84,10 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         loop = asyncio.get_running_loop()
         event_queue = get_event_queue(thread_id, loop)
         print(f"[STREAMING] Created event queue")
+
+        # Envoyer la requête de l'utilisateur comme premier événement
+        user_request_event = UserRequestEvent(query=request.query)
+        yield f"data: {user_request_event.model_dump_json()}\n\n"
 
         # Préparer l'état initial pour le graphe
         initial_state: dict[str, Any] = {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
+import { Link2, Brain, MessageSquare, FileText, Flag } from "lucide-react";
 import type { TimelineEvent } from "@/types/events";
 
 interface AgentTimelineProps {
@@ -13,6 +14,19 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
 
   // État pour suivre les étapes du plan complétées
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+
+  // Référence pour le scroll automatique
+  const timelineEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Fonction pour scroller vers le bas
+  const scrollToBottom = () => {
+    timelineEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Effet pour scroller automatiquement quand les événements changent
+  useEffect(() => {
+    scrollToBottom();
+  }, [events]);
 
   if (events.length === 0) {
     return (
@@ -34,18 +48,45 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
     });
   };
 
-  // Extraire le plan d'action et suivre la progression
-  const agentPlan = useMemo(() => {
-    const planEvent = events.find((e) => e.event.type === "agent_plan");
-    if (planEvent && "steps" in planEvent.event) {
-      return planEvent.event.steps;
+  const getEventIcon = (type: string) => {
+    switch (type) {
+      case "thread_id":
+        return <Link2 className="w-5 h-5" />;
+      case "user_request":
+        return "👤";
+      case "node_start":
+        return "▶";
+      case "node_end":
+        return "✓";
+      case "llm_start":
+        return <Brain className="w-5 h-5" />;
+      case "llm_token":
+        return <MessageSquare className="w-5 h-5" />;
+      case "llm_end":
+        return "✓";
+      case "impact_plan_ready":
+        return <FileText className="w-5 h-5" />;
+      case "workflow_complete":
+        return <Flag className="w-5 h-5" />;
+      case "error":
+        return "⚠";
+      default:
+        return "•";
     }
     return null;
   }, [events]);
 
-  // Calculer les étapes complétées basées sur les outils utilisés
-  useMemo(() => {
-    if (!agentPlan) return;
+  // Nouvelle fonction pour obtenir la couleur de bordure gauche (design clair)
+  const getBorderColor = (status?: string, type?: string) => {
+    if (status === "error" || type === "error") return "border-l-red-400";
+    if (status === "completed") return "border-l-green-400";
+    if (status === "running") return "border-l-blue-400";
+    if (type === "impact_plan_ready") return "border-l-amber-400";
+    if (type === "workflow_complete") return "border-l-emerald-400";
+    if (type === "thread_id") return "border-l-purple-400";
+    if (type === "user_request") return "border-l-indigo-400";
+    return "border-l-gray-300";
+  };
 
     const toolEvents = events.filter((e) => e.event.type === "tool_used");
     const completedToolsCount = toolEvents.filter(
@@ -81,22 +122,23 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
               </p>
             </div>
           </div>
-        </div>
-      );
-    }
-
-    // Reformulation de l'agent (AgentStart)
-    if (type === "agent_start" && "thought" in event.event) {
-      return (
-        <div
-          key={event.id}
-          className="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-l-blue-500 rounded-lg p-6 shadow-md"
-        >
-          <div className="flex items-start gap-4">
-            <span className="text-3xl">🤖</span>
-            <div className="flex-1">
-              <p className="font-semibold text-blue-900 text-lg mb-2">
-                {event.event.agent_name}
+        );
+      case "user_request":
+        return (
+          <div>
+            <p className="font-semibold text-gray-900">Requête utilisateur</p>
+            <p className="text-sm text-gray-700 mt-2 italic">
+              &quot;{event.event.query}&quot;
+            </p>
+          </div>
+        );
+      case "node_start":
+        return (
+          <div>
+            <p className="text-sm text-gray-900">Démarré</p>
+            {!compact && (
+              <p className="text-xs text-gray-500 mt-1">
+                {event.timestamp.toLocaleTimeString()}
               </p>
               <p className="text-gray-800 text-base leading-relaxed">
                 {event.event.thought}
@@ -288,9 +330,114 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
         Timeline d&apos;exécution
       </h2>
 
-      {/* Affichage chronologique (plus ancien en haut, plus récent en bas) */}
-      <div className="flex flex-col space-y-4">
-        {events.map((event) => renderEvent(event))}
+      <div className="flex flex-col-reverse space-y-3 space-y-reverse">
+        {groups.map((group) => {
+          const isOpen = openGroups.has(group.id);
+
+          if (group.type === "node") {
+            // Groupe de nœud avec accordéon
+            return (
+              <div
+                key={group.id}
+                className={`bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow ${getBorderColor(
+                  group.status
+                )} border-l-4`}
+              >
+                {/* Header cliquable */}
+                <button
+                  onClick={() => toggleGroup(group.id)}
+                  className="w-full px-6 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors text-left"
+                >
+                  {/* Chevron */}
+                  <span className="text-gray-600 text-lg flex-shrink-0">
+                    {isOpen ? "▼" : "▶"}
+                  </span>
+
+                  {/* Icône du nœud */}
+                  <span className="text-xl flex-shrink-0">
+                    {group.status === "completed"
+                      ? "✓"
+                      : group.status === "error"
+                      ? "⚠"
+                      : "▶"}
+                  </span>
+
+                  {/* Nom du nœud */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 text-base">
+                      {group.nodeName}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {group.status === "completed"
+                        ? "Terminé"
+                        : group.status === "error"
+                        ? "Erreur"
+                        : "En cours..."}
+                    </p>
+                  </div>
+
+                  {/* Badge avec nombre d'événements */}
+                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                    {group.events.length} événements
+                  </span>
+                </button>
+
+                {/* Contenu dépliable */}
+                {isOpen && (
+                  <div className="border-t border-gray-100 bg-gray-50/50">
+                    <div className="px-6 py-4 space-y-3">
+                      {group.events.map((event) => (
+                        <div
+                          key={event.id}
+                          className="flex items-start gap-3 p-3 bg-white rounded border border-gray-200"
+                        >
+                          {/* Icône */}
+                          <div className="text-lg flex-shrink-0 text-gray-600">
+                            {getEventIcon(event.event.type)}
+                          </div>
+
+                          {/* Contenu */}
+                          <div className="flex-1 min-w-0">
+                            {formatEventDetails(event, false)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          } else {
+            // Événement standalone
+            const event = group.events[0];
+            return (
+              <div
+                key={group.id}
+                className={`bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow ${getBorderColor(
+                  undefined,
+                  event.event.type
+                )} border-l-4`}
+              >
+                <div className="flex items-start gap-4">
+                  {/* Icône */}
+                  <div className="text-2xl flex-shrink-0">
+                    {getEventIcon(event.event.type)}
+                  </div>
+
+                  {/* Contenu */}
+                  <div className="flex-1 min-w-0">
+                    {formatEventDetails(event, false)}
+                    <p className="text-xs text-gray-400 mt-2">
+                      {event.timestamp.toLocaleTimeString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+        })}
+        {/* Élément de référence pour le scroll automatique */}
+        <div ref={timelineEndRef} />
       </div>
     </div>
   );
