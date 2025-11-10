@@ -105,3 +105,68 @@ class ProjectContextService:
 
         with backlog_file.open("w", encoding="utf-8") as f:
             json.dump(data_dicts, f, indent=2, ensure_ascii=False)
+
+    def save_timeline_events(self, project_id: str, events: list[dict]) -> None:
+        """
+        Sauvegarde les événements de timeline dans l'historique du projet.
+
+        Args:
+            project_id: Identifiant unique du projet
+            events: Liste des événements de la timeline à ajouter
+        """
+        project_dir = self._get_project_dir(project_id)
+        project_dir.mkdir(parents=True, exist_ok=True)
+
+        timeline_file = project_dir / "timeline_history.json"
+
+        # Charger l'historique existant
+        history = []
+        if timeline_file.exists():
+            with timeline_file.open("r", encoding="utf-8") as f:
+                try:
+                    history = json.load(f)
+                except json.JSONDecodeError:
+                    # Si le fichier est corrompu, on repart de zéro
+                    history = []
+
+        # Ajouter la nouvelle session avec timestamp
+        from datetime import datetime
+
+        session_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "events": events,
+        }
+        history.append(session_entry)
+
+        # Sauvegarder l'historique mis à jour
+        with timeline_file.open("w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2, ensure_ascii=False)
+
+    def load_timeline_history(self, project_id: str) -> list[dict]:
+        """
+        Charge l'historique complet des événements de timeline d'un projet.
+
+        Args:
+            project_id: Identifiant unique du projet
+
+        Returns:
+            Liste des sessions d'événements avec leurs timestamps
+
+        Raises:
+            FileNotFoundError: Si le fichier d'historique n'existe pas
+        """
+        project_dir = self._get_project_dir(project_id)
+        timeline_file = project_dir / "timeline_history.json"
+
+        if not timeline_file.exists():
+            # Retourner une liste vide plutôt qu'une erreur
+            # (pas d'historique pour un nouveau projet)
+            return []
+
+        with timeline_file.open("r", encoding="utf-8") as f:
+            try:
+                history = json.load(f)
+                return history if isinstance(history, list) else []
+            except json.JSONDecodeError:
+                # Si le fichier est corrompu, retourner une liste vide
+                return []

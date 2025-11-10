@@ -8,7 +8,7 @@ import CreateProjectModal from "@/components/CreateProjectModal";
 import BacklogView from "@/components/BacklogView";
 import ProjectSelector from "@/components/ProjectSelector";
 import DocumentManager from "@/components/DocumentManager";
-import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, createProject } from "@/lib/api";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject } from "@/lib/api";
 import type { TimelineEvent, ImpactPlan, SSEEvent, WorkItem } from "@/types/events";
 
 export default function Home() {
@@ -83,6 +83,51 @@ export default function Home() {
     loadDocuments();
   }, [selectedProject]);
 
+  // Load timeline history when selected project changes
+  useEffect(() => {
+    if (!selectedProject) return;
+
+    const loadTimelineHistory = async () => {
+      try {
+        const history = await getProjectTimelineHistory(selectedProject);
+
+        // Convert history sessions to TimelineEvent format
+        const allEvents: TimelineEvent[] = [];
+
+        history.forEach((session, sessionIndex) => {
+          // Add a session separator if this is not the first session
+          if (sessionIndex > 0) {
+            allEvents.push({
+              id: `session-separator-${session.timestamp}`,
+              timestamp: new Date(session.timestamp),
+              event: {
+                type: "workflow_complete",
+                result: "─────── Session précédente ───────",
+                status: "separator",
+              },
+            });
+          }
+
+          // Add all events from this session
+          session.events.forEach((evt, eventIndex) => {
+            allEvents.push({
+              id: `${session.timestamp}-${eventIndex}`,
+              timestamp: new Date(session.timestamp),
+              event: evt,
+            });
+          });
+        });
+
+        setTimelineEvents(allEvents);
+      } catch (error) {
+        console.error("Error loading timeline history:", error);
+        setTimelineEvents([]);
+      }
+    };
+
+    loadTimelineHistory();
+  }, [selectedProject]);
+
   // Function to refresh documents list after upload
   const handleDocumentUploadSuccess = async () => {
     try {
@@ -103,8 +148,21 @@ export default function Home() {
   };
 
   const handleChatSubmit = async (query: string) => {
-    // Reset state
-    setTimelineEvents([]);
+    // Add session separator if there are existing events
+    if (timelineEvents.length > 0) {
+      const separator: TimelineEvent = {
+        id: `session-separator-${Date.now()}`,
+        timestamp: new Date(),
+        event: {
+          type: "workflow_complete",
+          result: "─────── Nouvelle session ───────",
+          status: "separator",
+        },
+      };
+      setTimelineEvents((prev) => [...prev, separator]);
+    }
+
+    // Reset other state
     setImpactPlan(null);
     setThreadId(null);
     setStatusMessage(null);
