@@ -6,6 +6,7 @@ aux agents d'émettre des événements au fur et à mesure de leur exécution.
 """
 
 import asyncio
+import threading
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -15,7 +16,19 @@ class EventQueue:
 
     def __init__(self) -> None:
         """Initialise la queue."""
-        self._queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+        # Utiliser une queue standard thread-safe
+        import queue
+        self._queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """
+        Définit la boucle d'événements asyncio.
+
+        Args:
+            loop: Boucle d'événements asyncio
+        """
+        self._loop = loop
 
     def put(self, event: dict[str, Any]) -> None:
         """
@@ -24,12 +37,11 @@ class EventQueue:
         Args:
             event: Dictionnaire représentant l'événement
         """
-        # put_nowait est thread-safe dans asyncio
-        self._queue.put_nowait(event)
+        self._queue.put(event)
 
     def done(self) -> None:
         """Signale que plus aucun événement ne sera ajouté."""
-        self._queue.put_nowait(None)
+        self._queue.put(None)
 
     async def get_events(self) -> AsyncIterator[dict[str, Any]]:
         """
@@ -38,8 +50,11 @@ class EventQueue:
         Yields:
             Événements de la queue jusqu'à recevoir le signal de fin (None)
         """
+        loop = asyncio.get_running_loop()
+
         while True:
-            event = await self._queue.get()
+            # Récupérer de manière asynchrone depuis une queue synchrone
+            event = await loop.run_in_executor(None, self._queue.get)
             if event is None:
                 break
             yield event
@@ -47,6 +62,7 @@ class EventQueue:
 
 # Dictionnaire global pour stocker les queues par thread_id
 _event_queues: dict[str, EventQueue] = {}
+_queue_lock = threading.Lock()
 
 
 def get_event_queue(thread_id: str) -> EventQueue:
@@ -59,9 +75,10 @@ def get_event_queue(thread_id: str) -> EventQueue:
     Returns:
         Queue d'événements pour ce thread
     """
-    if thread_id not in _event_queues:
-        _event_queues[thread_id] = EventQueue()
-    return _event_queues[thread_id]
+    with _queue_lock:
+        if thread_id not in _event_queues:
+            _event_queues[thread_id] = EventQueue()
+        return _event_queues[thread_id]
 
 
 def cleanup_event_queue(thread_id: str) -> None:
@@ -71,5 +88,7 @@ def cleanup_event_queue(thread_id: str) -> None:
     Args:
         thread_id: Identifiant du thread
     """
-    if thread_id in _event_queues:
-        del _event_queues[thread_id]
+    with _queue_lock:
+        if thread_id in _event_queues:
+            del _event_queues[thread_id]
+
