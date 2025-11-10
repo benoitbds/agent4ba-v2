@@ -72,13 +72,18 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
     # Générer un thread_id unique pour cette conversation
     thread_id = str(uuid.uuid4())
 
+    print(f"[STREAMING] Starting stream for thread_id: {thread_id}")
+    print(f"[STREAMING] Project: {request.project_id}, Query: {request.query}")
+
     try:
         # Envoyer immédiatement le thread_id au client
         thread_id_event = ThreadIdEvent(thread_id=thread_id)
         yield f"data: {thread_id_event.model_dump_json()}\n\n"
+        print(f"[STREAMING] Sent thread_id event")
 
         # Créer la queue d'événements pour ce thread
         event_queue = get_event_queue(thread_id)
+        print(f"[STREAMING] Created event queue")
 
         # Préparer l'état initial pour le graphe
         initial_state: dict[str, Any] = {
@@ -102,14 +107,17 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         # Variables pour accumuler l'état
         accumulated_state: dict[str, Any] = initial_state.copy()
 
-        # Flag pour savoir si le workflow est terminé
-        workflow_done = False
+        print(f"[STREAMING] Starting workflow execution")
 
         # Générateur pour streamer les événements de la queue
         async def stream_queue_events():
             """Stream les événements de la queue au fur et à mesure."""
+            print(f"[STREAMING] stream_queue_events started")
+            event_count = 0
             async for agent_event_data in event_queue.get_events():
+                event_count += 1
                 event_type = agent_event_data.get("type")
+                print(f"[STREAMING] Received event #{event_count}: {event_type}")
 
                 if event_type == "agent_start":
                     agent_start_event = AgentStartEvent(
@@ -134,43 +142,65 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                         details=agent_event_data.get("details"),
                     )
                     yield f"data: {tool_used_event.model_dump_json()}\n\n"
+            print(f"[STREAMING] stream_queue_events finished with {event_count} events")
 
         # Générateur pour streamer les événements LangGraph
         async def stream_langgraph_events():
             """Stream les événements du workflow LangGraph."""
             nonlocal accumulated_state
+            print(f"[STREAMING] stream_langgraph_events started")
 
-            async for event in workflow_app.astream_events(
-                initial_state,
-                config,  # type: ignore[arg-type]
-                version="v2",
-            ):
-                event_kind = event.get("event")
-                event_data: dict[str, Any] = event.get("data", {})  # type: ignore[assignment]
+            try:
+                event_count = 0
+                async for event in workflow_app.astream_events(
+                    initial_state,
+                    config,  # type: ignore[arg-type]
+                    version="v2",
+                ):
+                    event_count += 1
+                    event_kind = event.get("event")
+                    event_data: dict[str, Any] = event.get("data", {})  # type: ignore[assignment]
 
-                # Événement de fin de nœud avec output
-                if event_kind == "on_chain_end":
-                    node_name = event.get("name", "")
-                    output = event_data.get("output")
-                    if node_name and node_name != "LangGraph":
-                        # Mettre à jour l'état accumulé avec la sortie du nœud
-                        if isinstance(output, dict):
-                            accumulated_state.update(output)
+                    if event_count % 10 == 0:
+                        print(f"[STREAMING] Processed {event_count} LangGraph events")
 
-            # Signaler la fin du workflow à la queue
-            event_queue.done()
+                    # Événement de fin de nœud avec output
+                    if event_kind == "on_chain_end":
+                        node_name = event.get("name", "")
+                        output = event_data.get("output")
+                        if node_name and node_name != "LangGraph":
+                            print(f"[STREAMING] Node finished: {node_name}")
+                            # Mettre à jour l'état accumulé avec la sortie du nœud
+                            if isinstance(output, dict):
+                                accumulated_state.update(output)
+
+                print(f"[STREAMING] stream_langgraph_events finished with {event_count} events")
+            except Exception as e:
+                print(f"[STREAMING] Error in stream_langgraph_events: {e}")
+                import traceback
+                traceback.print_exc()
+                raise
+            finally:
+                # Signaler la fin du workflow à la queue
+                print(f"[STREAMING] Signaling queue done")
+                event_queue.done()
 
         # Merger les deux streams et les yielder
+        print(f"[STREAMING] Starting merge_streams")
         async for event_data in merge_streams(
             stream_queue_events(),
             stream_langgraph_events(),
         ):
             yield event_data
 
+        print(f"[STREAMING] Merge complete, sending final events")
+
         # Après avoir parcouru tous les événements, envoyer l'événement final
         result = accumulated_state.get("result", "")
         status = accumulated_state.get("status", "completed")
         impact_plan = accumulated_state.get("impact_plan", {})
+
+        print(f"[STREAMING] Final status: {status}")
 
         # Si le workflow attend une approbation, envoyer ImpactPlanReadyEvent
         if status == "awaiting_approval" and impact_plan:
@@ -180,6 +210,7 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                 status=status,
             )
             yield f"data: {impact_plan_event.model_dump_json()}\n\n"
+            print(f"[STREAMING] Sent impact_plan_ready event")
         else:
             # Sinon, envoyer WorkflowCompleteEvent
             complete_event = WorkflowCompleteEvent(
@@ -187,9 +218,16 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                 status=status,
             )
             yield f"data: {complete_event.model_dump_json()}\n\n"
+            print(f"[STREAMING] Sent workflow_complete event")
+
+        print(f"[STREAMING] Stream completed successfully")
 
     except Exception as e:
         # En cas d'erreur, envoyer un ErrorEvent
+        print(f"[STREAMING] Error occurred: {e}")
+        import traceback
+        traceback.print_exc()
+
         error_event = ErrorEvent(
             error=str(e),
             details="An error occurred during workflow execution",
@@ -197,6 +235,7 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         yield f"data: {error_event.model_dump_json()}\n\n"
     finally:
         # Nettoyer la queue d'événements
+        print(f"[STREAMING] Cleaning up queue for thread_id: {thread_id}")
         cleanup_event_queue(thread_id)
 
 
