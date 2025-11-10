@@ -288,8 +288,8 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
         Timeline d&apos;exécution
       </h2>
 
-      {/* Affichage chronologique inversé (plus récent en haut) */}
-      <div className="flex flex-col-reverse space-y-4 space-y-reverse">
+      {/* Affichage chronologique (plus ancien en haut, plus récent en bas) */}
+      <div className="flex flex-col space-y-4">
         {events.map((event) => renderEvent(event))}
       </div>
     </div>
