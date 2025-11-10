@@ -2,21 +2,22 @@
 
 import { useState, useEffect } from "react";
 import ChatInput from "@/components/ChatInput";
-import AgentTimeline from "@/components/AgentTimeline";
+import TimelineView from "@/components/TimelineView";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
 import CreateProjectModal from "@/components/CreateProjectModal";
 import BacklogView from "@/components/BacklogView";
 import ProjectSelector from "@/components/ProjectSelector";
 import DocumentManager from "@/components/DocumentManager";
 import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject } from "@/lib/api";
-import type { TimelineEvent, ImpactPlan, SSEEvent, WorkItem } from "@/types/events";
+import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent } from "@/types/events";
 
 export default function Home() {
   const [projects, setProjects] = useState<string[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
   const [documents, setDocuments] = useState<string[]>([]);
-  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  const [sessions, setSessions] = useState<TimelineSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [impactPlan, setImpactPlan] = useState<ImpactPlan | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -91,37 +92,68 @@ export default function Home() {
       try {
         const history = await getProjectTimelineHistory(selectedProject);
 
-        // Convert history sessions to TimelineEvent format
-        const allEvents: TimelineEvent[] = [];
+        // Convert history to sessions
+        const historySessions: TimelineSession[] = history.map((historySession, index) => {
+          const sessionTimestamp = new Date(historySession.timestamp);
+          const sessionId = `history-${sessionTimestamp.getTime()}-${index}`;
 
-        history.forEach((session, sessionIndex) => {
-          // Add a session separator if this is not the first session
-          if (sessionIndex > 0) {
-            allEvents.push({
-              id: `session-separator-${session.timestamp}`,
-              timestamp: new Date(session.timestamp),
-              event: {
-                type: "workflow_complete",
-                result: "─────── Session précédente ───────",
-                status: "separator",
-              },
-            });
-          }
+          // Extract user_query from events
+          const userRequestEvent = historySession.events.find((evt: SSEEvent) => evt.type === "user_request");
+          const userQuery = userRequestEvent && "query" in userRequestEvent ? userRequestEvent.query : "Session historique";
 
-          // Add all events from this session
-          session.events.forEach((evt, eventIndex) => {
-            allEvents.push({
-              id: `${session.timestamp}-${eventIndex}`,
-              timestamp: new Date(session.timestamp),
-              event: evt,
-            });
+          // Process tool_used events into tool_runs Map
+          const toolRunsMap = new Map<string, ToolRunState>();
+          const agentEvents: any[] = [];
+
+          historySession.events.forEach((evt: SSEEvent, eventIndex: number) => {
+            if (evt.type === "tool_used") {
+              const toolEvent = evt as ToolUsedEvent;
+              const existingToolRun = toolRunsMap.get(toolEvent.tool_run_id);
+
+              if (!existingToolRun) {
+                // First time seeing this tool_run_id
+                toolRunsMap.set(toolEvent.tool_run_id, {
+                  tool_run_id: toolEvent.tool_run_id,
+                  tool_name: toolEvent.tool_name,
+                  tool_icon: toolEvent.tool_icon,
+                  description: toolEvent.description,
+                  status: toolEvent.status,
+                  details: (toolEvent.details || {}) as Record<string, string | number | boolean | null | undefined>,
+                  started_at: sessionTimestamp,
+                  completed_at: toolEvent.status !== "running" ? sessionTimestamp : undefined,
+                });
+              } else {
+                // Update existing tool_run
+                toolRunsMap.set(toolEvent.tool_run_id, {
+                  ...existingToolRun,
+                  status: toolEvent.status,
+                  details: { ...existingToolRun.details, ...(toolEvent.details || {}) } as Record<string, string | number | boolean | null | undefined>,
+                  completed_at: toolEvent.status !== "running" ? sessionTimestamp : existingToolRun.completed_at,
+                });
+              }
+            } else if (evt.type === "agent_start" || evt.type === "agent_plan") {
+              agentEvents.push({
+                id: `${sessionId}-agent-${eventIndex}`,
+                timestamp: sessionTimestamp,
+                event: evt,
+              });
+            }
           });
+
+          return {
+            id: sessionId,
+            user_query: userQuery,
+            timestamp: sessionTimestamp,
+            tool_runs: toolRunsMap,
+            agent_events: agentEvents,
+            is_expanded: false, // Historical sessions start collapsed
+          };
         });
 
-        setTimelineEvents(allEvents);
+        setSessions(historySessions);
       } catch (error) {
         console.error("Error loading timeline history:", error);
-        setTimelineEvents([]);
+        setSessions([]);
       }
     };
 
@@ -138,29 +170,69 @@ export default function Home() {
     }
   };
 
-  const addTimelineEvent = (event: SSEEvent) => {
-    const timelineEvent: TimelineEvent = {
-      id: `${Date.now()}-${Math.random()}`,
-      timestamp: new Date(),
-      event,
-    };
-    setTimelineEvents((prev) => [...prev, timelineEvent]);
+  // Helper function to add or update events in the current session
+  const addEventToCurrentSession = (event: SSEEvent) => {
+    setSessions((prevSessions) => {
+      const updatedSessions = [...prevSessions];
+      const currentSession = updatedSessions.find((s) => s.id === currentSessionId);
+
+      if (!currentSession) return prevSessions;
+
+      if (event.type === "tool_used") {
+        const toolEvent = event as ToolUsedEvent;
+        const existingToolRun = currentSession.tool_runs.get(toolEvent.tool_run_id);
+
+        if (!existingToolRun) {
+          // New tool run
+          currentSession.tool_runs.set(toolEvent.tool_run_id, {
+            tool_run_id: toolEvent.tool_run_id,
+            tool_name: toolEvent.tool_name,
+            tool_icon: toolEvent.tool_icon,
+            description: toolEvent.description,
+            status: toolEvent.status,
+            details: (toolEvent.details || {}) as Record<string, string | number | boolean | null | undefined>,
+            started_at: new Date(),
+          });
+        } else {
+          // Update existing tool run
+          currentSession.tool_runs.set(toolEvent.tool_run_id, {
+            ...existingToolRun,
+            status: toolEvent.status,
+            details: { ...existingToolRun.details, ...(toolEvent.details || {}) } as Record<string, string | number | boolean | null | undefined>,
+            completed_at: toolEvent.status !== "running" ? new Date() : undefined,
+          });
+        }
+      } else if (event.type === "agent_start" || event.type === "agent_plan") {
+        currentSession.agent_events.push({
+          id: `${currentSessionId}-agent-${Date.now()}`,
+          timestamp: new Date(),
+          event,
+        });
+      }
+
+      return updatedSessions;
+    });
   };
 
   const handleChatSubmit = async (query: string) => {
-    // Add session separator if there are existing events
-    if (timelineEvents.length > 0) {
-      const separator: TimelineEvent = {
-        id: `session-separator-${Date.now()}`,
-        timestamp: new Date(),
-        event: {
-          type: "workflow_complete",
-          result: "─────── Nouvelle session ───────",
-          status: "separator",
-        },
-      };
-      setTimelineEvents((prev) => [...prev, separator]);
-    }
+    // Collapse all previous sessions
+    setSessions((prevSessions) =>
+      prevSessions.map((session) => ({ ...session, is_expanded: false }))
+    );
+
+    // Create new session
+    const newSessionId = `session-${Date.now()}`;
+    const newSession: TimelineSession = {
+      id: newSessionId,
+      user_query: query,
+      timestamp: new Date(),
+      tool_runs: new Map(),
+      agent_events: [],
+      is_expanded: true, // New session starts expanded
+    };
+
+    setSessions((prev) => [...prev, newSession]);
+    setCurrentSessionId(newSessionId);
 
     // Reset other state
     setImpactPlan(null);
@@ -174,7 +246,7 @@ export default function Home() {
         project_id: selectedProject,
         query,
       })) {
-        addTimelineEvent(event);
+        addEventToCurrentSession(event);
 
         // Handle special events
         if (event.type === "thread_id") {
@@ -198,6 +270,17 @@ export default function Home() {
     } finally {
       setIsStreaming(false);
     }
+  };
+
+  // Toggle session expansion
+  const handleToggleSession = (sessionId: string) => {
+    setSessions((prevSessions) =>
+      prevSessions.map((session) =>
+        session.id === sessionId
+          ? { ...session, is_expanded: !session.is_expanded }
+          : session
+      )
+    );
   };
 
   const handleApprove = async () => {
@@ -331,10 +414,13 @@ export default function Home() {
               </div>
             )}
 
-            {/* Agent Timeline - only show if there are events */}
-            {timelineEvents.length > 0 && (
+            {/* Timeline View - only show if there are sessions */}
+            {sessions.length > 0 && (
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <AgentTimeline events={timelineEvents} />
+                <TimelineView
+                  sessions={sessions}
+                  onToggleSession={handleToggleSession}
+                />
               </div>
             )}
           </div>
