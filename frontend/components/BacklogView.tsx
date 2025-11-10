@@ -40,16 +40,19 @@ const INVEST_LABELS: Record<string, string> = {
 export default function BacklogView({ items }: BacklogViewProps) {
   if (items.length === 0) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">Aucun item dans le backlog</p>
+      <div className="flex flex-col h-full">
+        <h2 className="text-xl font-semibold mb-4 flex-shrink-0">Backlog du projet</h2>
+        <div className="text-center py-12 flex-1">
+          <p className="text-gray-500">Aucun item dans le backlog</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold mb-4">Backlog du projet</h2>
-      <div className="space-y-3">
+    <div className="flex flex-col h-full">
+      <h2 className="text-xl font-semibold mb-4 flex-shrink-0">Backlog du projet</h2>
+      <div className="flex-1 overflow-y-auto pr-2 space-y-3">
         {items.map((item) => {
           const investAnalysis = item.attributes?.invest_analysis as
             | InvestAnalysis
