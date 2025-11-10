@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { Link2, Brain, MessageSquare, FileText, Flag } from "lucide-react";
 import type { TimelineEvent } from "@/types/events";
 
@@ -8,18 +8,7 @@ interface AgentTimelineProps {
   events: TimelineEvent[];
 }
 
-interface EventGroup {
-  id: string;
-  type: "node" | "standalone";
-  nodeName?: string;
-  events: TimelineEvent[];
-  status?: "running" | "completed" | "error";
-}
-
 export default function AgentTimeline({ events }: AgentTimelineProps) {
-  // État pour gérer l'ouverture/fermeture de chaque groupe
-  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
-
   // Référence pour le scroll automatique
   const timelineEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -41,64 +30,11 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
     );
   }
 
-  // Fonction pour regrouper les événements par nœud
-  const groupEvents = (events: TimelineEvent[]): EventGroup[] => {
-    const groups: EventGroup[] = [];
-    let currentNodeGroup: EventGroup | null = null;
-
-    events.forEach((event) => {
-      const { type } = event.event;
-
-      if (type === "node_start") {
-        // Démarrer un nouveau groupe de nœud
-        const nodeName = "node_name" in event.event ? event.event.node_name : "Unknown";
-        currentNodeGroup = {
-          id: `node-${event.id}`,
-          type: "node",
-          nodeName,
-          events: [event],
-          status: "running",
-        };
-      } else if (type === "node_end" && currentNodeGroup) {
-        // Terminer le groupe de nœud actuel
-        currentNodeGroup.events.push(event);
-        currentNodeGroup.status = "completed";
-        groups.push(currentNodeGroup);
-        currentNodeGroup = null;
-      } else if (currentNodeGroup) {
-        // Ajouter l'événement au groupe actuel
-        currentNodeGroup.events.push(event);
-        if (type === "error") {
-          currentNodeGroup.status = "error";
-        }
-      } else {
-        // Événement standalone (pas dans un nœud)
-        groups.push({
-          id: `standalone-${event.id}`,
-          type: "standalone",
-          events: [event],
-        });
-      }
-    });
-
-    // Si un groupe de nœud est encore ouvert, l'ajouter
-    if (currentNodeGroup) {
-      groups.push(currentNodeGroup);
-    }
-
-    return groups;
-  };
-
-  const toggleGroup = (groupId: string) => {
-    setOpenGroups((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(groupId)) {
-        newSet.delete(groupId);
-      } else {
-        newSet.add(groupId);
-      }
-      return newSet;
-    });
+  // Simplification : afficher chaque événement individuellement pour une timeline narrative claire
+  // Les événements node_start et node_end sont optionnels et traités comme les autres
+  const shouldDisplayEvent = (type: string): boolean => {
+    // Filtrer les événements de bas niveau qu'on ne veut pas afficher
+    return type !== "llm_token"; // Les tokens individuels sont trop verbeux
   };
 
   const getEventIcon = (type: string) => {
@@ -107,6 +43,12 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
         return <Link2 className="w-5 h-5" />;
       case "user_request":
         return "👤";
+      case "agent_start":
+        return "🤖";
+      case "agent_plan":
+        return "📋";
+      case "tool_used":
+        return "🔧";
       case "node_start":
         return "▶";
       case "node_end":
@@ -118,7 +60,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
       case "llm_end":
         return "✓";
       case "impact_plan_ready":
-        return <FileText className="w-5 h-5" />;
+        return "🟡";
       case "workflow_complete":
         return <Flag className="w-5 h-5" />;
       case "error":
@@ -133,6 +75,9 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
     if (status === "error" || type === "error") return "border-l-red-400";
     if (status === "completed") return "border-l-green-400";
     if (status === "running") return "border-l-blue-400";
+    if (type === "agent_start") return "border-l-blue-500";
+    if (type === "agent_plan") return "border-l-cyan-400";
+    if (type === "tool_used") return "border-l-orange-400";
     if (type === "impact_plan_ready") return "border-l-amber-400";
     if (type === "workflow_complete") return "border-l-emerald-400";
     if (type === "thread_id") return "border-l-purple-400";
@@ -162,6 +107,76 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
             <p className="text-sm text-gray-700 mt-2 italic">
               &quot;{event.event.query}&quot;
             </p>
+          </div>
+        );
+      case "agent_start":
+        return (
+          <div>
+            <p className="font-semibold text-gray-900 mb-2">
+              🤖 {event.event.agent_name}
+            </p>
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+              <p className="text-sm text-gray-700 italic">
+                &quot;{event.event.thought}&quot;
+              </p>
+            </div>
+          </div>
+        );
+      case "agent_plan":
+        return (
+          <div>
+            <p className="font-semibold text-gray-900 mb-3">
+              📋 Plan d&apos;action - {event.event.agent_name}
+            </p>
+            <ul className="space-y-2">
+              {event.event.steps.map((step, index) => (
+                <li key={index} className="flex items-start gap-2 text-sm">
+                  <span className="text-blue-500 font-bold flex-shrink-0 mt-0.5">
+                    {index + 1}.
+                  </span>
+                  <span className="text-gray-700">{step}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      case "tool_used":
+        return (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-2xl">{event.event.tool_icon}</span>
+              <div className="flex-1">
+                <p className="font-semibold text-gray-900">
+                  {event.event.tool_name}
+                </p>
+                <p className="text-xs text-gray-500">{event.event.description}</p>
+              </div>
+              <span
+                className={`text-xs font-medium px-2 py-1 rounded ${
+                  event.event.status === "completed"
+                    ? "bg-green-100 text-green-700"
+                    : event.event.status === "error"
+                    ? "bg-red-100 text-red-700"
+                    : "bg-blue-100 text-blue-700"
+                }`}
+              >
+                {event.event.status === "completed"
+                  ? "✓ Terminé"
+                  : event.event.status === "error"
+                  ? "⚠ Erreur"
+                  : "⏳ En cours"}
+              </span>
+            </div>
+            {!compact && event.event.details && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs text-gray-600 hover:text-gray-900 font-medium">
+                  Voir les détails
+                </summary>
+                <pre className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded text-xs overflow-x-auto">
+                  {JSON.stringify(event.event.details, null, 2)}
+                </pre>
+              </details>
+            )}
           </div>
         );
       case "node_start":
@@ -265,7 +280,10 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
     }
   };
 
-  const groups = groupEvents(events);
+  // Filtrer les événements à afficher
+  const filteredEvents = events.filter((event) =>
+    shouldDisplayEvent(event.event.type)
+  );
 
   return (
     <div className="space-y-4">
@@ -273,112 +291,31 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
         Timeline d&apos;exécution
       </h2>
 
-      <div className="flex flex-col-reverse space-y-3 space-y-reverse">
-        {groups.map((group) => {
-          const isOpen = openGroups.has(group.id);
-
-          if (group.type === "node") {
-            // Groupe de nœud avec accordéon
-            return (
-              <div
-                key={group.id}
-                className={`bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow ${getBorderColor(
-                  group.status
-                )} border-l-4`}
-              >
-                {/* Header cliquable */}
-                <button
-                  onClick={() => toggleGroup(group.id)}
-                  className="w-full px-6 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors text-left"
-                >
-                  {/* Chevron */}
-                  <span className="text-gray-600 text-lg flex-shrink-0">
-                    {isOpen ? "▼" : "▶"}
-                  </span>
-
-                  {/* Icône du nœud */}
-                  <span className="text-xl flex-shrink-0">
-                    {group.status === "completed"
-                      ? "✓"
-                      : group.status === "error"
-                      ? "⚠"
-                      : "▶"}
-                  </span>
-
-                  {/* Nom du nœud */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 text-base">
-                      {group.nodeName}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {group.status === "completed"
-                        ? "Terminé"
-                        : group.status === "error"
-                        ? "Erreur"
-                        : "En cours..."}
-                    </p>
-                  </div>
-
-                  {/* Badge avec nombre d'événements */}
-                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                    {group.events.length} événements
-                  </span>
-                </button>
-
-                {/* Contenu dépliable */}
-                {isOpen && (
-                  <div className="border-t border-gray-100 bg-gray-50/50">
-                    <div className="px-6 py-4 space-y-3">
-                      {group.events.map((event) => (
-                        <div
-                          key={event.id}
-                          className="flex items-start gap-3 p-3 bg-white rounded border border-gray-200"
-                        >
-                          {/* Icône */}
-                          <div className="text-lg flex-shrink-0 text-gray-600">
-                            {getEventIcon(event.event.type)}
-                          </div>
-
-                          {/* Contenu */}
-                          <div className="flex-1 min-w-0">
-                            {formatEventDetails(event, false)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+      <div className="space-y-3">
+        {filteredEvents.map((event) => (
+          <div
+            key={event.id}
+            className={`bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow ${getBorderColor(
+              undefined,
+              event.event.type
+            )} border-l-4`}
+          >
+            <div className="flex items-start gap-4">
+              {/* Icône */}
+              <div className="text-2xl flex-shrink-0">
+                {getEventIcon(event.event.type)}
               </div>
-            );
-          } else {
-            // Événement standalone
-            const event = group.events[0];
-            return (
-              <div
-                key={group.id}
-                className={`bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow ${getBorderColor(
-                  undefined,
-                  event.event.type
-                )} border-l-4`}
-              >
-                <div className="flex items-start gap-4">
-                  {/* Icône */}
-                  <div className="text-2xl flex-shrink-0">
-                    {getEventIcon(event.event.type)}
-                  </div>
 
-                  {/* Contenu */}
-                  <div className="flex-1 min-w-0">
-                    {formatEventDetails(event, false)}
-                    <p className="text-xs text-gray-400 mt-2">
-                      {event.timestamp.toLocaleTimeString()}
-                    </p>
-                  </div>
-                </div>
+              {/* Contenu */}
+              <div className="flex-1 min-w-0">
+                {formatEventDetails(event, false)}
+                <p className="text-xs text-gray-400 mt-2">
+                  {event.timestamp.toLocaleTimeString()}
+                </p>
               </div>
-            );
-          }
-        })}
+            </div>
+          </div>
+        ))}
         {/* Élément de référence pour le scroll automatique */}
         <div ref={timelineEndRef} />
       </div>
