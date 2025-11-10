@@ -114,9 +114,11 @@ export default function SessionView({ session, isLastSession, onToggle }: Sessio
                 <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Outils utilisés
                 </h5>
-                {toolRuns.map((toolRun) => (
-                  <ToolRunView key={toolRun.tool_run_id} toolRun={toolRun} />
-                ))}
+                <div className="space-y-3">
+                  {toolRuns.map((toolRun) => (
+                    <ToolRunView key={toolRun.tool_run_id} toolRun={toolRun} />
+                  ))}
+                </div>
               </div>
             )}
 
