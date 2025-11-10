@@ -400,17 +400,17 @@ async def upload_project_document(
     file: UploadFile = File(...),
 ) -> JSONResponse:
     """
-    Upload un document pour un projet.
+    Upload un document pour un projet et le vectorise automatiquement.
 
     Args:
         project_id: Identifiant unique du projet
         file: Fichier à uploader
 
     Returns:
-        JSONResponse avec le nom du fichier uploadé
+        JSONResponse avec les détails de l'upload et de la vectorisation
 
     Raises:
-        HTTPException: Si le type de fichier n'est pas supporté
+        HTTPException: Si le type de fichier n'est pas supporté ou si la vectorisation échoue
     """
     # Vérifier le type de fichier
     if file.content_type != "application/pdf":
@@ -434,15 +434,27 @@ async def upload_project_document(
         with file_path.open("wb") as f:
             f.write(content)
 
+        # Vectoriser le document automatiquement
+        ingestion_service = DocumentIngestionService(project_id)
+        ingestion_result = ingestion_service.ingest_document(file_path, file.filename)
+
         return JSONResponse(
             content={
                 "filename": file.filename,
-                "message": f"Fichier '{file.filename}' uploadé avec succès",
+                "message": f"Fichier '{file.filename}' uploadé et vectorisé avec succès",
+                "vectorization": {
+                    "num_chunks": ingestion_result["num_chunks"],
+                    "num_pages": ingestion_result["num_pages"],
+                    "status": ingestion_result["status"],
+                },
             },
             status_code=201,
         )
     except Exception as e:
+        # Si la vectorisation échoue, supprimer le fichier uploadé
+        if file_path.exists():
+            file_path.unlink()
         raise HTTPException(
             status_code=500,
-            detail=f"Erreur lors de l'upload du fichier: {e}",
+            detail=f"Erreur lors de l'upload ou de la vectorisation du fichier: {e}",
         ) from e

@@ -9,7 +9,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
 export interface ChatRequest {
   project_id: string;
   query: string;
-  document_content?: string;
 }
 
 export interface ApprovalRequest {
@@ -142,6 +141,30 @@ export async function getProjects(): Promise<string[]> {
 }
 
 /**
+ * Create a new project
+ */
+export async function createProject(
+  projectId: string
+): Promise<{ project_id: string; message: string }> {
+  const response = await fetch(`${API_URL}/projects`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ project_id: projectId }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
  * Get the list of documents for a project
  */
 export async function getProjectDocuments(
@@ -162,12 +185,12 @@ export async function getProjectDocuments(
 }
 
 /**
- * Upload a document to a project
+ * Upload a document for a project
  */
 export async function uploadDocument(
   projectId: string,
   file: File
-): Promise<{ filename: string; message: string }> {
+): Promise<{ message: string; filename: string }> {
   const formData = new FormData();
   formData.append("file", file);
 
@@ -177,10 +200,8 @@ export async function uploadDocument(
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(
-      errorData.detail || `HTTP error! status: ${response.status}`
-    );
+    const errorData = await response.json();
+    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
   }
 
   return response.json();

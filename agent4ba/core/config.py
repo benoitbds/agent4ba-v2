@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     CORS_ALLOWED_ORIGINS: list[str] = [
         "http://localhost:3000",  # Frontend Next.js (port par défaut)
         "http://localhost:3001",  # Frontend Next.js (port alternatif)
+        "http://192.168.1.95:3000",  # Frontend sur réseau local
     ]
 
 
