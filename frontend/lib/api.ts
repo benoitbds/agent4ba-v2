@@ -220,8 +220,19 @@ export async function uploadDocument(
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    // Gérer spécifiquement l'erreur 413 (Content Too Large)
+    if (response.status === 413) {
+      throw new Error("Le fichier dépasse la taille maximale autorisée de 50 Mo.");
+    }
+
+    // Tenter de parser l'erreur JSON du backend
+    try {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    } catch {
+      // Si le parsing JSON échoue, lever une erreur générique
+      throw new Error(`Erreur lors de l'upload du fichier (${response.status})`);
+    }
   }
 
   return response.json();
