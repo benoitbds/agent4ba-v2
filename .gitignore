@@ -149,3 +149,4 @@ Thumbs.db
 # Project specific
 agent4ba/data/*
 !agent4ba/data/.gitkeep
+agent_registry.local.yaml
