@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from 'next-intl';
 
 interface CreateProjectModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ export default function CreateProjectModal({
   onClose,
   onCreateProject,
 }: CreateProjectModalProps) {
+  const t = useTranslations();
   const [projectId, setProjectId] = useState("");
   const [error, setError] = useState("");
 
@@ -21,14 +23,14 @@ export default function CreateProjectModal({
 
     // Validation basique
     if (!projectId.trim()) {
-      setError("Le nom du projet est requis");
+      setError(t('createProject.nameRequired'));
       return;
     }
 
     // Validation du format (pas d'espaces, caractères spéciaux limités)
     const validProjectIdRegex = /^[a-zA-Z0-9_-]+$/;
     if (!validProjectIdRegex.test(projectId)) {
-      setError("Le nom du projet ne peut contenir que des lettres, chiffres, tirets et underscores");
+      setError(t('createProject.invalidFormat'));
       return;
     }
 
@@ -48,12 +50,12 @@ export default function CreateProjectModal({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-4 text-gray-800">Créer un nouveau projet</h2>
+        <h2 className="text-2xl font-bold mb-4 text-gray-800">{t('createProject.title')}</h2>
 
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label htmlFor="project-id" className="block text-sm font-medium text-gray-700 mb-2">
-              Nom du projet
+              {t('createProject.nameLabel')}
             </label>
             <input
               id="project-id"
@@ -64,14 +66,14 @@ export default function CreateProjectModal({
                 setError("");
               }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="mon-projet"
+              placeholder={t('createProject.placeholder')}
               autoFocus
             />
             {error && (
               <p className="mt-2 text-sm text-red-600">{error}</p>
             )}
             <p className="mt-2 text-sm text-gray-500">
-              Utilisez uniquement des lettres, chiffres, tirets (-) et underscores (_)
+              {t('createProject.hint')}
             </p>
           </div>
 
@@ -81,13 +83,13 @@ export default function CreateProjectModal({
               onClick={handleClose}
               className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
             >
-              Annuler
+              {t('createProject.cancel')}
             </button>
             <button
               type="submit"
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              Créer
+              {t('createProject.create')}
             </button>
           </div>
         </form>

@@ -1,0 +1,149 @@
+{
+  "metadata": {
+    "title": "Agent4BA - Gestion de Backlog par IA",
+    "description": "Gestion de backlog en temps réel avec assistance IA"
+  },
+  "header": {
+    "title": "Agent4BA - Assistant IA pour Backlog"
+  },
+  "project": {
+    "label": "Projet :",
+    "noProjects": "Aucun projet disponible",
+    "newProject": "+ Nouveau projet",
+    "deleteProject": "Supprimer le projet sélectionné"
+  },
+  "newRequest": {
+    "title": "Nouvelle demande",
+    "placeholder": "Posez votre question sur les documents du projet (ex: Quelles sont les exigences de sécurité ?)",
+    "send": "Envoyer",
+    "hint": "L'agent utilisera les documents uploadés pour répondre à votre question et proposer des work items"
+  },
+  "status": {
+    "processing": "Traitement en cours...",
+    "impactPlanReady": "ImpactPlan prêt pour validation",
+    "approved": "Approuvé:",
+    "rejected": "Rejeté:",
+    "error": "Erreur:",
+    "errorApproving": "Erreur lors de l'approbation:",
+    "errorRejecting": "Erreur lors du rejet:",
+    "sendingApproval": "Envoi de l'approbation...",
+    "sendingRejection": "Envoi du rejet..."
+  },
+  "documents": {
+    "title": "Documents du Projet",
+    "add": "Ajouter un document",
+    "existing": "Documents existants",
+    "loading": "Chargement des documents...",
+    "getStarted": "Pour commencer, ajoutez un document en cliquant sur le bouton +"
+  },
+  "backlog": {
+    "title": "Backlog du projet",
+    "empty": "Aucun item dans le backlog",
+    "loading": "Chargement du backlog...",
+    "priority": "Priorité:",
+    "points": "Points:",
+    "status": "Statut:"
+  },
+  "timeline": {
+    "title": "Timeline d'exécution",
+    "waiting": "En attente de requêtes...",
+    "userRequest": "Requête utilisateur",
+    "toolsUsed": "outils utilisés",
+    "actionPlan": "Plan d'action",
+    "descriptionChanges": "Modifications de la description",
+    "before": "Avant",
+    "after": "Après",
+    "investAnalysisAdded": "✅ Analyse INVEST ajoutée",
+    "score": "Score:",
+    "newItems": "Nouveaux items",
+    "modifiedItems": "Items modifiés",
+    "deletedItems": "Items supprimés",
+    "summary": "Résumé",
+    "newItem": "nouveau item",
+    "newItems_plural": "nouveaux items",
+    "modifiedItem": "item modifié",
+    "modifiedItems_plural": "items modifiés",
+    "deletedItem": "item supprimé",
+    "deletedItems_plural": "items supprimés",
+    "viewDetails": "Voir les détails",
+    "viewPrompt": "Voir le prompt",
+    "viewResponse": "Voir la réponse",
+    "otherDetails": "Autres détails",
+    "model": "Modèle :",
+    "temperature": "Température :",
+    "chunksRetrieved": "Chunks récupérés :",
+    "documentsLoaded": "Documents chargés :",
+    "backlogItems": "Items du backlog :",
+    "responseLength": "Longueur de la réponse :",
+    "characters": "caractères",
+    "error": "Erreur :",
+    "completed": "✓ Terminé",
+    "running": "En cours",
+    "errorStatus": "⚠ Erreur",
+    "noToolsUsed": "Aucun outil utilisé dans cette session"
+  },
+  "invest": {
+    "I": "Independent (Indépendante)",
+    "N": "Negotiable (Négociable)",
+    "V": "Valuable (Apporte de la valeur)",
+    "E": "Estimable (Estimable)",
+    "S": "Small (Petite)",
+    "T": "Testable (Testable)"
+  },
+  "impactPlan": {
+    "title": "Validation de l'ImpactPlan",
+    "thread": "Thread:",
+    "approve": "Approuver",
+    "reject": "Rejeter",
+    "processing": "En cours..."
+  },
+  "createProject": {
+    "title": "Créer un nouveau projet",
+    "nameLabel": "Nom du projet",
+    "placeholder": "mon-projet",
+    "nameRequired": "Le nom du projet est requis",
+    "invalidFormat": "Le nom du projet ne peut contenir que des lettres, chiffres, tirets et underscores",
+    "hint": "Utilisez uniquement des lettres, chiffres, tirets (-) et underscores (_)",
+    "cancel": "Annuler",
+    "create": "Créer",
+    "creating": "Création du projet en cours...",
+    "success": "Projet \"{name}\" créé avec succès"
+  },
+  "deleteProject": {
+    "title": "Supprimer le projet",
+    "confirmMessage": "Êtes-vous sûr de vouloir supprimer le projet",
+    "warning": "⚠️ Cette action est irréversible",
+    "warningDetails": "Toutes les données associées au projet seront définitivement supprimées, incluant :",
+    "backlogData": "Le backlog et tous les work items",
+    "timelineHistory": "L'historique de la timeline",
+    "uploadedDocuments": "Les documents uploadés",
+    "cancel": "Annuler",
+    "confirm": "Confirmer la suppression",
+    "deleting": "Suppression...",
+    "success": "Projet \"{name}\" supprimé avec succès"
+  },
+  "uploadDocument": {
+    "title": "Uploader un document",
+    "selectFile": "Sélectionner un fichier PDF",
+    "onlyPdf": "Seuls les fichiers PDF sont acceptés (taille maximale : 50 Mo)",
+    "fileSelected": "Fichier sélectionné:",
+    "uploading": "Upload en cours...",
+    "upload": "Uploader",
+    "cancel": "Annuler",
+    "fileTooLarge": "Le fichier dépasse la taille maximale autorisée de 50 Mo.",
+    "selectFileError": "Veuillez sélectionner un fichier",
+    "uploadError": "Erreur lors de l'upload du fichier"
+  },
+  "agentTimeline": {
+    "waiting": "En attente d'événements...",
+    "sessionInitialized": "Session initialisée",
+    "userRequest": "Requête utilisateur",
+    "llmStarted": "LLM démarré",
+    "llmFinished": "LLM terminé",
+    "impactPlanReady": "ImpactPlan prêt pour validation",
+    "workflowComplete": "Workflow terminé",
+    "started": "Démarré",
+    "finished": "Terminé",
+    "viewOutput": "Voir la sortie"
+  }
+}

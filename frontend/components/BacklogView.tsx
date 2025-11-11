@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { WorkItem } from "@/types/events";
 
 interface BacklogViewProps {
@@ -27,23 +28,14 @@ function getBadgeColor(score: number): string {
   return "bg-red-500 text-white";
 }
 
-// Noms complets des critères INVEST
-const INVEST_LABELS: Record<string, string> = {
-  I: "Independent (Indépendante)",
-  N: "Negotiable (Négociable)",
-  V: "Valuable (Apporte de la valeur)",
-  E: "Estimable (Estimable)",
-  S: "Small (Petite)",
-  T: "Testable (Testable)",
-};
-
 export default function BacklogView({ items }: BacklogViewProps) {
+  const t = useTranslations();
   if (items.length === 0) {
     return (
       <div className="flex flex-col h-full">
-        <h2 className="text-xl font-semibold mb-4 flex-shrink-0">Backlog du projet</h2>
+        <h2 className="text-xl font-semibold mb-4 flex-shrink-0">{t("backlog.title")}</h2>
         <div className="text-center py-12 flex-1">
-          <p className="text-gray-500">Aucun item dans le backlog</p>
+          <p className="text-gray-500">{t("backlog.empty")}</p>
         </div>
       </div>
     );
@@ -51,7 +43,7 @@ export default function BacklogView({ items }: BacklogViewProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <h2 className="text-xl font-semibold mb-4 flex-shrink-0">Backlog du projet</h2>
+      <h2 className="text-xl font-semibold mb-4 flex-shrink-0">{t("backlog.title")}</h2>
       <div className="flex-1 overflow-y-auto pr-2 space-y-3">
         {items.map((item) => {
           const investAnalysis = item.attributes?.invest_analysis as
@@ -98,7 +90,7 @@ export default function BacklogView({ items }: BacklogViewProps) {
                           <div
                             key={criterion}
                             className="group relative"
-                            title={`${INVEST_LABELS[criterion]}: ${data.reason}`}
+                            title={`${t(`invest.${criterion}`)}: ${data.reason}`}
                           >
                             <span
                               className={`px-2 py-1 text-xs font-bold rounded cursor-help ${getBadgeColor(data.score)}`}
@@ -109,10 +101,10 @@ export default function BacklogView({ items }: BacklogViewProps) {
                             <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10 w-64">
                               <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg">
                                 <div className="font-bold mb-1">
-                                  {INVEST_LABELS[criterion]}
+                                  {t(`invest.${criterion}`)}
                                 </div>
                                 <div className="mb-1">
-                                  Score: {(data.score * 100).toFixed(0)}%
+                                  {t("timeline.score")} {(data.score * 100).toFixed(0)}%
                                 </div>
                                 <div className="text-gray-300">
                                   {data.reason}
@@ -130,17 +122,17 @@ export default function BacklogView({ items }: BacklogViewProps) {
                     <div className="flex gap-2 mt-2 text-xs">
                       {item.attributes.priority && (
                         <span className="px-2 py-1 bg-gray-100 rounded">
-                          Priorité: {item.attributes.priority}
+                          {t("backlog.priority")} {item.attributes.priority}
                         </span>
                       )}
                       {item.attributes.points !== undefined && (
                         <span className="px-2 py-1 bg-gray-100 rounded">
-                          Points: {item.attributes.points}
+                          {t("backlog.points")} {item.attributes.points}
                         </span>
                       )}
                       {item.attributes.status && (
                         <span className="px-2 py-1 bg-gray-100 rounded">
-                          Statut: {item.attributes.status}
+                          {t("backlog.status")} {item.attributes.status}
                         </span>
                       )}
                     </div>

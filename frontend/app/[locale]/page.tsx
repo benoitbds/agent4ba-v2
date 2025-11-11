@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from 'next-intl';
 import ChatInput from "@/components/ChatInput";
 import TimelineView from "@/components/TimelineView";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
@@ -13,6 +14,7 @@ import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects,
 import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent } from "@/types/events";
 
 export default function Home() {
+  const t = useTranslations();
   const [projects, setProjects] = useState<string[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
@@ -278,18 +280,18 @@ export default function Home() {
         } else if (event.type === "impact_plan_ready") {
           setImpactPlan(event.impact_plan);
           setThreadId(event.thread_id);
-          setStatusMessage("ImpactPlan prêt pour validation");
+          setStatusMessage(t('status.impactPlanReady'));
           break; // Stop streaming when ImpactPlan is ready
         } else if (event.type === "workflow_complete") {
-          setStatusMessage(`Workflow terminé: ${event.result}`);
+          setStatusMessage(`${t('agentTimeline.workflowComplete')}: ${event.result}`);
         } else if (event.type === "error") {
-          setStatusMessage(`Erreur: ${event.error}`);
+          setStatusMessage(`${t('status.error')} ${event.error}`);
         }
       }
     } catch (error) {
       console.error("Error streaming events:", error);
       setStatusMessage(
-        `Erreur de connexion: ${error instanceof Error ? error.message : "Erreur inconnue"}`
+        `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
       );
     } finally {
       setIsStreaming(false);
@@ -314,9 +316,9 @@ export default function Home() {
     }
 
     try {
-      setStatusMessage("Envoi de l'approbation...");
+      setStatusMessage(t('status.sendingApproval'));
       const response = await sendApprovalDecision(threadId, true);
-      setStatusMessage(`Approuvé: ${response.result}`);
+      setStatusMessage(`${t('status.approved')} ${response.result}`);
       setImpactPlan(null);
       setThreadId(null);
 
@@ -330,7 +332,7 @@ export default function Home() {
     } catch (error) {
       console.error("Error approving plan:", error);
       setStatusMessage(
-        `Erreur lors de l'approbation: ${error instanceof Error ? error.message : "Erreur inconnue"}`
+        `${t('status.errorApproving')} ${error instanceof Error ? error.message : t('status.error')}`
       );
     }
   };
@@ -342,22 +344,22 @@ export default function Home() {
     }
 
     try {
-      setStatusMessage("Envoi du rejet...");
+      setStatusMessage(t('status.sendingRejection'));
       const response = await sendApprovalDecision(threadId, false);
-      setStatusMessage(`Rejeté: ${response.result}`);
+      setStatusMessage(`${t('status.rejected')} ${response.result}`);
       setImpactPlan(null);
       setThreadId(null);
     } catch (error) {
       console.error("Error rejecting plan:", error);
       setStatusMessage(
-        `Erreur lors du rejet: ${error instanceof Error ? error.message : "Erreur inconnue"}`
+        `${t('status.errorRejecting')} ${error instanceof Error ? error.message : t('status.error')}`
       );
     }
   };
 
   const handleCreateProject = async (projectId: string) => {
     try {
-      setStatusMessage("Création du projet en cours...");
+      setStatusMessage(t('createProject.creating'));
       await createProject(projectId);
 
       // Reload projects list
@@ -367,12 +369,12 @@ export default function Home() {
       // Select the newly created project
       setSelectedProject(projectId);
 
-      setStatusMessage(`Projet "${projectId}" créé avec succès`);
+      setStatusMessage(t('createProject.success', { name: projectId }));
       setIsCreateProjectModalOpen(false);
     } catch (error) {
       console.error("Error creating project:", error);
       setStatusMessage(
-        `Erreur lors de la création du projet: ${error instanceof Error ? error.message : "Erreur inconnue"}`
+        `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
       );
     }
   };
@@ -383,7 +385,7 @@ export default function Home() {
     const projectToDelete = selectedProject;
 
     try {
-      setStatusMessage("Suppression du projet en cours...");
+      setStatusMessage(t('deleteProject.deleting'));
       await deleteProject(selectedProject);
 
       // Reload projects list
@@ -400,7 +402,7 @@ export default function Home() {
         setSessions([]);
       }
 
-      setStatusMessage(`Projet "${projectToDelete}" supprimé avec succès`);
+      setStatusMessage(t('deleteProject.success', { name: projectToDelete }));
       setIsDeleteProjectModalOpen(false);
 
       // Clear status message after 3 seconds
@@ -410,7 +412,7 @@ export default function Home() {
     } catch (error) {
       console.error("Error deleting project:", error);
       setStatusMessage(
-        `Erreur lors de la suppression du projet: ${error instanceof Error ? error.message : "Erreur inconnue"}`
+        `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
       );
     }
   };
@@ -423,7 +425,7 @@ export default function Home() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                Agent4BA - AI Backlog Assistant
+                {t('header.title')}
               </h1>
             </div>
             <ProjectSelector
@@ -445,7 +447,7 @@ export default function Home() {
             {/* Chat Input */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold mb-4">
-                Nouvelle demande
+                {t('newRequest.title')}
               </h2>
               <ChatInput onSubmit={handleChatSubmit} disabled={isStreaming} />
             </div>
@@ -471,7 +473,7 @@ export default function Home() {
                 <div className="flex items-center gap-3">
                   <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full" />
                   <p className="text-blue-800 font-semibold">
-                    Traitement en cours...
+                    {t('status.processing')}
                   </p>
                 </div>
               </div>
@@ -496,7 +498,7 @@ export default function Home() {
                 <div className="flex items-center justify-center py-12">
                   <div className="flex items-center gap-3">
                     <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
-                    <p className="text-gray-600">Chargement des documents...</p>
+                    <p className="text-gray-600">{t('documents.loading')}</p>
                   </div>
                 </div>
               ) : (
@@ -514,7 +516,7 @@ export default function Home() {
                 <div className="flex items-center justify-center py-12">
                   <div className="flex items-center gap-3">
                     <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
-                    <p className="text-gray-600">Chargement du backlog...</p>
+                    <p className="text-gray-600">{t('backlog.loading')}</p>
                   </div>
                 </div>
               ) : (

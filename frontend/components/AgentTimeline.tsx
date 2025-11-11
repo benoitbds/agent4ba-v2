@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { Link2, Brain, MessageSquare, FileText, Flag } from "lucide-react";
 import type { TimelineEvent } from "@/types/events";
 
@@ -9,6 +10,7 @@ interface AgentTimelineProps {
 }
 
 export default function AgentTimeline({ events }: AgentTimelineProps) {
+  const t = useTranslations();
   // Référence pour le scroll automatique
   const timelineEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -25,7 +27,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
   if (events.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400">
-        <p>En attente d&apos;événements...</p>
+        <p>{t("agentTimeline.waiting")}</p>
       </div>
     );
   }
@@ -92,7 +94,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
       case "thread_id":
         return (
           <div>
-            <p className="font-semibold text-gray-900">Session initialisée</p>
+            <p className="font-semibold text-gray-900">{t("agentTimeline.sessionInitialized")}</p>
             {!compact && (
               <p className="text-sm text-gray-500 font-mono truncate mt-1">
                 Thread: {event.event.thread_id}
@@ -103,7 +105,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
       case "user_request":
         return (
           <div>
-            <p className="font-semibold text-gray-900">Requête utilisateur</p>
+            <p className="font-semibold text-gray-900">{t("agentTimeline.userRequest")}</p>
             <p className="text-sm text-gray-700 mt-2 italic">
               &quot;{event.event.query}&quot;
             </p>
@@ -126,7 +128,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
         return (
           <div>
             <p className="font-semibold text-gray-900 mb-3">
-              📋 Plan d&apos;action - {event.event.agent_name}
+              📋 {t("timeline.actionPlan")} - {event.event.agent_name}
             </p>
             <ul className="space-y-2">
               {event.event.steps.map((step, index) => (
@@ -161,16 +163,16 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
                 }`}
               >
                 {event.event.status === "completed"
-                  ? "✓ Terminé"
+                  ? t("timeline.completed")
                   : event.event.status === "error"
-                  ? "⚠ Erreur"
-                  : "⏳ En cours"}
+                  ? t("timeline.errorStatus")
+                  : t("timeline.running")}
               </span>
             </div>
             {!compact && event.event.details && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-xs text-gray-600 hover:text-gray-900 font-medium">
-                  Voir les détails
+                  {t("timeline.viewDetails")}
                 </summary>
                 <pre className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded text-xs overflow-x-auto">
                   {JSON.stringify(event.event.details, null, 2)}
@@ -182,7 +184,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
       case "node_start":
         return (
           <div>
-            <p className="text-sm text-gray-900">Démarré</p>
+            <p className="text-sm text-gray-900">{t("agentTimeline.started")}</p>
             {!compact && (
               <p className="text-xs text-gray-500 mt-1">
                 {event.timestamp.toLocaleTimeString()}
@@ -193,11 +195,11 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
       case "node_end":
         return (
           <div>
-            <p className="text-sm text-gray-900">Terminé</p>
+            <p className="text-sm text-gray-900">{t("agentTimeline.finished")}</p>
             {!compact && event.event.output && (
               <details className="mt-2 text-xs">
                 <summary className="cursor-pointer text-gray-600 hover:text-gray-900 font-medium">
-                  Voir la sortie
+                  {t("agentTimeline.viewOutput")}
                 </summary>
                 <pre className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded text-xs overflow-x-auto">
                   {JSON.stringify(event.event.output, null, 2)}
@@ -214,10 +216,10 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
       case "llm_start":
         return (
           <div>
-            <p className="text-sm text-gray-700">LLM démarré</p>
+            <p className="text-sm text-gray-700">{t("agentTimeline.llmStarted")}</p>
             {!compact && "model" in event.event && event.event.model && (
               <p className="text-xs text-gray-500 mt-1">
-                Modèle: {event.event.model}
+                {t("timeline.model")} {event.event.model}
               </p>
             )}
           </div>
@@ -225,7 +227,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
       case "llm_end":
         return (
           <div>
-            <p className="text-sm text-gray-700">LLM terminé</p>
+            <p className="text-sm text-gray-700">{t("agentTimeline.llmFinished")}</p>
             {!compact && "content" in event.event && event.event.content && (
               <p className="text-xs text-gray-600 mt-1 line-clamp-2">
                 {event.event.content}
@@ -243,11 +245,11 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
         return (
           <div>
             <p className="font-semibold text-gray-900">
-              ImpactPlan prêt pour validation
+              {t("agentTimeline.impactPlanReady")}
             </p>
             {!compact && (
               <p className="text-sm text-gray-600 mt-1">
-                {event.event.impact_plan.new_items.length} nouveaux items
+                {event.event.impact_plan.new_items.length} {event.event.impact_plan.new_items.length > 1 ? t("timeline.newItems_plural") : t("timeline.newItem")}
               </p>
             )}
           </div>
@@ -255,7 +257,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
       case "workflow_complete":
         return (
           <div>
-            <p className="font-semibold text-gray-900">Workflow terminé</p>
+            <p className="font-semibold text-gray-900">{t("agentTimeline.workflowComplete")}</p>
             {!compact && (
               <p className="text-sm text-gray-600 mt-1">{event.event.result}</p>
             )}
@@ -264,7 +266,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
       case "error":
         return (
           <div>
-            <p className="font-semibold text-red-700">Erreur</p>
+            <p className="font-semibold text-red-700">{t("timeline.error")}</p>
             <p className="text-sm text-gray-700 mt-1">{event.event.error}</p>
             {!compact && event.event.details && (
               <p className="text-xs text-gray-600 mt-1">{event.event.details}</p>
@@ -288,7 +290,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold text-gray-900 mb-6">
-        Timeline d&apos;exécution
+        {t("timeline.title")}
       </h2>
 
       <div className="space-y-3">

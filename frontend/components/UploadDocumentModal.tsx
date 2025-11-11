@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useTranslations } from "next-intl";
 
 interface UploadDocumentModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ export default function UploadDocumentModal({
   projectId,
   onUploadSuccess,
 }: UploadDocumentModalProps) {
+  const t = useTranslations();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<
     "idle" | "uploading" | "success" | "error"
@@ -28,7 +30,7 @@ export default function UploadDocumentModal({
       // Vérifier le type de fichier
       if (file.type !== "application/pdf") {
         setUploadStatus("error");
-        setStatusMessage("Seuls les fichiers PDF sont acceptés");
+        setStatusMessage(t("uploadDocument.onlyPdf"));
         setSelectedFile(null);
         return;
       }
@@ -37,7 +39,7 @@ export default function UploadDocumentModal({
       const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 Mo
       if (file.size > MAX_FILE_SIZE) {
         setUploadStatus("error");
-        setStatusMessage("Le fichier dépasse la taille maximale autorisée de 50 Mo.");
+        setStatusMessage(t("uploadDocument.fileTooLarge"));
         setSelectedFile(null);
         return;
       }
@@ -51,12 +53,12 @@ export default function UploadDocumentModal({
   const handleUpload = async () => {
     if (!selectedFile) {
       setUploadStatus("error");
-      setStatusMessage("Veuillez sélectionner un fichier");
+      setStatusMessage(t("uploadDocument.selectFileError"));
       return;
     }
 
     setUploadStatus("uploading");
-    setStatusMessage("Upload en cours...");
+    setStatusMessage(t("uploadDocument.uploading"));
 
     try {
       // Dynamically import uploadDocument to avoid circular dependency
@@ -84,7 +86,7 @@ export default function UploadDocumentModal({
       setStatusMessage(
         error instanceof Error
           ? error.message
-          : "Erreur lors de l'upload du fichier"
+          : t("uploadDocument.uploadError")
       );
     }
   };
@@ -105,13 +107,13 @@ export default function UploadDocumentModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
         <h2 className="text-2xl font-bold mb-4 text-gray-800">
-          Uploader un document
+          {t("uploadDocument.title")}
         </h2>
 
         <div className="space-y-4">
           <div>
             <label htmlFor="file-input" className="block text-sm font-medium text-gray-700 mb-2">
-              Sélectionner un fichier PDF
+              {t("uploadDocument.selectFile")}
             </label>
             <input
               id="file-input"
@@ -129,13 +131,13 @@ export default function UploadDocumentModal({
               disabled={uploadStatus === "uploading"}
             />
             <p className="mt-1 text-xs text-gray-500">
-              Seuls les fichiers PDF sont acceptés (taille maximale : 50 Mo)
+              {t("uploadDocument.onlyPdf")}
             </p>
           </div>
 
           {selectedFile && (
             <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded border border-gray-200">
-              Fichier sélectionné: <strong>{selectedFile.name}</strong> (
+              {t("uploadDocument.fileSelected")} <strong>{selectedFile.name}</strong> (
               {(selectedFile.size / 1024).toFixed(2)} KB)
             </div>
           )}
@@ -162,7 +164,7 @@ export default function UploadDocumentModal({
               disabled={uploadStatus === "uploading"}
               className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Annuler
+              {t("uploadDocument.cancel")}
             </button>
             <button
               onClick={handleUpload}
@@ -173,7 +175,7 @@ export default function UploadDocumentModal({
                   : "bg-blue-600 hover:bg-blue-700"
               }`}
             >
-              {uploadStatus === "uploading" ? "Upload en cours..." : "Uploader"}
+              {uploadStatus === "uploading" ? t("uploadDocument.uploading") : t("uploadDocument.upload")}
             </button>
           </div>
         </div>

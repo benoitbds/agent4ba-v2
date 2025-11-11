@@ -1,0 +1,149 @@
+{
+  "metadata": {
+    "title": "Agent4BA - AI-Powered Backlog Management",
+    "description": "Real-time backlog management with AI assistance"
+  },
+  "header": {
+    "title": "Agent4BA - AI Backlog Assistant"
+  },
+  "project": {
+    "label": "Project:",
+    "noProjects": "No projects available",
+    "newProject": "+ New project",
+    "deleteProject": "Delete selected project"
+  },
+  "newRequest": {
+    "title": "New Request",
+    "placeholder": "Ask your question about the project documents (e.g.: What are the security requirements?)",
+    "send": "Send",
+    "hint": "The agent will use the uploaded documents to answer your question and suggest work items"
+  },
+  "status": {
+    "processing": "Processing...",
+    "impactPlanReady": "ImpactPlan ready for validation",
+    "approved": "Approved:",
+    "rejected": "Rejected:",
+    "error": "Error:",
+    "errorApproving": "Error during approval:",
+    "errorRejecting": "Error during rejection:",
+    "sendingApproval": "Sending approval...",
+    "sendingRejection": "Sending rejection..."
+  },
+  "documents": {
+    "title": "Project Documents",
+    "add": "Add a document",
+    "existing": "Existing documents",
+    "loading": "Loading documents...",
+    "getStarted": "To get started, add a document by clicking the + button"
+  },
+  "backlog": {
+    "title": "Project Backlog",
+    "empty": "No items in the backlog",
+    "loading": "Loading backlog...",
+    "priority": "Priority:",
+    "points": "Points:",
+    "status": "Status:"
+  },
+  "timeline": {
+    "title": "Execution Timeline",
+    "waiting": "Waiting for requests...",
+    "userRequest": "User Request",
+    "toolsUsed": "tools used",
+    "actionPlan": "Action Plan",
+    "descriptionChanges": "Description Changes",
+    "before": "Before",
+    "after": "After",
+    "investAnalysisAdded": "INVEST Analysis Added",
+    "score": "Score:",
+    "newItems": "New items",
+    "modifiedItems": "Modified items",
+    "deletedItems": "Deleted items",
+    "summary": "Summary",
+    "newItem": "new item",
+    "newItems_plural": "new items",
+    "modifiedItem": "modified item",
+    "modifiedItems_plural": "modified items",
+    "deletedItem": "deleted item",
+    "deletedItems_plural": "deleted items",
+    "viewDetails": "View details",
+    "viewPrompt": "View prompt",
+    "viewResponse": "View response",
+    "otherDetails": "Other details",
+    "model": "Model:",
+    "temperature": "Temperature:",
+    "chunksRetrieved": "Chunks retrieved:",
+    "documentsLoaded": "Documents loaded:",
+    "backlogItems": "Backlog items:",
+    "responseLength": "Response length:",
+    "characters": "characters",
+    "error": "Error:",
+    "completed": "✓ Completed",
+    "running": "In Progress",
+    "errorStatus": "⚠ Error",
+    "noToolsUsed": "No tools used in this session"
+  },
+  "invest": {
+    "I": "Independent",
+    "N": "Negotiable",
+    "V": "Valuable",
+    "E": "Estimable",
+    "S": "Small",
+    "T": "Testable"
+  },
+  "impactPlan": {
+    "title": "ImpactPlan Validation",
+    "thread": "Thread:",
+    "approve": "Approve",
+    "reject": "Reject",
+    "processing": "In progress..."
+  },
+  "createProject": {
+    "title": "Create a new project",
+    "nameLabel": "Project name",
+    "placeholder": "my-project",
+    "nameRequired": "Project name is required",
+    "invalidFormat": "Project name can only contain letters, numbers, hyphens and underscores",
+    "hint": "Use only letters, numbers, hyphens (-) and underscores (_)",
+    "cancel": "Cancel",
+    "create": "Create",
+    "creating": "Creating project...",
+    "success": "Project \"{name}\" created successfully"
+  },
+  "deleteProject": {
+    "title": "Delete project",
+    "confirmMessage": "Are you sure you want to delete the project",
+    "warning": "⚠️ This action is irreversible",
+    "warningDetails": "All data associated with the project will be permanently deleted, including:",
+    "backlogData": "The backlog and all work items",
+    "timelineHistory": "The timeline history",
+    "uploadedDocuments": "Uploaded documents",
+    "cancel": "Cancel",
+    "confirm": "Confirm deletion",
+    "deleting": "Deleting...",
+    "success": "Project \"{name}\" successfully deleted"
+  },
+  "uploadDocument": {
+    "title": "Upload a document",
+    "selectFile": "Select a PDF file",
+    "onlyPdf": "Only PDF files are accepted (maximum size: 50 MB)",
+    "fileSelected": "File selected:",
+    "uploading": "Uploading...",
+    "upload": "Upload",
+    "cancel": "Cancel",
+    "fileTooLarge": "File exceeds the maximum allowed size of 50 MB.",
+    "selectFileError": "Please select a file",
+    "uploadError": "Error uploading file"
+  },
+  "agentTimeline": {
+    "waiting": "Waiting for events...",
+    "sessionInitialized": "Session initialized",
+    "userRequest": "User request",
+    "llmStarted": "LLM started",
+    "llmFinished": "LLM finished",
+    "impactPlanReady": "ImpactPlan ready for validation",
+    "workflowComplete": "Workflow completed",
+    "started": "Started",
+    "finished": "Finished",
+    "viewOutput": "View output"
+  }
+}

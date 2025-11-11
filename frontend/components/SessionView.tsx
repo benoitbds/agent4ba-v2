@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import ToolRunView from "./ToolRunView";
 import type { TimelineSession, TimelineEvent, AgentStartEvent, AgentPlanEvent } from "@/types/events";
 
@@ -11,6 +12,7 @@ interface SessionViewProps {
 }
 
 export default function SessionView({ session, isLastSession, onToggle }: SessionViewProps) {
+  const t = useTranslations();
   const isExpanded = session.is_expanded;
 
   // Convertir la Map en Array pour l'affichage
@@ -44,7 +46,7 @@ export default function SessionView({ session, isLastSession, onToggle }: Sessio
 
         {/* Requête utilisateur */}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 text-base">Requête utilisateur</p>
+          <p className="font-semibold text-gray-900 text-base">{t("timeline.userRequest")}</p>
           <p className="text-sm text-gray-700 mt-1 italic line-clamp-2">
             &quot;{session.user_query}&quot;
           </p>
@@ -52,7 +54,7 @@ export default function SessionView({ session, isLastSession, onToggle }: Sessio
 
         {/* Badge avec nombre d'outils */}
         <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
-          {toolRuns.length} outils utilisés
+          {toolRuns.length} {t("timeline.toolsUsed")}
         </span>
 
         {/* Timestamp */}
@@ -91,7 +93,7 @@ export default function SessionView({ session, isLastSession, onToggle }: Sessio
                   <span className="text-2xl flex-shrink-0">📋</span>
                   <div className="flex-1">
                     <p className="font-semibold text-gray-900 mb-3">
-                      Plan d&apos;action - {agentPlan.agent_name}
+                      {t("timeline.actionPlan")} - {agentPlan.agent_name}
                     </p>
                     <ul className="space-y-2">
                       {agentPlan.steps.map((step, index) => (
@@ -112,7 +114,7 @@ export default function SessionView({ session, isLastSession, onToggle }: Sessio
             {toolRuns.length > 0 && (
               <div className="space-y-3">
                 <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Outils utilisés
+                  {t("timeline.toolsUsed")}
                 </h5>
                 <div className="space-y-3">
                   {toolRuns.map((toolRun) => (
@@ -125,7 +127,7 @@ export default function SessionView({ session, isLastSession, onToggle }: Sessio
             {/* Message si aucun outil n'a été utilisé */}
             {toolRuns.length === 0 && !agentStart && !agentPlan && (
               <p className="text-sm text-gray-500 italic text-center py-4">
-                Aucun outil utilisé dans cette session
+                {t("timeline.noToolsUsed")}
               </p>
             )}
           </div>
