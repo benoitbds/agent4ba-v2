@@ -1,7 +1,8 @@
 const createNextIntlPlugin = require('next-intl/plugin');
 
-// On pointe vers le nouveau fichier de configuration simple
-const withNextIntl = createNextIntlPlugin('./i18n.ts');
+// Le plugin doit pointer vers le fichier avec getRequestConfig (pour les messages)
+// Le fichier i18n.ts est utilisé par le middleware uniquement
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {};
