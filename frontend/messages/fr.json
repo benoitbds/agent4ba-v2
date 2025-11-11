@@ -144,6 +144,7 @@
     "workflowComplete": "Workflow terminé",
     "started": "Démarré",
     "finished": "Terminé",
-    "viewOutput": "Voir la sortie"
+    "viewOutput": "Voir la sortie",
+    "historicalSession": "Session historique"
   }
 }
