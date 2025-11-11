@@ -57,17 +57,13 @@ poetry run uvicorn agent4ba.api.main:app --reload
 
 Le serveur sera accessible sur `http://127.0.0.1:8000`.
 
-### Configuration de la taille maximale d'upload (Production)
+### Configuration de la taille maximale d'upload
 
-Par défaut, Uvicorn limite la taille des requêtes HTTP. Pour permettre l'upload de fichiers jusqu'à 50 Mo, utilisez le paramètre `--limit-max-body` lors du lancement en production :
+La taille maximale d'upload est configurée à **50 Mo** directement dans le code backend via un middleware personnalisé (`MaxBodySizeMiddleware` dans `agent4ba/api/app_factory.py`).
 
-```bash
-poetry run uvicorn agent4ba.api.main:app --host 0.0.0.0 --port 8000 --limit-max-body 52428800
-```
+Cette configuration s'applique automatiquement au démarrage du serveur, sans nécessiter de paramètres supplémentaires. Les requêtes dépassant 50 Mo seront rejetées avec une erreur HTTP 413 (Content Too Large).
 
-Où `52428800` = 50 Mo × 1024 × 1024 bytes.
-
-**Note:** Cette limite est importante pour éviter les erreurs HTTP 413 (Content Too Large) lors de l'upload de documents volumineux.
+Pour modifier cette limite, éditez la constante `MAX_UPLOAD_SIZE` dans le fichier `agent4ba/api/app_factory.py`.
 
 ## Endpoints disponibles
 
