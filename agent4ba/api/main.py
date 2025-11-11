@@ -426,6 +426,36 @@ async def create_project(request: CreateProjectRequest) -> JSONResponse:
     )
 
 
+@app.delete("/projects/{project_id}", status_code=204)
+async def delete_project(project_id: str) -> None:
+    """
+    Supprime un projet et toutes ses données associées.
+
+    Args:
+        project_id: Identifiant unique du projet à supprimer
+
+    Returns:
+        Aucun contenu (code 204)
+
+    Raises:
+        HTTPException: Si le projet n'existe pas (404) ou si le project_id est invalide (400)
+    """
+    storage = ProjectContextService()
+
+    try:
+        storage.delete_project_data(project_id)
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' not found: {e}",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid project_id: {e}",
+        ) from e
+
+
 @app.get("/projects/{project_id}/backlog")
 async def get_project_backlog(project_id: str) -> JSONResponse:
     """
