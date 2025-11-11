@@ -152,20 +152,12 @@ export default function Home() {
           };
         });
 
-        // CORRECTION: Préserver les sessions live lors du chargement de l'historique
-        setSessions((prevSessions) => {
-          // Identifier les sessions live (non historiques)
-          const liveSessions = prevSessions.filter(s => !s.id.startsWith('history-'));
-          // Combiner l'historique avec les sessions live
-          return [...historySessions, ...liveSessions];
-        });
+        // Réinitialiser la timeline avec l'historique du nouveau projet
+        setSessions(historySessions);
       } catch (error) {
         console.error("Error loading timeline history:", error);
-        // CORRECTION: En cas d'erreur, préserver quand même les sessions live
-        setSessions((prevSessions) => {
-          const liveSessions = prevSessions.filter(s => !s.id.startsWith('history-'));
-          return liveSessions;
-        });
+        // En cas d'erreur, réinitialiser la timeline à vide
+        setSessions([]);
       }
     };
 
