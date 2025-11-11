@@ -12,10 +12,23 @@ from langgraph.graph import END, StateGraph
 from litellm import completion
 
 from agent4ba.ai import backlog_agent, document_agent
+from agent4ba.core.registry_service import load_agent_registry
 from agent4ba.core.storage import ProjectContextService
 
 # Charger les variables d'environnement
 load_dotenv()
+
+# Charger la configuration des agents et des intentions
+print("[GRAPH] Loading agent registry configuration...")
+_AGENT_REGISTRY = load_agent_registry()
+print(f"[GRAPH] Loaded {len(_AGENT_REGISTRY.agents)} agents and "
+      f"{len(_AGENT_REGISTRY.intent_mapping)} intent mappings")
+
+# Créer un dictionnaire de lookup pour accéder rapidement aux mappings d'intentions
+INTENT_CONFIG_MAP = {
+    mapping.intent_id: mapping
+    for mapping in _AGENT_REGISTRY.intent_mapping
+}
 
 
 class GraphState(TypedDict):
@@ -26,7 +39,8 @@ class GraphState(TypedDict):
     document_content: str
     intent: dict[str, Any]
     next_node: str
-    agent_task: str
+    agent_id: str  # ID de l'agent à exécuter (ex: "backlog_agent")
+    agent_task: str  # Tâche à exécuter par l'agent (ex: "decompose_objective")
     impact_plan: dict[str, Any]
     status: str
     approval_decision: bool | None
@@ -142,11 +156,14 @@ def router_node(state: GraphState) -> dict[str, Any]:
     """
     Route la requête vers le bon agent selon l'intention.
 
+    Utilise la configuration chargée depuis agent_registry.yaml pour
+    déterminer quel agent doit traiter quelle intention.
+
     Args:
         state: État actuel du graphe
 
     Returns:
-        Mise à jour partielle de l'état avec next_node et agent_task
+        Mise à jour partielle de l'état avec next_node, agent_id et agent_task
     """
     intent = state.get("intent", {})
     intent_id = intent.get("intent_id", "unknown")
@@ -162,37 +179,41 @@ def router_node(state: GraphState) -> dict[str, Any]:
         print(f"[ROUTER_NODE] Low confidence ({confidence}), routing to end")
         return {
             "next_node": "end",
+            "agent_id": "none",
             "agent_task": "none",
             "result": f"Intent confidence too low ({confidence:.2f}). Please rephrase your query.",
         }
 
-    # Mapping des intentions vers les tâches d'agent
-    intent_to_task = {
-        "generate_spec": "generate_specification",
-        "extract_features_from_docs": "extract_features",
-        "review_backlog_quality": "review_quality",
-        "search_requirements": "search_requirements",
-        "decompose_objective": "decompose_objective",
-        "estimate_stories": "estimate_stories",
-        "improve_item_description": "improve_description",
-    }
+    # Rechercher la configuration de l'intention dans le registre
+    intent_config = INTENT_CONFIG_MAP.get(intent_id)
 
-    agent_task = intent_to_task.get(intent_id, "unknown_task")
-
-    if agent_task == "unknown_task":
+    if intent_config is None:
         print(f"[ROUTER_NODE] Unknown intent '{intent_id}', routing to end")
         return {
             "next_node": "end",
+            "agent_id": "none",
             "agent_task": "none",
             "result": f"Intent '{intent_id}' is not recognized.",
         }
 
-    print(f"[ROUTER_NODE] Selected agent task: {agent_task}")
+    # Vérifier si l'intention est implémentée
+    if intent_config.status == "not_implemented":
+        print(f"[ROUTER_NODE] Intent '{intent_id}' is not yet implemented, routing to end")
+        return {
+            "next_node": "end",
+            "agent_id": intent_config.agent_id,
+            "agent_task": intent_config.agent_task,
+            "result": f"Intent '{intent_id}' is not yet implemented.",
+        }
+
+    print(f"[ROUTER_NODE] Selected agent: {intent_config.agent_id}")
+    print(f"[ROUTER_NODE] Selected task: {intent_config.agent_task}")
     print("[ROUTER_NODE] Routing to agent node")
 
     return {
         "next_node": "agent",
-        "agent_task": agent_task,
+        "agent_id": intent_config.agent_id,
+        "agent_task": intent_config.agent_task,
     }
 
 
@@ -237,53 +258,66 @@ def agent_node(state: GraphState) -> dict[str, Any]:
     """
     Exécute l'agent approprié pour traiter la requête.
 
+    Dispatche vers le bon agent en se basant sur agent_id,
+    puis exécute la tâche correspondant à agent_task.
+
     Args:
         state: État actuel du graphe
 
     Returns:
         Mise à jour partielle de l'état avec le résultat
     """
+    agent_id = state.get("agent_id", "unknown")
     agent_task = state.get("agent_task", "unknown_task")
 
     print("[AGENT_NODE] Routing to specific agent...")
+    print(f"[AGENT_NODE] Agent ID: {agent_id}")
     print(f"[AGENT_NODE] Agent task: {agent_task}")
 
-    # Router vers le bon agent selon la tâche
-    if agent_task == "decompose_objective":
-        return backlog_agent.decompose_objective(state)
+    # Dispatcher vers le bon agent selon agent_id
+    if agent_id == "backlog_agent":
+        # Router vers la méthode appropriée du backlog_agent
+        if agent_task == "decompose_objective":
+            return backlog_agent.decompose_objective(state)
+        elif agent_task == "review_quality":
+            return backlog_agent.review_quality(state)
+        elif agent_task == "improve_description":
+            return backlog_agent.improve_description(state)
+        elif agent_task == "generate_specification":
+            return {
+                "status": "completed",
+                "result": "Stub: Generating detailed specification (not yet implemented)",
+            }
+        elif agent_task == "search_requirements":
+            return {
+                "status": "completed",
+                "result": "Stub: Searching requirements (not yet implemented)",
+            }
+        elif agent_task == "estimate_stories":
+            return {
+                "status": "completed",
+                "result": "Stub: Estimating story points (not yet implemented)",
+            }
+        else:
+            return {
+                "status": "error",
+                "result": f"Unknown task '{agent_task}' for backlog_agent",
+            }
 
-    # Stubs pour les autres agents (à implémenter)
-    elif agent_task == "generate_specification":
-        return {
-            "status": "completed",
-            "result": "Stub: Generating detailed specification (not yet implemented)",
-        }
-
-    elif agent_task == "extract_features":
-        return document_agent.extract_requirements(state)
-
-    elif agent_task == "review_quality":
-        return backlog_agent.review_quality(state)
-
-    elif agent_task == "search_requirements":
-        return {
-            "status": "completed",
-            "result": "Stub: Searching requirements (not yet implemented)",
-        }
-
-    elif agent_task == "estimate_stories":
-        return {
-            "status": "completed",
-            "result": "Stub: Estimating story points (not yet implemented)",
-        }
-
-    elif agent_task == "improve_description":
-        return backlog_agent.improve_description(state)
+    elif agent_id == "document_agent":
+        # Router vers la méthode appropriée du document_agent
+        if agent_task == "extract_features":
+            return document_agent.extract_requirements(state)
+        else:
+            return {
+                "status": "error",
+                "result": f"Unknown task '{agent_task}' for document_agent",
+            }
 
     else:
         return {
             "status": "error",
-            "result": f"Unknown agent task: {agent_task}",
+            "result": f"Unknown agent: {agent_id}",
         }
 
 
