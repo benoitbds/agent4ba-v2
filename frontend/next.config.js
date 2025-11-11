@@ -1,19 +1,9 @@
 const createNextIntlPlugin = require('next-intl/plugin');
 
-const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
+// On pointe vers le nouveau fichier de configuration simple
+const withNextIntl = createNextIntlPlugin('./i18n.ts');
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  // Cette section est cruciale. Elle indique à Next.js de ne pas
-  // traiter les chemins de locales comme des routes statiques.
-  async rewrites() {
-    return [
-      {
-        source: '/:locale(en|fr)/:path*',
-        destination: '/:path*',
-      },
-    ];
-  },
-};
+const nextConfig = {};
 
 module.exports = withNextIntl(nextConfig);
