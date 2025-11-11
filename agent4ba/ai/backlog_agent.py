@@ -18,6 +18,31 @@ from agent4ba.core.storage import ProjectContextService
 load_dotenv()
 
 
+def get_next_temp_index(existing_items: list[WorkItem]) -> int:
+    """
+    Calcule le prochain index disponible pour les ID temporaires.
+
+    Parcourt tous les items existants et trouve le plus grand index
+    numérique parmi les ID qui suivent le pattern temp-X.
+
+    Args:
+        existing_items: Liste des WorkItems existants
+
+    Returns:
+        Le prochain index disponible (au moins 1)
+    """
+    max_index = 0
+    for item in existing_items:
+        if item.id.startswith("temp-"):
+            try:
+                index = int(item.id.split("-")[1])
+                max_index = max(max_index, index)
+            except (IndexError, ValueError):
+                # Ignorer les ID mal formés
+                continue
+    return max_index + 1
+
+
 def load_decompose_prompt() -> dict[str, Any]:
     """
     Charge le prompt de décomposition depuis le fichier YAML.
@@ -245,9 +270,17 @@ def decompose_objective(state: Any) -> dict[str, Any]:
 
         print(f"[BACKLOG_AGENT] Generated {len(work_items_data)} work items")
 
-        # Valider et convertir en WorkItem
+        # Calculer le prochain index temp disponible pour éviter les collisions
+        start_index = get_next_temp_index(existing_items)
+        print(f"[BACKLOG_AGENT] Next available temp index: {start_index}")
+
+        # Valider et convertir en WorkItem, en renumérotant les ID temporaires
         new_items = []
-        for item_data in work_items_data:
+        for i, item_data in enumerate(work_items_data):
+            # Si l'ID est un temp-X, le remplacer par un nouveau pour éviter les collisions
+            if item_data.get("id", "").startswith("temp-"):
+                item_data["id"] = f"temp-{start_index + i}"
+
             # Ajouter le project_id
             item_data["project_id"] = project_id
 
@@ -255,7 +288,7 @@ def decompose_objective(state: Any) -> dict[str, Any]:
             work_item = WorkItem(**item_data)
             new_items.append(work_item)
 
-            print(f"[BACKLOG_AGENT]   - {work_item.type}: {work_item.title}")
+            print(f"[BACKLOG_AGENT]   - {work_item.type}: {work_item.title} (ID: {work_item.id})")
 
         # Construire l'ImpactPlan
         impact_plan = {
