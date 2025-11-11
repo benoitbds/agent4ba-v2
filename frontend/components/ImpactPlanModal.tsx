@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { ImpactPlan, WorkItem, ModifiedItem } from "@/types/events";
 import { useState, type ReactElement } from "react";
 
@@ -32,18 +33,9 @@ function getBadgeColor(score: number): string {
   return "bg-red-500 text-white";
 }
 
-// Noms complets des critères INVEST
-const INVEST_LABELS: Record<string, string> = {
-  I: "Independent (Indépendante)",
-  N: "Negotiable (Négociable)",
-  V: "Valuable (Apporte de la valeur)",
-  E: "Estimable (Estimable)",
-  S: "Small (Petite)",
-  T: "Testable (Testable)",
-};
-
 // Composant pour afficher un item modifié avec diff visuel simple
 function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): ReactElement {
+  const t = useTranslations();
   const { before, after } = modifiedItem;
 
   // Détecter si l'analyse INVEST a été ajoutée
@@ -60,7 +52,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
       <div className="mt-3 border border-gray-300 rounded overflow-hidden">
         <div className="bg-gray-100 px-3 py-2 border-b border-gray-300">
           <span className="text-sm font-semibold text-gray-700">
-            Modifications de la description
+            {t("timeline.descriptionChanges")}
           </span>
         </div>
 
@@ -69,7 +61,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
           {/* Before (left side) */}
           <div className="bg-red-50">
             <div className="bg-red-100 px-3 py-1 border-b border-red-200">
-              <span className="text-xs font-semibold text-red-800">Avant</span>
+              <span className="text-xs font-semibold text-red-800">{t("timeline.before")}</span>
             </div>
             <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
               {before.description || "(vide)"}
@@ -79,7 +71,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
           {/* After (right side) */}
           <div className="bg-green-50">
             <div className="bg-green-100 px-3 py-1 border-b border-green-200">
-              <span className="text-xs font-semibold text-green-800">Après</span>
+              <span className="text-xs font-semibold text-green-800">{t("timeline.after")}</span>
             </div>
             <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
               {after.description || "(vide)"}
@@ -115,7 +107,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
         <div className="mt-3 border border-gray-300 rounded overflow-hidden">
           <div className="bg-gray-100 px-3 py-2 border-b border-gray-300">
             <span className="text-sm font-semibold text-gray-700">
-              Modifications de la description
+              {t("timeline.descriptionChanges")}
             </span>
           </div>
 
@@ -124,7 +116,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
             {/* Before (left side) */}
             <div className="bg-red-50">
               <div className="bg-red-100 px-3 py-1 border-b border-red-200">
-                <span className="text-xs font-semibold text-red-800">Avant</span>
+                <span className="text-xs font-semibold text-red-800">{t("timeline.before")}</span>
               </div>
               <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
                 {before.description || "(vide)"}
@@ -134,7 +126,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
             {/* After (right side) */}
             <div className="bg-green-50">
               <div className="bg-green-100 px-3 py-1 border-b border-green-200">
-                <span className="text-xs font-semibold text-green-800">Après</span>
+                <span className="text-xs font-semibold text-green-800">{t("timeline.after")}</span>
               </div>
               <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
                 {after.description || "(vide)"}
@@ -149,7 +141,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
         <div className="mt-3 border border-green-300 rounded overflow-hidden bg-green-50">
           <div className="bg-green-100 px-3 py-2 border-b border-green-200">
             <span className="text-sm font-semibold text-green-800">
-              ✅ Analyse INVEST ajoutée
+              {t("timeline.investAnalysisAdded")}
             </span>
           </div>
           <div className="p-3">
@@ -163,11 +155,11 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
                       {criterion}
                     </span>
                     <span className="text-xs font-semibold text-gray-700">
-                      {INVEST_LABELS[criterion]}
+                      {t(`invest.${criterion}`)}
                     </span>
                   </div>
                   <div className="text-xs text-gray-600 mb-1">
-                    Score: {(data.score * 100).toFixed(0)}%
+                    {t("timeline.score")} {(data.score * 100).toFixed(0)}%
                   </div>
                   <div className="text-xs text-gray-700">
                     {data.reason}
@@ -184,17 +176,17 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
         <div className="flex gap-2 mt-3 text-xs">
           {after.attributes.priority && (
             <span className="px-2 py-1 bg-gray-200 rounded">
-              Priorité: {after.attributes.priority}
+              {t("backlog.priority")} {after.attributes.priority}
             </span>
           )}
           {after.attributes.points !== undefined && (
             <span className="px-2 py-1 bg-gray-200 rounded">
-              Points: {after.attributes.points}
+              {t("backlog.points")} {after.attributes.points}
             </span>
           )}
           {after.attributes.status && (
             <span className="px-2 py-1 bg-gray-200 rounded">
-              Statut: {after.attributes.status}
+              {t("backlog.status")} {after.attributes.status}
             </span>
           )}
         </div>
@@ -210,6 +202,7 @@ export default function ImpactPlanModal({
   onReject,
   isOpen,
 }: ImpactPlanModalProps) {
+  const t = useTranslations();
   const [isProcessing, setIsProcessing] = useState(false);
 
   if (!isOpen) return null;
@@ -256,17 +249,17 @@ export default function ImpactPlanModal({
             <div className="flex gap-2 mt-2 text-xs">
               {item.attributes.priority && (
                 <span className="px-2 py-1 bg-gray-200 rounded">
-                  Priorité: {item.attributes.priority}
+                  {t("backlog.priority")} {item.attributes.priority}
                 </span>
               )}
               {item.attributes.points !== undefined && (
                 <span className="px-2 py-1 bg-gray-200 rounded">
-                  Points: {item.attributes.points}
+                  {t("backlog.points")} {item.attributes.points}
                 </span>
               )}
               {item.attributes.status && (
                 <span className="px-2 py-1 bg-gray-200 rounded">
-                  Statut: {item.attributes.status}
+                  {t("backlog.status")} {item.attributes.status}
                 </span>
               )}
             </div>
@@ -282,10 +275,10 @@ export default function ImpactPlanModal({
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-2xl font-bold text-gray-900">
-            Validation de l&apos;ImpactPlan
+            {t("impactPlan.title")}
           </h2>
           <p className="text-sm text-gray-600 mt-1 font-mono">
-            Thread: {threadId}
+            {t("impactPlan.thread")} {threadId}
           </p>
         </div>
 
@@ -296,7 +289,7 @@ export default function ImpactPlanModal({
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
                 <span className="text-green-600">✨</span>
-                Nouveaux items ({impactPlan.new_items.length})
+                {t("timeline.newItems")} ({impactPlan.new_items.length})
               </h3>
               <div className="space-y-3">
                 {impactPlan.new_items.map(renderWorkItem)}
@@ -309,7 +302,7 @@ export default function ImpactPlanModal({
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
                 <span className="text-blue-600">✏️</span>
-                Items modifiés ({impactPlan.modified_items.length})
+                {t("timeline.modifiedItems")} ({impactPlan.modified_items.length})
               </h3>
               <div className="space-y-3">
                 {impactPlan.modified_items.map((item) => (
@@ -324,7 +317,7 @@ export default function ImpactPlanModal({
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
                 <span className="text-red-600">🗑️</span>
-                Items supprimés ({impactPlan.deleted_items.length})
+                {t("timeline.deletedItems")} ({impactPlan.deleted_items.length})
               </h3>
               <div className="space-y-2">
                 {impactPlan.deleted_items.map((itemId) => (
@@ -341,22 +334,16 @@ export default function ImpactPlanModal({
 
           {/* Summary */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
-            <h4 className="font-semibold text-blue-900 mb-2">Résumé</h4>
+            <h4 className="font-semibold text-blue-900 mb-2">{t("timeline.summary")}</h4>
             <ul className="text-sm text-blue-800 space-y-1">
               <li>
-                • {impactPlan.new_items.length} nouveau
-                {impactPlan.new_items.length > 1 ? "x" : ""} item
-                {impactPlan.new_items.length > 1 ? "s" : ""}
+                • {impactPlan.new_items.length} {impactPlan.new_items.length > 1 ? t("timeline.newItems_plural") : t("timeline.newItem")}
               </li>
               <li>
-                • {impactPlan.modified_items.length} item
-                {impactPlan.modified_items.length > 1 ? "s" : ""} modifié
-                {impactPlan.modified_items.length > 1 ? "s" : ""}
+                • {impactPlan.modified_items.length} {impactPlan.modified_items.length > 1 ? t("timeline.modifiedItems_plural") : t("timeline.modifiedItem")}
               </li>
               <li>
-                • {impactPlan.deleted_items.length} item
-                {impactPlan.deleted_items.length > 1 ? "s" : ""} supprimé
-                {impactPlan.deleted_items.length > 1 ? "s" : ""}
+                • {impactPlan.deleted_items.length} {impactPlan.deleted_items.length > 1 ? t("timeline.deletedItems_plural") : t("timeline.deletedItem")}
               </li>
             </ul>
           </div>
@@ -369,14 +356,14 @@ export default function ImpactPlanModal({
             disabled={isProcessing}
             className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            Rejeter
+            {t("impactPlan.reject")}
           </button>
           <button
             onClick={handleApprove}
             disabled={isProcessing}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isProcessing ? "En cours..." : "Approuver"}
+            {isProcessing ? t("impactPlan.processing") : t("impactPlan.approve")}
           </button>
         </div>
       </div>

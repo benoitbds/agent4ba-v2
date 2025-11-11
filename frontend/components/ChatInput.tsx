@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from 'next-intl';
 
 interface ChatInputProps {
   onSubmit: (query: string) => void;
@@ -8,6 +9,7 @@ interface ChatInputProps {
 }
 
 export default function ChatInput({ onSubmit, disabled = false }: ChatInputProps) {
+  const t = useTranslations();
   const [query, setQuery] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -25,7 +27,7 @@ export default function ChatInput({ onSubmit, disabled = false }: ChatInputProps
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Posez votre question sur les documents du projet (ex: Quelles sont les exigences de sécurité ?)"
+          placeholder={t('newRequest.placeholder')}
           disabled={disabled}
           className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
         />
@@ -34,12 +36,12 @@ export default function ChatInput({ onSubmit, disabled = false }: ChatInputProps
           disabled={disabled || !query.trim()}
           className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
         >
-          Envoyer
+          {t('newRequest.send')}
         </button>
       </div>
 
       <p className="mt-2 text-sm text-gray-500">
-        L&apos;agent utilisera les documents uploadés pour répondre à votre question et proposer des work items
+        {t('newRequest.hint')}
       </p>
     </form>
   );

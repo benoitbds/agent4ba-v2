@@ -1,6 +1,7 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 interface ProjectSelectorProps {
   projects: string[];
@@ -17,13 +18,15 @@ export default function ProjectSelector({
   onCreateProject,
   onDeleteProject,
 }: ProjectSelectorProps) {
+  const t = useTranslations();
+
   return (
     <div className="flex items-center gap-3">
       <label
         htmlFor="project-select"
         className="text-sm font-semibold text-gray-900 dark:text-gray-100"
       >
-        Projet :
+        {t("project.label")}
       </label>
       <select
         id="project-select"
@@ -39,7 +42,7 @@ export default function ProjectSelector({
       >
         {projects.length === 0 ? (
           <option value="" className="text-gray-900 dark:text-gray-100">
-            Aucun projet disponible
+            {t("project.noProjects")}
           </option>
         ) : (
           projects.map((project) => (
@@ -58,7 +61,7 @@ export default function ProjectSelector({
           onClick={onDeleteProject}
           disabled={!selectedProject || projects.length === 0}
           className="p-2 border-2 border-red-300 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-400 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-red-300"
-          title="Supprimer le projet sélectionné"
+          title={t("project.deleteProject")}
         >
           <Trash2 className="w-5 h-5" />
         </button>
@@ -67,9 +70,9 @@ export default function ProjectSelector({
         <button
           onClick={onCreateProject}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          title="Créer un nouveau projet"
+          title={t("project.newProject")}
         >
-          + Nouveau projet
+          {t("project.newProject")}
         </button>
       )}
     </div>

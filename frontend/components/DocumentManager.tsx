@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from 'next-intl';
 import UploadDocumentModal from "./UploadDocumentModal";
 
 interface DocumentManagerProps {
@@ -14,6 +15,7 @@ export default function DocumentManager({
   documents,
   onUploadSuccess,
 }: DocumentManagerProps) {
+  const t = useTranslations();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleUploadSuccess = () => {
@@ -24,11 +26,11 @@ export default function DocumentManager({
     <div className="space-y-4">
       {/* Header with title and add button */}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold">Documents du Projet</h2>
+        <h2 className="text-xl font-semibold">{t('documents.title')}</h2>
         <button
           onClick={() => setIsModalOpen(true)}
           className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          title="Ajouter un document"
+          title={t('documents.add')}
         >
           <svg
             className="w-5 h-5"
@@ -51,13 +53,13 @@ export default function DocumentManager({
         {documents.length === 0 ? (
           <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
             <p className="text-gray-500 text-sm">
-              Pour commencer, ajoutez un document en cliquant sur le bouton +
+              {t('documents.getStarted')}
             </p>
           </div>
         ) : (
           <>
             <h3 className="text-sm font-semibold text-gray-700 mb-3">
-              Documents existants
+              {t('documents.existing')}
             </h3>
             <ul className="space-y-2">
               {documents.map((docName) => (

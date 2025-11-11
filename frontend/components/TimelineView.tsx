@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import SessionView from "./SessionView";
 import type { TimelineSession } from "@/types/events";
 
@@ -10,6 +11,7 @@ interface TimelineViewProps {
 }
 
 export default function TimelineView({ sessions, onToggleSession }: TimelineViewProps) {
+  const t = useTranslations();
   // Référence pour le scroll automatique vers le haut (nouvelle session)
   const timelineTopRef = useRef<HTMLDivElement | null>(null);
 
@@ -26,7 +28,7 @@ export default function TimelineView({ sessions, onToggleSession }: TimelineView
   if (sessions.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400">
-        <p>En attente de requêtes...</p>
+        <p>{t("timeline.waiting")}</p>
       </div>
     );
   }
@@ -37,7 +39,7 @@ export default function TimelineView({ sessions, onToggleSession }: TimelineView
   return (
     <div className="flex flex-col h-full">
       <h2 className="text-xl font-semibold text-gray-900 mb-4 flex-shrink-0">
-        Timeline d&apos;exécution
+        {t("timeline.title")}
       </h2>
 
       <div className="flex-1 overflow-y-auto pr-2 space-y-3">

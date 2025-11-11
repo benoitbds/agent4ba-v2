@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from 'next-intl';
 import { AlertTriangle } from "lucide-react";
 
 interface DeleteProjectModalProps {
@@ -16,6 +17,7 @@ export default function DeleteProjectModal({
   onDeleteProject,
   projectName,
 }: DeleteProjectModalProps) {
+  const t = useTranslations();
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async () => {
@@ -40,13 +42,13 @@ export default function DeleteProjectModal({
             <AlertTriangle className="w-6 h-6 text-red-600" />
           </div>
           <h2 className="text-2xl font-bold text-gray-800">
-            Supprimer le projet
+            {t('deleteProject.title')}
           </h2>
         </div>
 
         <div className="mb-6">
           <p className="text-gray-700 mb-3">
-            Êtes-vous sûr de vouloir supprimer le projet{" "}
+            {t('deleteProject.confirmMessage')}{" "}
             <span className="font-semibold text-gray-900">
               &quot;{projectName}&quot;
             </span>{" "}
@@ -54,16 +56,15 @@ export default function DeleteProjectModal({
           </p>
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-sm text-red-800 font-semibold">
-              ⚠️ Cette action est irréversible
+              {t('deleteProject.warning')}
             </p>
             <p className="text-sm text-red-700 mt-2">
-              Toutes les données associées au projet seront définitivement
-              supprimées, incluant :
+              {t('deleteProject.warningDetails')}
             </p>
             <ul className="text-sm text-red-700 mt-2 ml-4 list-disc">
-              <li>Le backlog et tous les work items</li>
-              <li>L&apos;historique de la timeline</li>
-              <li>Les documents uploadés</li>
+              <li>{t('deleteProject.backlogData')}</li>
+              <li>{t('deleteProject.timelineHistory')}</li>
+              <li>{t('deleteProject.uploadedDocuments')}</li>
             </ul>
           </div>
         </div>
@@ -75,7 +76,7 @@ export default function DeleteProjectModal({
             disabled={isDeleting}
             className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Annuler
+            {t('deleteProject.cancel')}
           </button>
           <button
             type="button"
@@ -83,7 +84,7 @@ export default function DeleteProjectModal({
             disabled={isDeleting}
             className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isDeleting ? "Suppression..." : "Confirmer la suppression"}
+            {isDeleting ? t('deleteProject.deleting') : t('deleteProject.confirm')}
           </button>
         </div>
       </div>
