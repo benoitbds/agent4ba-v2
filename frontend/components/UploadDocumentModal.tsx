@@ -32,6 +32,16 @@ export default function UploadDocumentModal({
         setSelectedFile(null);
         return;
       }
+
+      // Vérifier la taille du fichier (50 Mo = 52428800 bytes)
+      const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 Mo
+      if (file.size > MAX_FILE_SIZE) {
+        setUploadStatus("error");
+        setStatusMessage("Le fichier dépasse la taille maximale autorisée de 50 Mo.");
+        setSelectedFile(null);
+        return;
+      }
+
       setSelectedFile(file);
       setUploadStatus("idle");
       setStatusMessage("");
@@ -119,7 +129,7 @@ export default function UploadDocumentModal({
               disabled={uploadStatus === "uploading"}
             />
             <p className="mt-1 text-xs text-gray-500">
-              Seuls les fichiers PDF sont acceptés
+              Seuls les fichiers PDF sont acceptés (taille maximale : 50 Mo)
             </p>
           </div>
 
