@@ -279,9 +279,11 @@ def agent_node(state: GraphState) -> dict[str, Any]:
     print("[AGENT_NODE] Routing to specific agent...")
     print(f"[AGENT_NODE] Agent ID: {agent_id}")
     print(f"[AGENT_NODE] Agent task: {agent_task}")
+    print(f"[AGENT_NODE_DEBUG] State received: {state}")
 
     # Dispatcher vers le bon agent selon agent_id
     if agent_id == "backlog_agent":
+        print(f"[AGENT_NODE_DEBUG] Calling BacklogAgent method '{agent_task}'...")
         # Router vers la méthode appropriée du backlog_agent
         if agent_task == "decompose_objective":
             return backlog_agent.decompose_objective(state)
@@ -311,6 +313,7 @@ def agent_node(state: GraphState) -> dict[str, Any]:
             }
 
     elif agent_id == "document_agent":
+        print(f"[AGENT_NODE_DEBUG] Calling DocumentAgent method '{agent_task}'...")
         # Router vers la méthode appropriée du document_agent
         if agent_task == "extract_features":
             return document_agent.extract_requirements(state)
