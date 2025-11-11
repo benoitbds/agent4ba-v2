@@ -183,11 +183,11 @@ export default function Home() {
   };
 
   // Helper function to add or update events in the current session
-  const addEventToCurrentSession = (event: SSEEvent) => {
+  const addEventToCurrentSession = (event: SSEEvent, sessionId: string) => {
     setSessions((prevSessions) => {
       return prevSessions.map((session) => {
         // Ne modifier que la session courante
-        if (session.id !== currentSessionId) {
+        if (session.id !== sessionId) {
           return session;
         }
 
@@ -278,7 +278,7 @@ export default function Home() {
         // Log pour debug : tracer tous les événements SSE reçus
         console.log("[SSE Event Received]", event.type, event);
 
-        addEventToCurrentSession(event);
+        addEventToCurrentSession(event, newSessionId);
 
         // Handle special events
         if (event.type === "thread_id") {
