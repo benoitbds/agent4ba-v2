@@ -9,7 +9,7 @@ import BacklogView from "@/components/BacklogView";
 import ProjectSelector from "@/components/ProjectSelector";
 import DocumentManager from "@/components/DocumentManager";
 import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject } from "@/lib/api";
-import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent } from "@/types/events";
+import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent } from "@/types/events";
 
 export default function Home() {
   const [projects, setProjects] = useState<string[]>([]);
@@ -103,7 +103,7 @@ export default function Home() {
 
           // Process tool_used events into tool_runs Map
           const toolRunsMap = new Map<string, ToolRunState>();
-          const agentEvents: any[] = [];
+          const agentEvents: TimelineEvent[] = [];
 
           historySession.events.forEach((evt: SSEEvent, eventIndex: number) => {
             if (evt.type === "tool_used") {
@@ -173,44 +173,62 @@ export default function Home() {
   // Helper function to add or update events in the current session
   const addEventToCurrentSession = (event: SSEEvent) => {
     setSessions((prevSessions) => {
-      const updatedSessions = [...prevSessions];
-      const currentSession = updatedSessions.find((s) => s.id === currentSessionId);
-
-      if (!currentSession) return prevSessions;
-
-      if (event.type === "tool_used") {
-        const toolEvent = event as ToolUsedEvent;
-        const existingToolRun = currentSession.tool_runs.get(toolEvent.tool_run_id);
-
-        if (!existingToolRun) {
-          // New tool run
-          currentSession.tool_runs.set(toolEvent.tool_run_id, {
-            tool_run_id: toolEvent.tool_run_id,
-            tool_name: toolEvent.tool_name,
-            tool_icon: toolEvent.tool_icon,
-            description: toolEvent.description,
-            status: toolEvent.status,
-            details: (toolEvent.details || {}) as Record<string, string | number | boolean | null | undefined>,
-            started_at: new Date(),
-          });
-        } else {
-          // Update existing tool run
-          currentSession.tool_runs.set(toolEvent.tool_run_id, {
-            ...existingToolRun,
-            status: toolEvent.status,
-            details: { ...existingToolRun.details, ...(toolEvent.details || {}) } as Record<string, string | number | boolean | null | undefined>,
-            completed_at: toolEvent.status !== "running" ? new Date() : undefined,
-          });
+      return prevSessions.map((session) => {
+        // Ne modifier que la session courante
+        if (session.id !== currentSessionId) {
+          return session;
         }
-      } else if (event.type === "agent_start" || event.type === "agent_plan") {
-        currentSession.agent_events.push({
-          id: `${currentSessionId}-agent-${Date.now()}`,
-          timestamp: new Date(),
-          event,
-        });
-      }
 
-      return updatedSessions;
+        // Créer une nouvelle session avec de nouvelles références immuables
+        if (event.type === "tool_used") {
+          const toolEvent = event as ToolUsedEvent;
+          // Créer une nouvelle Map (copie profonde)
+          const newToolRuns = new Map(session.tool_runs);
+          const existingToolRun = newToolRuns.get(toolEvent.tool_run_id);
+
+          if (!existingToolRun) {
+            // New tool run
+            newToolRuns.set(toolEvent.tool_run_id, {
+              tool_run_id: toolEvent.tool_run_id,
+              tool_name: toolEvent.tool_name,
+              tool_icon: toolEvent.tool_icon,
+              description: toolEvent.description,
+              status: toolEvent.status,
+              details: (toolEvent.details || {}) as Record<string, string | number | boolean | null | undefined>,
+              started_at: new Date(),
+            });
+          } else {
+            // Update existing tool run
+            newToolRuns.set(toolEvent.tool_run_id, {
+              ...existingToolRun,
+              status: toolEvent.status,
+              details: { ...existingToolRun.details, ...(toolEvent.details || {}) } as Record<string, string | number | boolean | null | undefined>,
+              completed_at: toolEvent.status !== "running" ? new Date() : undefined,
+            });
+          }
+
+          // Retourner une nouvelle session avec la nouvelle Map
+          return {
+            ...session,
+            tool_runs: newToolRuns,
+          };
+        } else if (event.type === "agent_start" || event.type === "agent_plan") {
+          // Créer un nouveau tableau avec le nouvel événement
+          return {
+            ...session,
+            agent_events: [
+              ...session.agent_events,
+              {
+                id: `${currentSessionId}-agent-${Date.now()}`,
+                timestamp: new Date(),
+                event,
+              },
+            ],
+          };
+        }
+
+        return session;
+      });
     });
   };
 
@@ -246,6 +264,9 @@ export default function Home() {
         project_id: selectedProject,
         query,
       })) {
+        // Log pour debug : tracer tous les événements SSE reçus
+        console.log("[SSE Event Received]", event.type, event);
+
         addEventToCurrentSession(event);
 
         // Handle special events
