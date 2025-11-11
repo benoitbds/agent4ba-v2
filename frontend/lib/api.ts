@@ -226,3 +226,22 @@ export async function uploadDocument(
 
   return response.json();
 }
+
+/**
+ * Delete a project and all its associated data
+ */
+export async function deleteProject(projectId: string): Promise<void> {
+  const response = await fetch(`${API_URL}/projects/${projectId}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
+  }
+}
