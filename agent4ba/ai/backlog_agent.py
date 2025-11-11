@@ -375,10 +375,13 @@ def improve_description(state: Any) -> dict[str, Any]:
     print("[BACKLOG_AGENT] Improving work item description...")
 
     # Récupérer l'item_id depuis intent_args
-    item_id = state.get("intent_args", {}).get("work_item_id")
+    # Accepter à la fois "work_item_id" et "work_item" pour compatibilité
+    intent_args = state.get("intent_args", {})
+    item_id = intent_args.get("work_item_id") or intent_args.get("work_item")
 
     if not item_id:
         print("[BACKLOG_AGENT] No item_id found in intent args")
+        print(f"[BACKLOG_AGENT] intent_args content: {intent_args}")
         return {
             "status": "error",
             "result": "No item_id provided for description improvement",
