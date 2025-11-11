@@ -1,0 +1,100 @@
+# ====================================================================
+# Configuration centrale des agents et du mapping des intentions
+# ====================================================================
+# Ce fichier définit :
+# 1. Les agents disponibles avec leurs identifiants et descriptions
+# 2. Le mapping entre les intentions utilisateur et les tâches d'agent
+#
+# Pour personnaliser cette configuration en local :
+# - Copier ce fichier vers agent_registry.local.yaml
+# - Modifier selon vos besoins (agent_registry.local.yaml est ignoré par git)
+# ====================================================================
+
+# --------------------------------------------------------------------
+# Définition des agents
+# --------------------------------------------------------------------
+# Chaque agent est un composant spécialisé capable d'effectuer
+# des tâches spécifiques sur le backlog ou les documents du projet.
+# --------------------------------------------------------------------
+
+agents:
+  - id: backlog_agent
+    description: "Agent spécialisé dans la gestion et la manipulation du backlog projet. Capacités : décomposition d'objectifs métier en work items structurés, amélioration de descriptions, analyse qualité selon les critères INVEST."
+
+  - id: document_agent
+    description: "Agent spécialisé dans l'extraction d'exigences depuis des documents non structurés via RAG (Retrieval-Augmented Generation). Utilise une base vectorielle pour rechercher et extraire les informations pertinentes."
+
+
+# --------------------------------------------------------------------
+# Mapping des intentions utilisateur vers les tâches d'agent
+# --------------------------------------------------------------------
+# Chaque intention correspond à une action métier spécifique.
+# Structure :
+#   - intent_id : identifiant unique de l'intention
+#   - agent_id : agent responsable de traiter cette intention
+#   - agent_task : tâche interne exécutée par l'agent
+#   - prompt_file : fichier YAML contenant le prompt système et utilisateur
+#   - status (optionnel) : not_implemented si la fonctionnalité est en stub
+# --------------------------------------------------------------------
+
+intent_mapping:
+  # ----------------------------------------------------------------
+  # Intention : Décomposer un objectif métier
+  # ----------------------------------------------------------------
+  - intent_id: decompose_objective
+    agent_id: backlog_agent
+    agent_task: decompose_objective
+    prompt_file: prompts/decompose_objective.yaml
+    description: "Décompose un objectif métier en une structure hiérarchique de Features et User Stories avec critères d'acceptation."
+
+  # ----------------------------------------------------------------
+  # Intention : Extraire des exigences depuis des documents
+  # ----------------------------------------------------------------
+  - intent_id: extract_features_from_docs
+    agent_id: document_agent
+    agent_task: extract_features
+    prompt_file: prompts/extract_requirements.yaml
+    description: "Extrait les exigences fonctionnelles depuis des documents uploadés en utilisant la recherche vectorielle (RAG)."
+
+  # ----------------------------------------------------------------
+  # Intention : Analyser la qualité du backlog
+  # ----------------------------------------------------------------
+  - intent_id: review_backlog_quality
+    agent_id: backlog_agent
+    agent_task: review_quality
+    prompt_file: prompts/invest_analysis.yaml
+    description: "Analyse la qualité des User Stories du backlog selon les critères INVEST (Independent, Negotiable, Valuable, Estimable, Small, Testable)."
+
+  # ----------------------------------------------------------------
+  # Intention : Améliorer la description d'un work item
+  # ----------------------------------------------------------------
+  - intent_id: improve_item_description
+    agent_id: backlog_agent
+    agent_task: improve_description
+    prompt_file: prompts/improve_description.yaml
+    description: "Améliore et enrichit la description d'un work item existant pour la rendre plus claire et actionnable."
+
+  # ----------------------------------------------------------------
+  # Intentions non implémentées (stubs)
+  # ----------------------------------------------------------------
+
+  - intent_id: generate_spec
+    agent_id: backlog_agent
+    agent_task: generate_specification
+    prompt_file: prompts/generate_specification.yaml
+    status: not_implemented
+    description: "Génère une spécification détaillée pour un work item."
+
+  - intent_id: search_requirements
+    agent_id: backlog_agent
+    agent_task: search_requirements
+    prompt_file: prompts/search_requirements.yaml
+    status: not_implemented
+    description: "Recherche des exigences spécifiques dans le backlog."
+
+  - intent_id: estimate_stories
+    agent_id: backlog_agent
+    agent_task: estimate_stories
+    prompt_file: prompts/estimate_stories.yaml
+    status: not_implemented
+    description: "Estime la complexité des User Stories en story points."
