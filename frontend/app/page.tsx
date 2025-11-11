@@ -152,10 +152,20 @@ export default function Home() {
           };
         });
 
-        setSessions(historySessions);
+        // CORRECTION: Préserver les sessions live lors du chargement de l'historique
+        setSessions((prevSessions) => {
+          // Identifier les sessions live (non historiques)
+          const liveSessions = prevSessions.filter(s => !s.id.startsWith('history-'));
+          // Combiner l'historique avec les sessions live
+          return [...historySessions, ...liveSessions];
+        });
       } catch (error) {
         console.error("Error loading timeline history:", error);
-        setSessions([]);
+        // CORRECTION: En cas d'erreur, préserver quand même les sessions live
+        setSessions((prevSessions) => {
+          const liveSessions = prevSessions.filter(s => !s.id.startsWith('history-'));
+          return liveSessions;
+        });
       }
     };
 
@@ -235,12 +245,7 @@ export default function Home() {
   };
 
   const handleChatSubmit = async (query: string) => {
-    // Collapse all previous sessions
-    setSessions((prevSessions) =>
-      prevSessions.map((session) => ({ ...session, is_expanded: false }))
-    );
-
-    // Create new session
+    // Create new session ID
     const newSessionId = `session-${Date.now()}`;
     const newSession: TimelineSession = {
       id: newSessionId,
@@ -251,7 +256,11 @@ export default function Home() {
       is_expanded: true, // New session starts expanded
     };
 
-    setSessions((prev) => [...prev, newSession]);
+    // CORRECTION: Combiner collapse + ajout de session en un seul setState
+    setSessions((prevSessions) => [
+      ...prevSessions.map((session) => ({ ...session, is_expanded: false })),
+      newSession,
+    ]);
     setCurrentSessionId(newSessionId);
 
     // Reset other state
