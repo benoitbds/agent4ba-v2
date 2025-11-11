@@ -149,6 +149,7 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
 
                 elif event_type == "tool_used":
                     tool_used_event = ToolUsedEvent(
+                        tool_run_id=agent_event_data["tool_run_id"],
                         tool_name=agent_event_data["tool_name"],
                         tool_icon=agent_event_data["tool_icon"],
                         description=agent_event_data["description"],
