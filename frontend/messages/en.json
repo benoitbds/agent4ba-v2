@@ -144,6 +144,7 @@
     "workflowComplete": "Workflow completed",
     "started": "Started",
     "finished": "Finished",
-    "viewOutput": "View output"
+    "viewOutput": "View output",
+    "historicalSession": "Historical session"
   }
 }

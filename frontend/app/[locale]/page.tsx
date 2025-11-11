@@ -103,7 +103,7 @@ export default function Home() {
 
           // Extract user_query from events
           const userRequestEvent = historySession.events.find((evt: SSEEvent) => evt.type === "user_request");
-          const userQuery = userRequestEvent && "query" in userRequestEvent ? userRequestEvent.query : "Session historique";
+          const userQuery = userRequestEvent && "query" in userRequestEvent ? userRequestEvent.query : t('agentTimeline.historicalSession');
 
           // Process tool_used events into tool_runs Map
           const toolRunsMap = new Map<string, ToolRunState>();
