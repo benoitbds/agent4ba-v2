@@ -1,10 +1,13 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
+
 interface ProjectSelectorProps {
   projects: string[];
   selectedProject: string;
   onProjectChange: (projectId: string) => void;
   onCreateProject?: () => void;
+  onDeleteProject?: () => void;
 }
 
 export default function ProjectSelector({
@@ -12,6 +15,7 @@ export default function ProjectSelector({
   selectedProject,
   onProjectChange,
   onCreateProject,
+  onDeleteProject,
 }: ProjectSelectorProps) {
   return (
     <div className="flex items-center gap-3">
@@ -49,6 +53,16 @@ export default function ProjectSelector({
           ))
         )}
       </select>
+      {onDeleteProject && (
+        <button
+          onClick={onDeleteProject}
+          disabled={!selectedProject || projects.length === 0}
+          className="p-2 border-2 border-red-300 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-400 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-red-300"
+          title="Supprimer le projet sélectionné"
+        >
+          <Trash2 className="w-5 h-5" />
+        </button>
+      )}
       {onCreateProject && (
         <button
           onClick={onCreateProject}

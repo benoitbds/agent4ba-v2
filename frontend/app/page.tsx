@@ -5,10 +5,11 @@ import ChatInput from "@/components/ChatInput";
 import TimelineView from "@/components/TimelineView";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
 import CreateProjectModal from "@/components/CreateProjectModal";
+import DeleteProjectModal from "@/components/DeleteProjectModal";
 import BacklogView from "@/components/BacklogView";
 import ProjectSelector from "@/components/ProjectSelector";
 import DocumentManager from "@/components/DocumentManager";
-import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject } from "@/lib/api";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject } from "@/lib/api";
 import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent } from "@/types/events";
 
 export default function Home() {
@@ -25,6 +26,7 @@ export default function Home() {
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+  const [isDeleteProjectModalOpen, setIsDeleteProjectModalOpen] = useState(false);
 
   // Load projects list on component mount
   useEffect(() => {
@@ -374,6 +376,44 @@ export default function Home() {
     }
   };
 
+  const handleDeleteProject = async () => {
+    if (!selectedProject) return;
+
+    const projectToDelete = selectedProject;
+
+    try {
+      setStatusMessage("Suppression du projet en cours...");
+      await deleteProject(selectedProject);
+
+      // Reload projects list
+      const projectsList = await getProjects();
+      setProjects(projectsList);
+
+      // Select the first project in the list, or empty string if no projects left
+      if (projectsList.length > 0) {
+        setSelectedProject(projectsList[0]);
+      } else {
+        setSelectedProject("");
+        setBacklogItems([]);
+        setDocuments([]);
+        setSessions([]);
+      }
+
+      setStatusMessage(`Projet "${projectToDelete}" supprimé avec succès`);
+      setIsDeleteProjectModalOpen(false);
+
+      // Clear status message after 3 seconds
+      setTimeout(() => {
+        setStatusMessage(null);
+      }, 3000);
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      setStatusMessage(
+        `Erreur lors de la suppression du projet: ${error instanceof Error ? error.message : "Erreur inconnue"}`
+      );
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -390,6 +430,7 @@ export default function Home() {
               selectedProject={selectedProject}
               onProjectChange={setSelectedProject}
               onCreateProject={() => setIsCreateProjectModalOpen(true)}
+              onDeleteProject={() => setIsDeleteProjectModalOpen(true)}
             />
           </div>
         </div>
@@ -499,6 +540,14 @@ export default function Home() {
         isOpen={isCreateProjectModalOpen}
         onClose={() => setIsCreateProjectModalOpen(false)}
         onCreateProject={handleCreateProject}
+      />
+
+      {/* Delete Project Modal */}
+      <DeleteProjectModal
+        isOpen={isDeleteProjectModalOpen}
+        onClose={() => setIsDeleteProjectModalOpen(false)}
+        onDeleteProject={handleDeleteProject}
+        projectName={selectedProject}
       />
     </div>
   );

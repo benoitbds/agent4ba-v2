@@ -170,3 +170,57 @@ class ProjectContextService:
             except json.JSONDecodeError:
                 # Si le fichier est corrompu, retourner une liste vide
                 return []
+
+    def delete_project_data(self, project_id: str) -> None:
+        """
+        Supprime toutes les données associées à un projet.
+
+        Args:
+            project_id: Identifiant unique du projet
+
+        Raises:
+            FileNotFoundError: Si le projet n'existe pas
+            ValueError: Si le project_id contient des caractères dangereux
+        """
+        # Validation de sécurité : empêcher les attaques de type path traversal
+        # Vérifier que le project_id ne contient que des caractères alphanumériques,
+        # tirets, underscores et points
+        if not re.match(r'^[a-zA-Z0-9._-]+$', project_id):
+            raise ValueError(
+                f"Invalid project_id '{project_id}': "
+                "only alphanumeric characters, dots, hyphens and underscores are allowed"
+            )
+
+        # Vérifier qu'il n'y a pas de séquences dangereuses
+        if '..' in project_id or project_id.startswith('/') or project_id.startswith('\\'):
+            raise ValueError(
+                f"Invalid project_id '{project_id}': "
+                "path traversal attempts are not allowed"
+            )
+
+        project_dir = self._get_project_dir(project_id)
+
+        # Vérifier que le répertoire existe
+        if not project_dir.exists():
+            raise FileNotFoundError(
+                f"Project directory '{project_id}' does not exist: {project_dir}"
+            )
+
+        # Vérification de sécurité finale : s'assurer que le chemin résolu
+        # est bien un sous-répertoire de base_path
+        try:
+            resolved_project_dir = project_dir.resolve()
+            resolved_base_path = self.base_path.resolve()
+
+            # Vérifier que le projet est bien dans le répertoire de base
+            if not str(resolved_project_dir).startswith(str(resolved_base_path)):
+                raise ValueError(
+                    f"Security violation: project directory '{resolved_project_dir}' "
+                    f"is not within base path '{resolved_base_path}'"
+                )
+        except Exception as e:
+            raise ValueError(f"Error resolving project path: {e}") from e
+
+        # Supprimer le répertoire et tout son contenu
+        import shutil
+        shutil.rmtree(project_dir)
