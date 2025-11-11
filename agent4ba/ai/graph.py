@@ -38,6 +38,7 @@ class GraphState(TypedDict):
     user_query: str
     document_content: str
     intent: dict[str, Any]
+    intent_args: dict[str, Any]  # Arguments extraits de l'intention
     next_node: str
     agent_id: str  # ID de l'agent à exécuter (ex: "backlog_agent")
     agent_task: str  # Tâche à exécuter par l'agent (ex: "decompose_objective")
@@ -128,7 +129,10 @@ def intent_classifier_node(state: GraphState) -> dict[str, Any]:
         print(f"[INTENT_CLASSIFIER_NODE] Confidence: {intent['confidence']}")
         print(f"[INTENT_CLASSIFIER_NODE] Args: {intent.get('args', {})}")
 
-        return {"intent": intent}
+        return {
+            "intent": intent,
+            "intent_args": intent.get("args", {}),
+        }
 
     except json.JSONDecodeError as e:
         print(f"[INTENT_CLASSIFIER_NODE] Error parsing JSON: {e}")
@@ -138,7 +142,8 @@ def intent_classifier_node(state: GraphState) -> dict[str, Any]:
                 "intent_id": "unknown",
                 "confidence": 0.0,
                 "args": {},
-            }
+            },
+            "intent_args": {},
         }
     except Exception as e:
         print(f"[INTENT_CLASSIFIER_NODE] Error calling LLM: {e}")
@@ -148,7 +153,8 @@ def intent_classifier_node(state: GraphState) -> dict[str, Any]:
                 "intent_id": "unknown",
                 "confidence": 0.0,
                 "args": {},
-            }
+            },
+            "intent_args": {},
         }
 
 
