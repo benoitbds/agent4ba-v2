@@ -106,9 +106,33 @@ def intent_classifier_node(state: GraphState) -> dict[str, Any]:
     # Charger le prompt
     prompt_config = load_intent_classifier_prompt()
 
+    # Créer le résumé du contexte
+    context = state.get("context", [])
+    context_summary = "Aucun"
+
+    if context and len(context) > 0:
+        context_parts = []
+        for ctx_item in context:
+            ctx_type = ctx_item.get("type", "unknown")
+            ctx_id = ctx_item.get("id", "unknown")
+            ctx_name = ctx_item.get("name", "")
+
+            if ctx_type == "work_item":
+                context_parts.append(f"work_item '{ctx_id}' - '{ctx_name}'")
+            elif ctx_type == "document":
+                context_parts.append(f"document '{ctx_name}'")
+            else:
+                context_parts.append(f"{ctx_type} '{ctx_id}'")
+
+        context_summary = ", ".join(context_parts)
+        print(f"[INTENT_CLASSIFIER_NODE] Context summary: {context_summary}")
+    else:
+        print("[INTENT_CLASSIFIER_NODE] No context provided")
+
     # Préparer le prompt utilisateur
     user_prompt = prompt_config["user_prompt_template"].format(
-        user_query=state["user_query"]
+        user_query=state["user_query"],
+        context_summary=context_summary
     )
 
     # Récupérer le modèle depuis l'environnement
