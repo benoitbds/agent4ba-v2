@@ -151,3 +151,4 @@ Thumbs.db
 agent4ba/data/*
 !agent4ba/data/.gitkeep
 agent_registry.local.yaml
+frontend/dist-tests/

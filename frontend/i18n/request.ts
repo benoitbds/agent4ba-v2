@@ -5,12 +5,29 @@ import { notFound } from 'next/navigation';
 export const locales = ['en', 'fr'] as const;
 export const defaultLocale = 'en' as const;
 
+export type Locale = (typeof locales)[number];
+
+export function resolveLocale(requestedLocale: string | null | undefined): Locale | null {
+  if (requestedLocale && locales.includes(requestedLocale as Locale)) {
+    return requestedLocale as Locale;
+  }
+
+  if (requestedLocale == null || requestedLocale === '') {
+    return defaultLocale;
+  }
+
+  return null;
+}
+
 export default getRequestConfig(async ({ locale }) => {
-  // Validate that the incoming `locale` parameter is valid
-  if (!locales.includes(locale as any)) notFound();
+  const resolvedLocale = resolveLocale(locale);
+
+  if (!resolvedLocale) {
+    notFound();
+  }
 
   return {
-    locale: locale as string,
-    messages: (await import(`../messages/${locale}.json`)).default
+    locale: resolvedLocale,
+    messages: (await import(`../messages/${resolvedLocale}.json`)).default
   };
 });
