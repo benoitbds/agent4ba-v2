@@ -38,6 +38,7 @@ class GraphState(TypedDict):
     user_query: str
     document_content: str
     context: list[dict] | None  # Contexte optionnel (documents ou work items ciblés)
+    rewritten_task: str  # Tâche reformulée par le task_rewriter_node
     intent: dict[str, Any]
     intent_args: dict[str, Any]  # Arguments extraits de l'intention
     next_node: str
@@ -51,14 +52,14 @@ class GraphState(TypedDict):
     thread_id: str  # Ajout du thread_id pour accéder à la queue
 
 
-def load_intent_classifier_prompt() -> dict[str, Any]:
+def load_task_rewriter_prompt() -> dict[str, Any]:
     """
-    Charge le prompt de classification depuis le fichier YAML.
+    Charge le prompt de reformulation de tâche depuis le fichier YAML.
 
     Returns:
         Dictionnaire contenant le prompt et les exemples
     """
-    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "intent_classifier.yaml"
+    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "task_rewriter.yaml"
     with prompt_path.open("r", encoding="utf-8") as f:
         result = yaml.safe_load(f)
         if not isinstance(result, dict):
@@ -91,20 +92,20 @@ def entry_node(state: GraphState) -> dict[str, Any]:
     return {}
 
 
-def intent_classifier_node(state: GraphState) -> dict[str, Any]:
+def task_rewriter_node(state: GraphState) -> dict[str, Any]:
     """
-    Classifie l'intention de l'utilisateur avec un LLM.
+    Reformule la requête utilisateur en une tâche claire et explicite.
 
     Args:
         state: État actuel du graphe
 
     Returns:
-        Mise à jour partielle de l'état avec l'intention détectée
+        Mise à jour partielle de l'état avec la tâche reformulée
     """
-    print("[INTENT_CLASSIFIER_NODE] Classifying user intent with LLM...")
+    print("[TASK_REWRITER_NODE] Rewriting user query into explicit task...")
 
     # Charger le prompt
-    prompt_config = load_intent_classifier_prompt()
+    prompt_config = load_task_rewriter_prompt()
 
     # Créer le résumé du contexte
     context = state.get("context", [])
@@ -125,21 +126,22 @@ def intent_classifier_node(state: GraphState) -> dict[str, Any]:
                 context_parts.append(f"{ctx_type} '{ctx_id}'")
 
         context_summary = ", ".join(context_parts)
-        print(f"[INTENT_CLASSIFIER_NODE] Context summary: {context_summary}")
+        print(f"[TASK_REWRITER_NODE] Context summary: {context_summary}")
     else:
-        print("[INTENT_CLASSIFIER_NODE] No context provided")
+        print("[TASK_REWRITER_NODE] No context provided")
 
     # Préparer le prompt utilisateur
-    user_prompt = prompt_config["user_prompt_template"].format(
-        user_query=state["user_query"],
-        context_summary=context_summary
+    user_prompt = prompt_config["user_prompt_template"].replace(
+        "{{ context_summary }}", context_summary
+    ).replace(
+        "{{ user_query }}", state["user_query"]
     )
 
     # Récupérer le modèle depuis l'environnement
     model = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
     temperature = float(os.getenv("LLM_TEMPERATURE", "0.0"))
 
-    print(f"[INTENT_CLASSIFIER_NODE] Using model: {model}")
+    print(f"[TASK_REWRITER_NODE] Using model: {model}")
 
     try:
         # Appeler le LLM
@@ -152,53 +154,29 @@ def intent_classifier_node(state: GraphState) -> dict[str, Any]:
             temperature=temperature,
         )
 
-        # Extraire la réponse
-        response_text = response.choices[0].message.content
+        # Extraire la réponse (tâche reformulée)
+        rewritten_task = response.choices[0].message.content.strip()
 
-        print(f"[INTENT_CLASSIFIER_NODE] LLM response: {response_text}")
-
-        # Parser la réponse JSON
-        intent = json.loads(response_text)
-
-        print(f"[INTENT_CLASSIFIER_NODE] Detected intent: {intent['intent_id']}")
-        print(f"[INTENT_CLASSIFIER_NODE] Confidence: {intent['confidence']}")
-        print(f"[INTENT_CLASSIFIER_NODE] Args: {intent.get('args', {})}")
+        print(f"[TASK_REWRITER_NODE] Rewritten task: {rewritten_task}")
 
         return {
-            "intent": intent,
-            "intent_args": intent.get("args", {}),
+            "rewritten_task": rewritten_task,
         }
 
-    except json.JSONDecodeError as e:
-        print(f"[INTENT_CLASSIFIER_NODE] Error parsing JSON: {e}")
-        # Fallback: intention inconnue
-        return {
-            "intent": {
-                "intent_id": "unknown",
-                "confidence": 0.0,
-                "args": {},
-            },
-            "intent_args": {},
-        }
     except Exception as e:
-        print(f"[INTENT_CLASSIFIER_NODE] Error calling LLM: {e}")
-        # Fallback: intention inconnue
+        print(f"[TASK_REWRITER_NODE] Error calling LLM: {e}")
+        # Fallback: utiliser la requête originale
         return {
-            "intent": {
-                "intent_id": "unknown",
-                "confidence": 0.0,
-                "args": {},
-            },
-            "intent_args": {},
+            "rewritten_task": state["user_query"],
         }
 
 
 def router_node(state: GraphState) -> dict[str, Any]:
     """
-    Route la requête vers le bon agent selon l'intention.
+    Route la requête vers le bon agent selon la tâche reformulée.
 
-    Utilise la configuration chargée depuis agent_registry.yaml pour
-    déterminer quel agent doit traiter quelle intention.
+    Analyse la tâche reformulée avec des règles simples pour déterminer
+    quel agent et quelle tâche exécuter.
 
     Args:
         state: État actuel du graphe
@@ -206,55 +184,54 @@ def router_node(state: GraphState) -> dict[str, Any]:
     Returns:
         Mise à jour partielle de l'état avec next_node, agent_id et agent_task
     """
-    intent = state.get("intent", {})
-    intent_id = intent.get("intent_id", "unknown")
-    confidence = intent.get("confidence", 0.0)
+    rewritten_task = state.get("rewritten_task", "")
 
-    print(f"[ROUTER_NODE] Routing based on intent: {intent_id}")
-    print(f"[ROUTER_NODE] Confidence: {confidence}")
+    print(f"[ROUTER_NODE] Routing based on rewritten task: {rewritten_task}")
 
-    # Seuil de confiance minimum
-    confidence_threshold = 0.7
-
-    if confidence < confidence_threshold:
-        print(f"[ROUTER_NODE] Low confidence ({confidence}), routing to end")
+    if not rewritten_task:
+        print("[ROUTER_NODE] No rewritten task found, routing to end")
         return {
             "next_node": "end",
             "agent_id": "none",
             "agent_task": "none",
-            "result": f"Intent confidence too low ({confidence:.2f}). Please rephrase your query.",
+            "result": "No task to process.",
         }
 
-    # Rechercher la configuration de l'intention dans le registre
-    intent_config = INTENT_CONFIG_MAP.get(intent_id)
+    # Normaliser la tâche pour la comparaison
+    task_lower = rewritten_task.lower()
 
-    if intent_config is None:
-        print(f"[ROUTER_NODE] Unknown intent '{intent_id}', routing to end")
-        return {
-            "next_node": "end",
-            "agent_id": "none",
-            "agent_task": "none",
-            "result": f"Intent '{intent_id}' is not recognized.",
-        }
+    # Règles de routage basées sur des mots-clés
+    agent_id = "backlog_agent"
+    agent_task = "unknown_task"
 
-    # Vérifier si l'intention est implémentée
-    if intent_config.status == "not_implemented":
-        print(f"[ROUTER_NODE] Intent '{intent_id}' is not yet implemented, routing to end")
-        return {
-            "next_node": "end",
-            "agent_id": intent_config.agent_id,
-            "agent_task": intent_config.agent_task,
-            "result": f"Intent '{intent_id}' is not yet implemented.",
-        }
+    # Détection de la tâche à exécuter
+    if any(keyword in task_lower for keyword in ["générer les user stories", "créer les user stories", "décomposer", "générer les features", "créer les features"]):
+        agent_task = "decompose_objective"
+    elif any(keyword in task_lower for keyword in ["améliorer la description", "améliorer le work item", "clarifier"]):
+        agent_task = "improve_description"
+    elif any(keyword in task_lower for keyword in ["générer une spécification", "générer les use cases", "générer les uc", "spec complète"]):
+        agent_task = "generate_specification"
+    elif any(keyword in task_lower for keyword in ["revue qualité", "review", "analyser le backlog"]):
+        agent_task = "review_quality"
+    elif any(keyword in task_lower for keyword in ["estimer", "story points", "estimation"]):
+        agent_task = "estimate_stories"
+    elif any(keyword in task_lower for keyword in ["chercher", "trouver", "rechercher"]):
+        agent_task = "search_requirements"
+    elif any(keyword in task_lower for keyword in ["extraire", "résumer le document", "analyser le document"]):
+        agent_id = "document_agent"
+        agent_task = "extract_features"
+    else:
+        # Par défaut, on suppose que c'est une décomposition d'objectif
+        agent_task = "decompose_objective"
 
-    print(f"[ROUTER_NODE] Selected agent: {intent_config.agent_id}")
-    print(f"[ROUTER_NODE] Selected task: {intent_config.agent_task}")
+    print(f"[ROUTER_NODE] Selected agent: {agent_id}")
+    print(f"[ROUTER_NODE] Selected task: {agent_task}")
     print("[ROUTER_NODE] Routing to agent node")
 
     return {
         "next_node": "agent",
-        "agent_id": intent_config.agent_id,
-        "agent_task": intent_config.agent_task,
+        "agent_id": agent_id,
+        "agent_task": agent_task,
     }
 
 
@@ -489,7 +466,7 @@ workflow = StateGraph(GraphState)
 
 # Ajout des nœuds
 workflow.add_node("entry", entry_node)
-workflow.add_node("intent_classifier", intent_classifier_node)
+workflow.add_node("task_rewriter", task_rewriter_node)
 workflow.add_node("router", router_node)
 workflow.add_node("agent", agent_node)
 workflow.add_node("approval", approval_node)
@@ -497,8 +474,8 @@ workflow.add_node("end", end_node)
 
 # Définition des arêtes (flux)
 workflow.set_entry_point("entry")
-workflow.add_edge("entry", "intent_classifier")
-workflow.add_edge("intent_classifier", "router")
+workflow.add_edge("entry", "task_rewriter")
+workflow.add_edge("task_rewriter", "router")
 
 # Routage conditionnel depuis le router
 workflow.add_conditional_edges(
