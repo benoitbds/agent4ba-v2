@@ -224,3 +224,53 @@ class ProjectContextService:
         # Supprimer le répertoire et tout son contenu
         import shutil
         shutil.rmtree(project_dir)
+
+    def update_work_item_in_backlog(
+        self, project_id: str, item_id: str, updated_data: dict
+    ) -> WorkItem:
+        """
+        Met à jour un WorkItem dans le backlog d'un projet.
+
+        Args:
+            project_id: Identifiant unique du projet
+            item_id: Identifiant du WorkItem à mettre à jour
+            updated_data: Données partielles à mettre à jour (title, description, etc.)
+
+        Returns:
+            Le WorkItem mis à jour
+
+        Raises:
+            FileNotFoundError: Si le projet ou le WorkItem n'existe pas
+        """
+        # Charger le backlog existant
+        work_items = self.load_context(project_id)
+
+        # Trouver l'item correspondant
+        item_index = None
+        for idx, item in enumerate(work_items):
+            if item.id == item_id:
+                item_index = idx
+                break
+
+        if item_index is None:
+            raise FileNotFoundError(
+                f"WorkItem '{item_id}' not found in project '{project_id}'"
+            )
+
+        # Mettre à jour l'item avec les nouvelles données
+        current_item = work_items[item_index]
+        item_dict = current_item.model_dump()
+
+        # Mettre à jour uniquement les champs fournis
+        for key, value in updated_data.items():
+            if key in item_dict:
+                item_dict[key] = value
+
+        # Créer un nouveau WorkItem avec les données mises à jour
+        updated_item = WorkItem(**item_dict)
+        work_items[item_index] = updated_item
+
+        # Sauvegarder le backlog mis à jour
+        self.save_backlog(project_id, work_items)
+
+        return updated_item

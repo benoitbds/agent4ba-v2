@@ -159,5 +159,17 @@
   "context": {
     "selectedItems": "Selected context:",
     "remove": "Remove from context"
+  },
+  "editWorkItem": {
+    "title": "Edit Work Item",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Work item title",
+    "titleRequired": "Title is required",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Work item description...",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving...",
+    "saveFailed": "Failed to save"
   }
 }

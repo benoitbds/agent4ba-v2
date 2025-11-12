@@ -565,7 +565,17 @@ export default function Home() {
               ) : (
                 <BacklogView
                   items={backlogItems}
+                  projectId={selectedProject}
                   onSelectItem={handleSelectWorkItem}
+                  onItemUpdated={async () => {
+                    // Rafraîchir le backlog après une mise à jour
+                    try {
+                      const items = await getProjectBacklog(selectedProject);
+                      setBacklogItems(items);
+                    } catch (error) {
+                      console.error("Error refreshing backlog after update:", error);
+                    }
+                  }}
                 />
               )}
             </div>

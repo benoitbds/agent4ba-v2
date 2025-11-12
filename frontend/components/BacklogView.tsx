@@ -4,10 +4,14 @@ import { useTranslations } from "next-intl";
 import { Check, ChevronRight, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import type { WorkItem } from "@/types/events";
+import EditWorkItemModal from "./EditWorkItemModal";
+import { updateWorkItem } from "@/lib/api";
 
 interface BacklogViewProps {
   items: WorkItem[];
+  projectId: string;
   onSelectItem?: (item: WorkItem) => void;
+  onItemUpdated?: () => void;
 }
 
 interface HierarchicalItem {
@@ -59,7 +63,7 @@ function getBadgeColor(score: number): string {
   return "bg-red-500 text-white";
 }
 
-export default function BacklogView({ items, onSelectItem }: BacklogViewProps) {
+export default function BacklogView({ items, projectId, onSelectItem, onItemUpdated }: BacklogViewProps) {
   const t = useTranslations();
 
   // État pour gérer les features dépliées (toutes dépliées par défaut)
@@ -70,6 +74,10 @@ export default function BacklogView({ items, onSelectItem }: BacklogViewProps) {
       .map((item) => item.id);
     return new Set(allFeatureIds);
   });
+
+  // État pour gérer la modale d'édition
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedItemForEdit, setSelectedItemForEdit] = useState<WorkItem | null>(null);
 
   // Fonction pour toggler l'état d'une feature
   const toggleFeature = (featureId: string) => {
@@ -82,6 +90,27 @@ export default function BacklogView({ items, onSelectItem }: BacklogViewProps) {
       }
       return newSet;
     });
+  };
+
+  // Fonction pour ouvrir la modale d'édition
+  const handleEditClick = (item: WorkItem, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setSelectedItemForEdit(item);
+    setIsEditModalOpen(true);
+  };
+
+  // Fonction pour sauvegarder les modifications
+  const handleSaveWorkItem = async (
+    itemId: string,
+    updatedData: { title: string; description: string | null }
+  ) => {
+    await updateWorkItem(projectId, itemId, updatedData);
+    // Appeler le callback pour rafraîchir le backlog
+    if (onItemUpdated) {
+      onItemUpdated();
+    }
   };
 
   if (items.length === 0) {
@@ -107,7 +136,8 @@ export default function BacklogView({ items, onSelectItem }: BacklogViewProps) {
     return (
       <div
         key={item.id}
-        className={`p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-colors ${
+        onClick={() => handleEditClick(item)}
+        className={`p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors cursor-pointer ${
           isChild ? "ml-8" : ""
         }`}
       >
@@ -221,16 +251,20 @@ export default function BacklogView({ items, onSelectItem }: BacklogViewProps) {
           return (
             <div key={hierarchicalItem.item.id}>
               {/* Afficher la feature parente avec chevron */}
-              <div
-                onClick={() => toggleFeature(hierarchicalItem.item.id)}
-                className="cursor-pointer"
-              >
+              <div className="relative">
                 <div
-                  className={`p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-colors`}
+                  onClick={() => handleEditClick(hierarchicalItem.item)}
+                  className={`p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors cursor-pointer`}
                 >
                   <div className="flex items-start gap-3">
                     {/* Chevron pour indiquer l'état */}
-                    <div className="flex-shrink-0 mt-1">
+                    <div
+                      className="flex-shrink-0 mt-1 cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFeature(hierarchicalItem.item.id);
+                      }}
+                    >
                       {isExpanded ? (
                         <ChevronDown className="w-5 h-5 text-gray-600" />
                       ) : (
@@ -366,6 +400,14 @@ export default function BacklogView({ items, onSelectItem }: BacklogViewProps) {
           );
         })}
       </div>
+
+      {/* Modal d'édition */}
+      <EditWorkItemModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleSaveWorkItem}
+        item={selectedItemForEdit}
+      />
     </div>
   );
 }
