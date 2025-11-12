@@ -9,6 +9,11 @@ interface BacklogViewProps {
   onSelectItem?: (item: WorkItem) => void;
 }
 
+interface HierarchicalItem {
+  item: WorkItem;
+  children: WorkItem[];
+}
+
 interface InvestCriterion {
   score: number;
   reason: string;
@@ -23,6 +28,29 @@ interface InvestAnalysis {
   T: InvestCriterion;
 }
 
+// Fonction pour transformer la liste plate en structure hiérarchique
+function buildHierarchy(items: WorkItem[]): HierarchicalItem[] {
+  // Séparer les features (items sans parent) et les stories/tasks (avec parent)
+  const rootItems = items.filter((item) => !item.parent_id);
+  const childItems = items.filter((item) => item.parent_id);
+
+  // Créer un map pour un accès rapide aux enfants par parent_id
+  const childrenByParentId = new Map<string, WorkItem[]>();
+  childItems.forEach((child) => {
+    const parentId = child.parent_id!;
+    if (!childrenByParentId.has(parentId)) {
+      childrenByParentId.set(parentId, []);
+    }
+    childrenByParentId.get(parentId)!.push(child);
+  });
+
+  // Construire la structure hiérarchique
+  return rootItems.map((rootItem) => ({
+    item: rootItem,
+    children: childrenByParentId.get(rootItem.id) || [],
+  }));
+}
+
 // Fonction pour déterminer la couleur du badge selon le score
 function getBadgeColor(score: number): string {
   if (score > 0.8) return "bg-green-500 text-white";
@@ -32,6 +60,7 @@ function getBadgeColor(score: number): string {
 
 export default function BacklogView({ items, onSelectItem }: BacklogViewProps) {
   const t = useTranslations();
+
   if (items.length === 0) {
     return (
       <div className="flex flex-col h-full">
@@ -43,118 +72,140 @@ export default function BacklogView({ items, onSelectItem }: BacklogViewProps) {
     );
   }
 
+  // Construire la structure hiérarchique
+  const hierarchicalItems = buildHierarchy(items);
+
+  // Fonction pour rendre un WorkItem (réutilisable pour parent et enfants)
+  const renderWorkItem = (item: WorkItem, isChild: boolean = false) => {
+    const investAnalysis = item.attributes?.invest_analysis as
+      | InvestAnalysis
+      | undefined;
+
+    return (
+      <div
+        key={item.id}
+        className={`p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-colors ${
+          isChild ? "ml-8" : ""
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <span
+            className={`px-2 py-1 text-xs font-semibold rounded flex-shrink-0 ${
+              item.type === "feature"
+                ? "bg-purple-200 text-purple-800"
+                : item.type === "story"
+                ? "bg-blue-200 text-blue-800"
+                : "bg-green-200 text-green-800"
+            }`}
+          >
+            {item.type}
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="font-semibold text-gray-900">
+                {item.title}
+              </h3>
+              <span className="text-xs text-gray-500 font-mono">
+                {item.id}
+              </span>
+            </div>
+            {item.description && (
+              <p className="text-sm text-gray-600 mt-1">
+                {item.description}
+              </p>
+            )}
+
+            {/* INVEST Analysis Badges */}
+            {investAnalysis && (
+              <div className="flex gap-1 mt-2">
+                {Object.entries(investAnalysis).map(
+                  ([criterion, data]) => (
+                    <div
+                      key={criterion}
+                      className="group relative"
+                      title={`${t(`invest.${criterion}`)}: ${data.reason}`}
+                    >
+                      <span
+                        className={`px-2 py-1 text-xs font-bold rounded cursor-help ${getBadgeColor(data.score)}`}
+                      >
+                        {criterion}
+                      </span>
+                      {/* Tooltip au survol */}
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10 w-64">
+                        <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg">
+                          <div className="font-bold mb-1">
+                            {t(`invest.${criterion}`)}
+                          </div>
+                          <div className="mb-1">
+                            {t("timeline.score")} {(data.score * 100).toFixed(0)}%
+                          </div>
+                          <div className="text-gray-300">
+                            {data.reason}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+
+            {/* Autres attributs */}
+            {item.attributes && (
+              <div className="flex gap-2 mt-2 text-xs">
+                {item.attributes.priority && (
+                  <span className="px-2 py-1 bg-gray-100 rounded">
+                    {t("backlog.priority")} {item.attributes.priority}
+                  </span>
+                )}
+                {item.attributes.points !== undefined && (
+                  <span className="px-2 py-1 bg-gray-100 rounded">
+                    {t("backlog.points")} {item.attributes.points}
+                  </span>
+                )}
+                {item.attributes.status && (
+                  <span className="px-2 py-1 bg-gray-100 rounded">
+                    {t("backlog.status")} {item.attributes.status}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Select button for context */}
+          {onSelectItem && (
+            <button
+              onClick={() => onSelectItem(item)}
+              className="flex-shrink-0 p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
+              title={t("backlog.addToContext")}
+            >
+              <Check className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full">
       <h2 className="text-xl font-semibold mb-4 flex-shrink-0">{t("backlog.title")}</h2>
       <div className="flex-1 overflow-y-auto pr-2 space-y-3">
-        {items.map((item) => {
-          const investAnalysis = item.attributes?.invest_analysis as
-            | InvestAnalysis
-            | undefined;
+        {hierarchicalItems.map((hierarchicalItem) => (
+          <div key={hierarchicalItem.item.id}>
+            {/* Afficher la feature parente */}
+            {renderWorkItem(hierarchicalItem.item, false)}
 
-          return (
-            <div
-              key={item.id}
-              className="p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
-            >
-              <div className="flex items-start gap-3">
-                <span
-                  className={`px-2 py-1 text-xs font-semibold rounded flex-shrink-0 ${
-                    item.type === "feature"
-                      ? "bg-purple-200 text-purple-800"
-                      : item.type === "story"
-                      ? "bg-blue-200 text-blue-800"
-                      : "bg-green-200 text-green-800"
-                  }`}
-                >
-                  {item.type}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-gray-900">
-                      {item.title}
-                    </h3>
-                    <span className="text-xs text-gray-500 font-mono">
-                      {item.id}
-                    </span>
-                  </div>
-                  {item.description && (
-                    <p className="text-sm text-gray-600 mt-1">
-                      {item.description}
-                    </p>
-                  )}
-
-                  {/* INVEST Analysis Badges */}
-                  {investAnalysis && (
-                    <div className="flex gap-1 mt-2">
-                      {Object.entries(investAnalysis).map(
-                        ([criterion, data]) => (
-                          <div
-                            key={criterion}
-                            className="group relative"
-                            title={`${t(`invest.${criterion}`)}: ${data.reason}`}
-                          >
-                            <span
-                              className={`px-2 py-1 text-xs font-bold rounded cursor-help ${getBadgeColor(data.score)}`}
-                            >
-                              {criterion}
-                            </span>
-                            {/* Tooltip au survol */}
-                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10 w-64">
-                              <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg">
-                                <div className="font-bold mb-1">
-                                  {t(`invest.${criterion}`)}
-                                </div>
-                                <div className="mb-1">
-                                  {t("timeline.score")} {(data.score * 100).toFixed(0)}%
-                                </div>
-                                <div className="text-gray-300">
-                                  {data.reason}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      )}
-                    </div>
-                  )}
-
-                  {/* Autres attributs */}
-                  {item.attributes && (
-                    <div className="flex gap-2 mt-2 text-xs">
-                      {item.attributes.priority && (
-                        <span className="px-2 py-1 bg-gray-100 rounded">
-                          {t("backlog.priority")} {item.attributes.priority}
-                        </span>
-                      )}
-                      {item.attributes.points !== undefined && (
-                        <span className="px-2 py-1 bg-gray-100 rounded">
-                          {t("backlog.points")} {item.attributes.points}
-                        </span>
-                      )}
-                      {item.attributes.status && (
-                        <span className="px-2 py-1 bg-gray-100 rounded">
-                          {t("backlog.status")} {item.attributes.status}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Select button for context */}
-                {onSelectItem && (
-                  <button
-                    onClick={() => onSelectItem(item)}
-                    className="flex-shrink-0 p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
-                    title={t("backlog.addToContext")}
-                  >
-                    <Check className="w-5 h-5" />
-                  </button>
+            {/* Afficher les stories enfants avec indentation */}
+            {hierarchicalItem.children.length > 0 && (
+              <div className="space-y-3 mt-3">
+                {hierarchicalItem.children.map((child) =>
+                  renderWorkItem(child, true)
                 )}
               </div>
-            </div>
-          );
-        })}
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
