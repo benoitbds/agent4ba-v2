@@ -34,7 +34,15 @@
     "add": "Add a document",
     "existing": "Existing documents",
     "loading": "Loading documents...",
-    "getStarted": "To get started, add a document by clicking the + button"
+    "getStarted": "To get started, add a document by clicking the + button",
+    "empty": "No documents available. Add one to get started.",
+    "select": "Select for context",
+    "confirmDelete": "Confirm deletion?",
+    "confirmDeleteAction": "Confirm",
+    "delete": "Delete document",
+    "deleteError": "Error deleting document",
+    "close": "Close",
+    "cancel": "Cancel"
   },
   "backlog": {
     "title": "Project Backlog",
@@ -42,7 +50,8 @@
     "loading": "Loading backlog...",
     "priority": "Priority:",
     "points": "Points:",
-    "status": "Status:"
+    "status": "Status:",
+    "addToContext": "Add to chat context"
   },
   "timeline": {
     "title": "Execution Timeline",
@@ -146,5 +155,9 @@
     "finished": "Finished",
     "viewOutput": "View output",
     "historicalSession": "Historical session"
+  },
+  "context": {
+    "selectedItems": "Selected context:",
+    "remove": "Remove from context"
   }
 }

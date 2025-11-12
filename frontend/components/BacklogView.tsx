@@ -1,10 +1,12 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { Check } from "lucide-react";
 import type { WorkItem } from "@/types/events";
 
 interface BacklogViewProps {
   items: WorkItem[];
+  onSelectItem?: (item: WorkItem) => void;
 }
 
 interface InvestCriterion {
@@ -28,7 +30,7 @@ function getBadgeColor(score: number): string {
   return "bg-red-500 text-white";
 }
 
-export default function BacklogView({ items }: BacklogViewProps) {
+export default function BacklogView({ items, onSelectItem }: BacklogViewProps) {
   const t = useTranslations();
   if (items.length === 0) {
     return (
@@ -57,7 +59,7 @@ export default function BacklogView({ items }: BacklogViewProps) {
             >
               <div className="flex items-start gap-3">
                 <span
-                  className={`px-2 py-1 text-xs font-semibold rounded ${
+                  className={`px-2 py-1 text-xs font-semibold rounded flex-shrink-0 ${
                     item.type === "feature"
                       ? "bg-purple-200 text-purple-800"
                       : item.type === "story"
@@ -67,7 +69,7 @@ export default function BacklogView({ items }: BacklogViewProps) {
                 >
                   {item.type}
                 </span>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold text-gray-900">
                       {item.title}
@@ -138,6 +140,17 @@ export default function BacklogView({ items }: BacklogViewProps) {
                     </div>
                   )}
                 </div>
+
+                {/* Select button for context */}
+                {onSelectItem && (
+                  <button
+                    onClick={() => onSelectItem(item)}
+                    className="flex-shrink-0 p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
+                    title={t("backlog.addToContext")}
+                  >
+                    <Check className="w-5 h-5" />
+                  </button>
+                )}
               </div>
             </div>
           );
