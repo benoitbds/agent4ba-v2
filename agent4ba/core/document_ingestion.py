@@ -163,10 +163,12 @@ class DocumentIngestionService:
             Exception: Si la suppression échoue
         """
         # Validation de sécurité : empêcher les attaques de type path traversal
-        if not re.match(r'^[a-zA-Z0-9._-]+$', document_name):
+        # Interdire les caractères dangereux : slashes, backslashes et caractères de contrôle
+        # Autoriser les espaces, accents et autres caractères Unicode imprimables
+        if re.search(r'[\x00-\x1F/\\]', document_name):
             raise ValueError(
                 f"Invalid document_name '{document_name}': "
-                "only alphanumeric characters, dots, hyphens and underscores are allowed"
+                "control characters, slashes and backslashes are not allowed"
             )
 
         # Vérifier qu'il n'y a pas de séquences dangereuses
