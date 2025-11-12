@@ -1,15 +1,11 @@
 """FastAPI application for Agent4BA."""
 
 import asyncio
-import shutil
 import uuid
 from collections.abc import AsyncIterator
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from agent4ba.ai.graph import app as workflow_app
@@ -20,8 +16,6 @@ from agent4ba.api.events import (
     AgentStartEvent,
     ErrorEvent,
     ImpactPlanReadyEvent,
-    NodeEndEvent,
-    NodeStartEvent,
     ThreadIdEvent,
     ToolUsedEvent,
     UserRequestEvent,
@@ -41,7 +35,6 @@ app = FastAPI(
     description="Backend pour la gestion de backlog assistée par IA",
     version="0.1.0",
 )
-from agent4ba.core.storage import ProjectContextService
 
 # Création de l'application via la factory
 # La configuration CORS et autres middlewares sont gérés dans app_factory.py
@@ -83,12 +76,12 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         thread_id_event = ThreadIdEvent(thread_id=thread_id)
         yield f"data: {thread_id_event.model_dump_json()}\n\n"
         timeline_events.append(thread_id_event.model_dump())
-        print(f"[STREAMING] Sent thread_id event")
+        print("[STREAMING] Sent thread_id event")
 
         # Créer la queue d'événements pour ce thread
         loop = asyncio.get_running_loop()
         event_queue = get_event_queue(thread_id, loop)
-        print(f"[STREAMING] Created event queue")
+        print("[STREAMING] Created event queue")
 
         # Envoyer la requête de l'utilisateur comme premier événement
         user_request_event = UserRequestEvent(query=request.query)
@@ -117,12 +110,12 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         # Variables pour accumuler l'état
         accumulated_state: dict[str, Any] = initial_state.copy()
 
-        print(f"[STREAMING] Starting workflow execution")
+        print("[STREAMING] Starting workflow execution")
 
         # Générateur pour streamer les événements de la queue
         async def stream_queue_events():
             """Stream les événements de la queue au fur et à mesure."""
-            print(f"[STREAMING] stream_queue_events started")
+            print("[STREAMING] stream_queue_events started")
             event_count = 0
             async for agent_event_data in event_queue.get_events():
                 event_count += 1
@@ -165,7 +158,7 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         async def run_langgraph_workflow():
             """Exécute le workflow LangGraph et met à jour l'état accumulé."""
             nonlocal accumulated_state
-            print(f"[STREAMING] run_langgraph_workflow started")
+            print("[STREAMING] run_langgraph_workflow started")
 
             try:
                 event_count = 0
@@ -199,22 +192,22 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
                 raise
             finally:
                 # Signaler la fin du workflow à la queue
-                print(f"[STREAMING] Signaling queue done")
+                print("[STREAMING] Signaling queue done")
                 event_queue.done()
 
         # Lancer le workflow en tâche de fond
-        print(f"[STREAMING] Starting LangGraph workflow task")
+        print("[STREAMING] Starting LangGraph workflow task")
         workflow_task = asyncio.create_task(run_langgraph_workflow())
 
         # Streamer les événements de la queue au fur et à mesure
-        print(f"[STREAMING] Starting to stream queue events")
+        print("[STREAMING] Starting to stream queue events")
         async for event_data in stream_queue_events():
             yield event_data
 
         # Attendre que le workflow soit terminé
-        print(f"[STREAMING] Waiting for workflow task to complete")
+        print("[STREAMING] Waiting for workflow task to complete")
         await workflow_task
-        print(f"[STREAMING] Workflow task completed")
+        print("[STREAMING] Workflow task completed")
 
         # Après avoir parcouru tous les événements, envoyer l'événement final
         result = accumulated_state.get("result", "")
@@ -232,7 +225,7 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
             )
             yield f"data: {impact_plan_event.model_dump_json()}\n\n"
             timeline_events.append(impact_plan_event.model_dump())
-            print(f"[STREAMING] Sent impact_plan_ready event")
+            print("[STREAMING] Sent impact_plan_ready event")
         else:
             # Sinon, envoyer WorkflowCompleteEvent
             complete_event = WorkflowCompleteEvent(
@@ -241,14 +234,14 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
             )
             yield f"data: {complete_event.model_dump_json()}\n\n"
             timeline_events.append(complete_event.model_dump())
-            print(f"[STREAMING] Sent workflow_complete event")
+            print("[STREAMING] Sent workflow_complete event")
 
         # Sauvegarder les événements dans l'historique de la timeline
         storage = ProjectContextService()
         storage.save_timeline_events(request.project_id, timeline_events)
         print(f"[STREAMING] Saved {len(timeline_events)} events to timeline history")
 
-        print(f"[STREAMING] Stream completed successfully")
+        print("[STREAMING] Stream completed successfully")
 
     except Exception as e:
         # En cas d'erreur, envoyer un ErrorEvent
@@ -267,7 +260,10 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         try:
             storage = ProjectContextService()
             storage.save_timeline_events(request.project_id, timeline_events)
-            print(f"[STREAMING] Saved {len(timeline_events)} events to timeline history (after error)")
+            print(
+                f"[STREAMING] Saved {len(timeline_events)} events to "
+                "timeline history (after error)"
+            )
         except Exception as save_error:
             # Log l'erreur mais ne pas interrompre le flux
             print(f"Failed to save timeline events: {save_error}")
@@ -564,7 +560,10 @@ async def upload_project_document(
     if file.content_type != "application/pdf":
         raise HTTPException(
             status_code=400,
-            detail=f"Type de fichier non supporté: {file.content_type}. Seuls les fichiers PDF sont acceptés.",
+            detail=(
+                f"Type de fichier non supporté: {file.content_type}. "
+                "Seuls les fichiers PDF sont acceptés."
+            ),
         )
 
     storage = ProjectContextService()
@@ -605,4 +604,58 @@ async def upload_project_document(
         raise HTTPException(
             status_code=500,
             detail=f"Erreur lors de l'upload ou de la vectorisation du fichier: {e}",
+        ) from e
+
+
+@app.delete("/projects/{project_id}/documents/{document_name}", status_code=204)
+async def delete_project_document(project_id: str, document_name: str) -> None:
+    """
+    Supprime un document spécifique d'un projet et ses vecteurs associés.
+
+    Cette opération :
+    1. Valide les paramètres pour éviter les failles de sécurité (path traversal)
+    2. Supprime le fichier physique (PDF/texte) du disque
+    3. Supprime les chunks et vecteurs associés de la base vectorielle FAISS
+    4. Sauvegarde l'index FAISS mis à jour
+
+    Args:
+        project_id: Identifiant unique du projet
+        document_name: Nom du document à supprimer
+
+    Returns:
+        Aucun contenu (code 204)
+
+    Raises:
+        HTTPException: Si le projet n'existe pas (404), si le document n'existe pas (404)
+                      ou si les paramètres sont invalides (400)
+    """
+    storage = ProjectContextService()
+    project_dir = storage.base_path / project_id
+
+    # Vérifier que le projet existe
+    if not project_dir.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' not found",
+        )
+
+    try:
+        # Utiliser le service d'ingestion pour supprimer le document
+        ingestion_service = DocumentIngestionService(project_id)
+        ingestion_service.delete_document(document_name)
+
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Document '{document_name}' not found in project '{project_id}': {e}",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid document_name: {e}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error deleting document '{document_name}': {e}",
         ) from e

@@ -1,5 +1,6 @@
 """Service d'ingestion de documents pour RAG."""
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -138,3 +139,103 @@ class DocumentIngestionService:
             index_name="index",
             allow_dangerous_deserialization=True,
         )
+
+    def delete_document(self, document_name: str) -> dict[str, Any]:
+        """
+        Supprime un document et ses vecteurs associés de l'index FAISS.
+
+        Cette méthode :
+        1. Valide le nom du document pour éviter les attaques path traversal
+        2. Supprime le fichier physique du disque
+        3. Charge l'index FAISS existant
+        4. Identifie et supprime les vecteurs associés au document
+        5. Sauvegarde l'index FAISS mis à jour
+
+        Args:
+            document_name: Nom du fichier à supprimer
+
+        Returns:
+            Dictionnaire contenant les informations sur la suppression
+
+        Raises:
+            ValueError: Si le nom du document contient des caractères dangereux
+            FileNotFoundError: Si le document n'existe pas
+            Exception: Si la suppression échoue
+        """
+        # Validation de sécurité : empêcher les attaques de type path traversal
+        if not re.match(r'^[a-zA-Z0-9._-]+$', document_name):
+            raise ValueError(
+                f"Invalid document_name '{document_name}': "
+                "only alphanumeric characters, dots, hyphens and underscores are allowed"
+            )
+
+        # Vérifier qu'il n'y a pas de séquences dangereuses
+        if '..' in document_name or document_name.startswith('/') or document_name.startswith('\\'):
+            raise ValueError(
+                f"Invalid document_name '{document_name}': "
+                "path traversal attempts are not allowed"
+            )
+
+        # Vérifier que le fichier existe
+        document_path = self.documents_dir / document_name
+        if not document_path.exists():
+            raise FileNotFoundError(
+                f"Document '{document_name}' not found in project {self.project_id}"
+            )
+
+        # Vérifier que c'est bien un fichier (pas un répertoire)
+        if not document_path.is_file():
+            raise ValueError(
+                f"'{document_name}' is not a file"
+            )
+
+        try:
+            # Vérifier si un vectorstore existe
+            vectorstore_path = self.vectorstore_dir / "index.faiss"
+            vectors_deleted = 0
+
+            if vectorstore_path.exists():
+                # Charger le vectorstore existant
+                vectorstore = FAISS.load_local(
+                    str(self.vectorstore_dir),
+                    self.embeddings,
+                    index_name="index",
+                    allow_dangerous_deserialization=True,
+                )
+
+                # Récupérer tous les documents avec leurs métadonnées
+                # FAISS dans LangChain stocke les documents dans docstore
+                docstore = vectorstore.docstore
+                index_to_docstore_id = vectorstore.index_to_docstore_id
+
+                # Identifier les IDs des documents à supprimer
+                ids_to_delete = []
+                for _idx, doc_id in index_to_docstore_id.items():
+                    doc = docstore.search(doc_id)
+                    if doc and doc.metadata.get("source") == document_name:
+                        ids_to_delete.append(doc_id)
+
+                # Supprimer les vecteurs associés
+                if ids_to_delete:
+                    # LangChain FAISS a une méthode delete() qui prend une liste d'IDs
+                    vectorstore.delete(ids_to_delete)
+                    vectors_deleted = len(ids_to_delete)
+
+                    # Sauvegarder l'index mis à jour
+                    vectorstore.save_local(str(self.vectorstore_dir), index_name="index")
+
+            # Supprimer le fichier physique
+            document_path.unlink()
+
+            return {
+                "status": "success",
+                "document_name": document_name,
+                "vectors_deleted": vectors_deleted,
+                "message": (
+                    f"Document '{document_name}' and {vectors_deleted} "
+                    "associated vectors deleted successfully"
+                ),
+            }
+
+        except Exception as e:
+            raise Exception(f"Failed to delete document {document_name}: {e}") from e
