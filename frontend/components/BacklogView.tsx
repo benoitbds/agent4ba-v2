@@ -1,7 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Check } from "lucide-react";
+import { Check, ChevronRight, ChevronDown } from "lucide-react";
+import { useState } from "react";
 import type { WorkItem } from "@/types/events";
 
 interface BacklogViewProps {
@@ -60,6 +61,28 @@ function getBadgeColor(score: number): string {
 
 export default function BacklogView({ items, onSelectItem }: BacklogViewProps) {
   const t = useTranslations();
+
+  // État pour gérer les features dépliées (toutes dépliées par défaut)
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(() => {
+    // Initialiser avec tous les IDs des features
+    const allFeatureIds = items
+      .filter((item) => !item.parent_id)
+      .map((item) => item.id);
+    return new Set(allFeatureIds);
+  });
+
+  // Fonction pour toggler l'état d'une feature
+  const toggleFeature = (featureId: string) => {
+    setExpandedItems((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(featureId)) {
+        newSet.delete(featureId);
+      } else {
+        newSet.add(featureId);
+      }
+      return newSet;
+    });
+  };
 
   if (items.length === 0) {
     return (
@@ -191,21 +214,157 @@ export default function BacklogView({ items, onSelectItem }: BacklogViewProps) {
     <div className="flex flex-col h-full">
       <h2 className="text-xl font-semibold mb-4 flex-shrink-0">{t("backlog.title")}</h2>
       <div className="flex-1 overflow-y-auto pr-2 space-y-3">
-        {hierarchicalItems.map((hierarchicalItem) => (
-          <div key={hierarchicalItem.item.id}>
-            {/* Afficher la feature parente */}
-            {renderWorkItem(hierarchicalItem.item, false)}
+        {hierarchicalItems.map((hierarchicalItem) => {
+          const isExpanded = expandedItems.has(hierarchicalItem.item.id);
+          const childrenCount = hierarchicalItem.children.length;
 
-            {/* Afficher les stories enfants avec indentation */}
-            {hierarchicalItem.children.length > 0 && (
-              <div className="space-y-3 mt-3">
-                {hierarchicalItem.children.map((child) =>
-                  renderWorkItem(child, true)
-                )}
+          return (
+            <div key={hierarchicalItem.item.id}>
+              {/* Afficher la feature parente avec chevron */}
+              <div
+                onClick={() => toggleFeature(hierarchicalItem.item.id)}
+                className="cursor-pointer"
+              >
+                <div
+                  className={`p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-colors`}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Chevron pour indiquer l'état */}
+                    <div className="flex-shrink-0 mt-1">
+                      {isExpanded ? (
+                        <ChevronDown className="w-5 h-5 text-gray-600" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-gray-600" />
+                      )}
+                    </div>
+
+                    <span
+                      className={`px-2 py-1 text-xs font-semibold rounded flex-shrink-0 ${
+                        hierarchicalItem.item.type === "feature"
+                          ? "bg-purple-200 text-purple-800"
+                          : hierarchicalItem.item.type === "story"
+                          ? "bg-blue-200 text-blue-800"
+                          : "bg-green-200 text-green-800"
+                      }`}
+                    >
+                      {hierarchicalItem.item.type}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-gray-900">
+                          {hierarchicalItem.item.title}
+                          {childrenCount > 0 && (
+                            <span className="text-gray-500 ml-2">
+                              ({childrenCount})
+                            </span>
+                          )}
+                        </h3>
+                        <span className="text-xs text-gray-500 font-mono">
+                          {hierarchicalItem.item.id}
+                        </span>
+                      </div>
+                      {hierarchicalItem.item.description && (
+                        <p className="text-sm text-gray-600 mt-1">
+                          {hierarchicalItem.item.description}
+                        </p>
+                      )}
+
+                      {/* INVEST Analysis Badges */}
+                      {(() => {
+                        const investAnalysis = hierarchicalItem.item.attributes
+                          ?.invest_analysis as InvestAnalysis | undefined;
+                        return (
+                          investAnalysis && (
+                            <div className="flex gap-1 mt-2">
+                              {Object.entries(investAnalysis).map(
+                                ([criterion, data]) => (
+                                  <div
+                                    key={criterion}
+                                    className="group relative"
+                                    title={`${t(`invest.${criterion}`)}: ${data.reason}`}
+                                  >
+                                    <span
+                                      className={`px-2 py-1 text-xs font-bold rounded cursor-help ${getBadgeColor(data.score)}`}
+                                    >
+                                      {criterion}
+                                    </span>
+                                    {/* Tooltip au survol */}
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10 w-64">
+                                      <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg">
+                                        <div className="font-bold mb-1">
+                                          {t(`invest.${criterion}`)}
+                                        </div>
+                                        <div className="mb-1">
+                                          {t("timeline.score")}{" "}
+                                          {(data.score * 100).toFixed(0)}%
+                                        </div>
+                                        <div className="text-gray-300">
+                                          {data.reason}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          )
+                        );
+                      })()}
+
+                      {/* Autres attributs */}
+                      {hierarchicalItem.item.attributes && (
+                        <div className="flex gap-2 mt-2 text-xs">
+                          {hierarchicalItem.item.attributes.priority && (
+                            <span className="px-2 py-1 bg-gray-100 rounded">
+                              {t("backlog.priority")}{" "}
+                              {hierarchicalItem.item.attributes.priority}
+                            </span>
+                          )}
+                          {hierarchicalItem.item.attributes.points !==
+                            undefined && (
+                            <span className="px-2 py-1 bg-gray-100 rounded">
+                              {t("backlog.points")}{" "}
+                              {hierarchicalItem.item.attributes.points}
+                            </span>
+                          )}
+                          {hierarchicalItem.item.attributes.status && (
+                            <span className="px-2 py-1 bg-gray-100 rounded">
+                              {t("backlog.status")}{" "}
+                              {hierarchicalItem.item.attributes.status}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Select button for context */}
+                    {onSelectItem && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectItem(hierarchicalItem.item);
+                        }}
+                        className="flex-shrink-0 p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
+                        title={t("backlog.addToContext")}
+                      >
+                        <Check className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-        ))}
+
+              {/* Afficher les stories enfants avec indentation si la feature est dépliée */}
+              {isExpanded && hierarchicalItem.children.length > 0 && (
+                <div className="space-y-3 mt-3">
+                  {hierarchicalItem.children.map((child) =>
+                    renderWorkItem(child, true)
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
