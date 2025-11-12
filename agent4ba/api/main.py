@@ -665,3 +665,36 @@ async def delete_project_document(project_id: str, document_name: str) -> None:
             status_code=500,
             detail=f"Error deleting document '{document_name}': {e}",
         ) from e
+
+
+@app.put("/projects/{project_id}/backlog/{item_id}")
+async def update_work_item(project_id: str, item_id: str, item_data: dict) -> JSONResponse:
+    """
+    Met à jour un WorkItem dans le backlog d'un projet.
+
+    Args:
+        project_id: Identifiant unique du projet
+        item_id: Identifiant du WorkItem à mettre à jour
+        item_data: Données partielles du WorkItem à mettre à jour
+
+    Returns:
+        JSONResponse avec le WorkItem mis à jour
+
+    Raises:
+        HTTPException: Si le projet ou le WorkItem n'existe pas
+    """
+    storage = ProjectContextService()
+
+    try:
+        updated_item = storage.update_work_item_in_backlog(project_id, item_id, item_data)
+        return JSONResponse(content=updated_item.model_dump())
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project or WorkItem not found: {e}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error updating WorkItem '{item_id}': {e}",
+        ) from e

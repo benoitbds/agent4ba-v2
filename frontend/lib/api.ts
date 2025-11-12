@@ -284,3 +284,32 @@ export async function deleteDocument(
 
   return response.json();
 }
+
+/**
+ * Update a WorkItem in the backlog
+ */
+export async function updateWorkItem(
+  projectId: string,
+  itemId: string,
+  updatedData: { title: string; description: string | null }
+): Promise<WorkItem> {
+  const response = await fetch(
+    `${API_URL}/projects/${projectId}/backlog/${itemId}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updatedData),
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
