@@ -18,7 +18,7 @@ export interface WorkItem {
 }
 
 export interface ContextItem {
-  type: "document" | "workitem";
+  type: "document" | "work_item";
   id: string;
   name: string;
 }

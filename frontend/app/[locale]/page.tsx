@@ -201,14 +201,14 @@ export default function Home() {
   // Function to add a work item to the chat context
   const handleSelectWorkItem = (workItem: WorkItem) => {
     // Check if work item is already in context
-    if (chatContext.some((item) => item.type === "workitem" && item.id === workItem.id)) {
+    if (chatContext.some((item) => item.type === "work_item" && item.id === workItem.id)) {
       return;
     }
 
     setChatContext((prev) => [
       ...prev,
       {
-        type: "workitem",
+        type: "work_item",
         id: workItem.id,
         name: workItem.title,
       },
