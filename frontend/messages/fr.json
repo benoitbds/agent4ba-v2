@@ -171,5 +171,10 @@
     "save": "Sauvegarder",
     "saving": "Sauvegarde...",
     "saveFailed": "Erreur lors de la sauvegarde"
+  },
+  "common": {
+    "empty": "(vide)",
+    "thread": "Thread :",
+    "token": "Token :"
   }
 }

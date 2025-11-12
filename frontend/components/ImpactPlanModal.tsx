@@ -64,7 +64,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
               <span className="text-xs font-semibold text-red-800">{t("timeline.before")}</span>
             </div>
             <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
-              {before.description || "(vide)"}
+              {before.description || t("common.empty")}
             </div>
           </div>
 
@@ -74,7 +74,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
               <span className="text-xs font-semibold text-green-800">{t("timeline.after")}</span>
             </div>
             <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
-              {after.description || "(vide)"}
+              {after.description || t("common.empty")}
             </div>
           </div>
         </div>
@@ -119,7 +119,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
                 <span className="text-xs font-semibold text-red-800">{t("timeline.before")}</span>
               </div>
               <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
-                {before.description || "(vide)"}
+                {before.description || t("common.empty")}
               </div>
             </div>
 
@@ -129,7 +129,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
                 <span className="text-xs font-semibold text-green-800">{t("timeline.after")}</span>
               </div>
               <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
-                {after.description || "(vide)"}
+                {after.description || t("common.empty")}
               </div>
             </div>
           </div>
