@@ -264,7 +264,7 @@ export async function deleteProject(projectId: string): Promise<void> {
 export async function deleteDocument(
   projectId: string,
   documentName: string
-): Promise<{ message: string }> {
+): Promise<void> {
   const response = await fetch(
     `${API_URL}/projects/${projectId}/documents/${encodeURIComponent(documentName)}`,
     {
@@ -282,7 +282,7 @@ export async function deleteDocument(
     );
   }
 
-  return response.json();
+  // Code 204 No Content - pas de corps de réponse à parser
 }
 
 /**
