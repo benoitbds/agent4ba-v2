@@ -19,7 +19,7 @@ def test_generate_project_prefix():
         ("project", "PRO"),
         ("a", "AX"),  # Un seul caractère, complété avec X
         ("test_project", "TES"),
-        ("123-test", "TES"),  # Commence par des chiffres
+        ("123-test", "PROJ"),  # Premier mot contient uniquement des chiffres -> préfixe par défaut
     ]
 
     for project_id, expected_prefix in test_cases:
