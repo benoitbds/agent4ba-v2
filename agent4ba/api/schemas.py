@@ -5,6 +5,13 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class ContextItem(BaseModel):
+    """Item de contexte pour cibler des documents ou work items spécifiques."""
+
+    type: str = Field(..., description="Type de contexte: 'document' ou 'work_item'")
+    id: str = Field(..., description="Identifiant du document ou du work item")
+
+
 class ChatRequest(BaseModel):
     """Requête de chat pour l'interaction avec l'agent."""
 
@@ -12,6 +19,9 @@ class ChatRequest(BaseModel):
     query: str = Field(..., description="Question ou commande de l'utilisateur")
     document_content: str | None = Field(
         None, description="Contenu optionnel d'un document à analyser"
+    )
+    context: list[ContextItem] | None = Field(
+        None, description="Contexte optionnel (documents ou work items ciblés)"
     )
 
     model_config = {

@@ -195,10 +195,27 @@ def extract_requirements(state: Any) -> dict[str, Any]:
             "agent_events": agent_events,
         }
 
+    # Vérifier si un contexte de type "document" est fourni
+    context = state.get("context", [])
+    document_context = None
+    if context:
+        for ctx_item in context:
+            if ctx_item.get("type") == "document":
+                document_context = ctx_item.get("id")
+                print(f"[DOCUMENT_AGENT] Document context provided: {document_context}")
+                break
+
     # Créer un retriever pour rechercher les documents pertinents
     # k=3 signifie qu'on récupère les 3 chunks les plus pertinents
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-    print("[DOCUMENT_AGENT] Retriever created with k=3")
+    # Si un contexte document est fourni, on filtre par source
+    search_kwargs = {"k": 3}
+    if document_context:
+        # Filtrer uniquement sur le document spécifié
+        search_kwargs["filter"] = {"source": document_context}
+        print(f"[DOCUMENT_AGENT] Applying document filter: {document_context}")
+
+    retriever = vectorstore.as_retriever(search_kwargs=search_kwargs)
+    print(f"[DOCUMENT_AGENT] Retriever created with k=3{' and document filter' if document_context else ''}")
 
     # Émettre l'événement de recherche RAG
     rag_run_id = str(uuid.uuid4())

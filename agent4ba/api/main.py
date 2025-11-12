@@ -89,10 +89,16 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
         timeline_events.append(user_request_event.model_dump())
 
         # Préparer l'état initial pour le graphe
+        # Convertir le context en liste de dictionnaires si présent
+        context_list = None
+        if request.context:
+            context_list = [item.model_dump() for item in request.context]
+
         initial_state: dict[str, Any] = {
             "project_id": request.project_id,
             "user_query": request.query,
             "document_content": request.document_content or "",
+            "context": context_list,
             "intent": {},
             "next_node": "",
             "agent_task": "",

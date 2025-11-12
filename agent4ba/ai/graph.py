@@ -37,6 +37,7 @@ class GraphState(TypedDict):
     project_id: str
     user_query: str
     document_content: str
+    context: list[dict] | None  # Contexte optionnel (documents ou work items ciblés)
     intent: dict[str, Any]
     intent_args: dict[str, Any]  # Arguments extraits de l'intention
     next_node: str
@@ -77,6 +78,16 @@ def entry_node(state: GraphState) -> dict[str, Any]:
     """
     print(f"[ENTRY_NODE] Processing query for project: {state['project_id']}")
     print(f"[ENTRY_NODE] User query: {state['user_query']}")
+
+    # Logger le contexte si présent
+    context = state.get("context")
+    if context:
+        print(f"[ENTRY_NODE] Context provided: {len(context)} items")
+        for ctx_item in context:
+            print(f"[ENTRY_NODE]   - {ctx_item['type']}: {ctx_item['id']}")
+    else:
+        print("[ENTRY_NODE] No context provided")
+
     return {}
 
 

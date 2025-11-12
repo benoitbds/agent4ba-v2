@@ -374,13 +374,25 @@ def improve_description(state: Any) -> dict[str, Any]:
     """
     print("[BACKLOG_AGENT] Improving work item description...")
 
-    # Récupérer l'item_id depuis intent_args
-    # Accepter à la fois "work_item_id" et "work_item" pour compatibilité
-    intent_args = state.get("intent_args", {})
-    item_id = intent_args.get("work_item_id") or intent_args.get("work_item")
+    # Vérifier d'abord si un contexte de type "work_item" est fourni
+    context = state.get("context", [])
+    item_id = None
+    if context:
+        for ctx_item in context:
+            if ctx_item.get("type") == "work_item":
+                item_id = ctx_item.get("id")
+                print(f"[BACKLOG_AGENT] Work item context provided: {item_id}")
+                break
+
+    # Si pas de contexte, récupérer l'item_id depuis intent_args
+    if not item_id:
+        # Accepter à la fois "work_item_id" et "work_item" pour compatibilité
+        intent_args = state.get("intent_args", {})
+        item_id = intent_args.get("work_item_id") or intent_args.get("work_item")
 
     if not item_id:
-        print("[BACKLOG_AGENT] No item_id found in intent args")
+        print("[BACKLOG_AGENT] No item_id found in context or intent args")
+        intent_args = state.get("intent_args", {})
         print(f"[BACKLOG_AGENT] intent_args content: {intent_args}")
         return {
             "status": "error",
