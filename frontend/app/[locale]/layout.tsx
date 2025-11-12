@@ -1,20 +1,17 @@
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from 'next-intl';
-import { getMessages } from 'next-intl/server';
+import { getMessages, getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { locales } from '@/i18n/request';
 import "../globals.css";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
+  const t = await getTranslations({ locale });
 
   return {
-    title: locale === 'fr'
-      ? "Agent4BA - Gestion de Backlog par IA"
-      : "Agent4BA - AI-Powered Backlog Management",
-    description: locale === 'fr'
-      ? "Gestion de backlog en temps réel avec assistance IA"
-      : "Real-time backlog management with AI assistance",
+    title: t('metadata.title'),
+    description: t('metadata.description'),
   };
 }
 
