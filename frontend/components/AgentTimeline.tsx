@@ -97,7 +97,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
             <p className="font-semibold text-gray-900">{t("agentTimeline.sessionInitialized")}</p>
             {!compact && (
               <p className="text-sm text-gray-500 font-mono truncate mt-1">
-                Thread: {event.event.thread_id}
+                {t("common.thread")} {event.event.thread_id}
               </p>
             )}
           </div>
@@ -238,7 +238,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
       case "llm_token":
         return (
           <div>
-            <p className="text-xs text-gray-600">Token: {event.event.token}</p>
+            <p className="text-xs text-gray-600">{t("common.token")} {event.event.token}</p>
           </div>
         );
       case "impact_plan_ready":

@@ -27,6 +27,7 @@ export default function Home() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusType, setStatusType] = useState<'error' | 'warning' | 'success' | 'info' | null>(null);
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
   const [isDeleteProjectModalOpen, setIsDeleteProjectModalOpen] = useState(false);
@@ -305,6 +306,7 @@ export default function Home() {
     setImpactPlan(null);
     setThreadId(null);
     setStatusMessage(null);
+    setStatusType(null);
     setIsStreaming(true);
 
     try {
@@ -326,11 +328,14 @@ export default function Home() {
           setImpactPlan(event.impact_plan);
           setThreadId(event.thread_id);
           setStatusMessage(t('status.impactPlanReady'));
+          setStatusType('warning');
           break; // Stop streaming when ImpactPlan is ready
         } else if (event.type === "workflow_complete") {
           setStatusMessage(`${t('agentTimeline.workflowComplete')}: ${event.result}`);
+          setStatusType('success');
         } else if (event.type === "error") {
           setStatusMessage(`${t('status.error')} ${event.error}`);
+          setStatusType('error');
         }
       }
     } catch (error) {
@@ -338,6 +343,7 @@ export default function Home() {
       setStatusMessage(
         `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
       );
+      setStatusType('error');
     } finally {
       setIsStreaming(false);
       // Clear context after sending the request
@@ -364,8 +370,10 @@ export default function Home() {
 
     try {
       setStatusMessage(t('status.sendingApproval'));
+      setStatusType('info');
       const response = await sendApprovalDecision(threadId, true);
       setStatusMessage(`${t('status.approved')} ${response.result}`);
+      setStatusType('success');
       setImpactPlan(null);
       setThreadId(null);
 
@@ -381,6 +389,7 @@ export default function Home() {
       setStatusMessage(
         `${t('status.errorApproving')} ${error instanceof Error ? error.message : t('status.error')}`
       );
+      setStatusType('error');
     }
   };
 
@@ -392,8 +401,10 @@ export default function Home() {
 
     try {
       setStatusMessage(t('status.sendingRejection'));
+      setStatusType('info');
       const response = await sendApprovalDecision(threadId, false);
       setStatusMessage(`${t('status.rejected')} ${response.result}`);
+      setStatusType('success');
       setImpactPlan(null);
       setThreadId(null);
     } catch (error) {
@@ -401,12 +412,14 @@ export default function Home() {
       setStatusMessage(
         `${t('status.errorRejecting')} ${error instanceof Error ? error.message : t('status.error')}`
       );
+      setStatusType('error');
     }
   };
 
   const handleCreateProject = async (projectId: string) => {
     try {
       setStatusMessage(t('createProject.creating'));
+      setStatusType('info');
       await createProject(projectId);
 
       // Reload projects list
@@ -417,12 +430,14 @@ export default function Home() {
       setSelectedProject(projectId);
 
       setStatusMessage(t('createProject.success', { name: projectId }));
+      setStatusType('success');
       setIsCreateProjectModalOpen(false);
     } catch (error) {
       console.error("Error creating project:", error);
       setStatusMessage(
         `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
       );
+      setStatusType('error');
     }
   };
 
@@ -433,6 +448,7 @@ export default function Home() {
 
     try {
       setStatusMessage(t('deleteProject.deleting'));
+      setStatusType('info');
       await deleteProject(selectedProject);
 
       // Reload projects list
@@ -450,17 +466,20 @@ export default function Home() {
       }
 
       setStatusMessage(t('deleteProject.success', { name: projectToDelete }));
+      setStatusType('success');
       setIsDeleteProjectModalOpen(false);
 
       // Clear status message after 3 seconds
       setTimeout(() => {
         setStatusMessage(null);
+        setStatusType(null);
       }, 3000);
     } catch (error) {
       console.error("Error deleting project:", error);
       setStatusMessage(
         `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
       );
+      setStatusType('error');
     }
   };
 
@@ -517,10 +536,12 @@ export default function Home() {
             {statusMessage && (
               <div
                 className={`p-4 rounded-lg ${
-                  statusMessage.includes("Erreur")
+                  statusType === "error"
                     ? "bg-red-100 border border-red-300 text-red-800"
-                    : statusMessage.includes("prêt")
+                    : statusType === "warning"
                     ? "bg-yellow-100 border border-yellow-300 text-yellow-800"
+                    : statusType === "info"
+                    ? "bg-blue-100 border border-blue-300 text-blue-800"
                     : "bg-green-100 border border-green-300 text-green-800"
                 }`}
               >
