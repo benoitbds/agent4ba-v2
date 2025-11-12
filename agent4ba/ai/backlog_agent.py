@@ -13,34 +13,10 @@ from litellm import completion
 from agent4ba.api.event_queue import get_event_queue
 from agent4ba.core.models import WorkItem
 from agent4ba.core.storage import ProjectContextService
+from agent4ba.core.workitem_utils import assign_sequential_ids
 
 # Charger les variables d'environnement
 load_dotenv()
-
-
-def get_next_temp_index(existing_items: list[WorkItem]) -> int:
-    """
-    Calcule le prochain index disponible pour les ID temporaires.
-
-    Parcourt tous les items existants et trouve le plus grand index
-    numérique parmi les ID qui suivent le pattern temp-X.
-
-    Args:
-        existing_items: Liste des WorkItems existants
-
-    Returns:
-        Le prochain index disponible (au moins 1)
-    """
-    max_index = 0
-    for item in existing_items:
-        if item.id.startswith("temp-"):
-            try:
-                index = int(item.id.split("-")[1])
-                max_index = max(max_index, index)
-            except (IndexError, ValueError):
-                # Ignorer les ID mal formés
-                continue
-    return max_index + 1
 
 
 def load_decompose_prompt() -> dict[str, Any]:
@@ -270,17 +246,13 @@ def decompose_objective(state: Any) -> dict[str, Any]:
 
         print(f"[BACKLOG_AGENT] Generated {len(work_items_data)} work items")
 
-        # Calculer le prochain index temp disponible pour éviter les collisions
-        start_index = get_next_temp_index(existing_items)
-        print(f"[BACKLOG_AGENT] Next available temp index: {start_index}")
+        # Assigner des ID séquentiels uniques basés sur le préfixe du projet
+        work_items_data = assign_sequential_ids(project_id, existing_items, work_items_data)
+        print(f"[BACKLOG_AGENT] Assigned sequential IDs starting with project prefix")
 
-        # Valider et convertir en WorkItem, en renumérotant les ID temporaires
+        # Valider et convertir en WorkItem
         new_items = []
-        for i, item_data in enumerate(work_items_data):
-            # Si l'ID est un temp-X, le remplacer par un nouveau pour éviter les collisions
-            if item_data.get("id", "").startswith("temp-"):
-                item_data["id"] = f"temp-{start_index + i}"
-
+        for item_data in work_items_data:
             # Ajouter le project_id
             item_data["project_id"] = project_id
 
