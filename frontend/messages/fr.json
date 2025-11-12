@@ -34,7 +34,15 @@
     "add": "Ajouter un document",
     "existing": "Documents existants",
     "loading": "Chargement des documents...",
-    "getStarted": "Pour commencer, ajoutez un document en cliquant sur le bouton +"
+    "getStarted": "Pour commencer, ajoutez un document en cliquant sur le bouton +",
+    "empty": "Aucun document disponible. Ajoutez-en un pour commencer.",
+    "select": "Sélectionner pour le contexte",
+    "confirmDelete": "Confirmer la suppression ?",
+    "confirmDeleteAction": "Confirmer",
+    "delete": "Supprimer le document",
+    "deleteError": "Erreur lors de la suppression du document",
+    "close": "Fermer",
+    "cancel": "Annuler"
   },
   "backlog": {
     "title": "Backlog du projet",
@@ -42,7 +50,8 @@
     "loading": "Chargement du backlog...",
     "priority": "Priorité:",
     "points": "Points:",
-    "status": "Statut:"
+    "status": "Statut:",
+    "addToContext": "Ajouter au contexte du chat"
   },
   "timeline": {
     "title": "Timeline d'exécution",
@@ -146,5 +155,9 @@
     "finished": "Terminé",
     "viewOutput": "Voir la sortie",
     "historicalSession": "Session historique"
+  },
+  "context": {
+    "selectedItems": "Contexte sélectionné :",
+    "remove": "Retirer du contexte"
   }
 }

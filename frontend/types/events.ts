@@ -17,6 +17,12 @@ export interface WorkItem {
   };
 }
 
+export interface ContextItem {
+  type: "document" | "workitem";
+  id: string;
+  name: string;
+}
+
 export interface ModifiedItem {
   before: WorkItem;
   after: WorkItem;

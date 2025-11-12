@@ -2,13 +2,14 @@
  * API utilities for communicating with Agent4BA backend
  */
 
-import type { SSEEvent, WorkItem } from "@/types/events";
+import type { SSEEvent, WorkItem, ContextItem } from "@/types/events";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
 
 export interface ChatRequest {
   project_id: string;
   query: string;
+  context?: ContextItem[];
 }
 
 export interface ApprovalRequest {
@@ -255,4 +256,31 @@ export async function deleteProject(projectId: string): Promise<void> {
       errorData.detail || `HTTP error! status: ${response.status}`
     );
   }
+}
+
+/**
+ * Delete a document from a project
+ */
+export async function deleteDocument(
+  projectId: string,
+  documentName: string
+): Promise<{ message: string }> {
+  const response = await fetch(
+    `${API_URL}/projects/${projectId}/documents/${encodeURIComponent(documentName)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
+  }
+
+  return response.json();
 }

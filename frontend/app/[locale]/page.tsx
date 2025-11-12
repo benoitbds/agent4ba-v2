@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from 'next-intl';
+import { FileText } from "lucide-react";
 import ChatInput from "@/components/ChatInput";
 import TimelineView from "@/components/TimelineView";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
@@ -9,9 +10,10 @@ import CreateProjectModal from "@/components/CreateProjectModal";
 import DeleteProjectModal from "@/components/DeleteProjectModal";
 import BacklogView from "@/components/BacklogView";
 import ProjectSelector from "@/components/ProjectSelector";
-import DocumentManager from "@/components/DocumentManager";
+import DocumentManagementModal from "@/components/DocumentManagementModal";
+import ContextPills from "@/components/ContextPills";
 import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject } from "@/lib/api";
-import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent } from "@/types/events";
+import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent, ContextItem } from "@/types/events";
 
 export default function Home() {
   const t = useTranslations();
@@ -26,9 +28,10 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isLoadingBacklog, setIsLoadingBacklog] = useState(false);
-  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
   const [isDeleteProjectModalOpen, setIsDeleteProjectModalOpen] = useState(false);
+  const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const [chatContext, setChatContext] = useState<ContextItem[]>([]);
 
   // Load projects list on component mount
   useEffect(() => {
@@ -73,19 +76,21 @@ export default function Home() {
     if (!selectedProject) return;
 
     const loadDocuments = async () => {
-      setIsLoadingDocuments(true);
       try {
         const docs = await getProjectDocuments(selectedProject);
         setDocuments(docs);
       } catch (error) {
         console.error("Error loading documents:", error);
         setDocuments([]);
-      } finally {
-        setIsLoadingDocuments(false);
       }
     };
 
     loadDocuments();
+  }, [selectedProject]);
+
+  // Reset context when project changes
+  useEffect(() => {
+    setChatContext([]);
   }, [selectedProject]);
 
   // Load timeline history when selected project changes
@@ -174,6 +179,45 @@ export default function Home() {
     } catch (error) {
       console.error("Error refreshing documents:", error);
     }
+  };
+
+  // Function to add a document to the chat context
+  const handleSelectDocument = (documentName: string) => {
+    // Check if document is already in context
+    if (chatContext.some((item) => item.type === "document" && item.id === documentName)) {
+      return;
+    }
+
+    setChatContext((prev) => [
+      ...prev,
+      {
+        type: "document",
+        id: documentName,
+        name: documentName,
+      },
+    ]);
+  };
+
+  // Function to add a work item to the chat context
+  const handleSelectWorkItem = (workItem: WorkItem) => {
+    // Check if work item is already in context
+    if (chatContext.some((item) => item.type === "workitem" && item.id === workItem.id)) {
+      return;
+    }
+
+    setChatContext((prev) => [
+      ...prev,
+      {
+        type: "workitem",
+        id: workItem.id,
+        name: workItem.title,
+      },
+    ]);
+  };
+
+  // Function to remove an item from the chat context
+  const handleRemoveFromContext = (id: string) => {
+    setChatContext((prev) => prev.filter((item) => item.id !== id));
   };
 
   // Helper function to add or update events in the current session
@@ -268,6 +312,7 @@ export default function Home() {
       for await (const event of streamChatEvents({
         project_id: selectedProject,
         query,
+        context: chatContext.length > 0 ? chatContext : undefined,
       })) {
         // Log pour debug : tracer tous les événements SSE reçus
         console.log("[SSE Event Received]", event.type, event);
@@ -295,6 +340,8 @@ export default function Home() {
       );
     } finally {
       setIsStreaming(false);
+      // Clear context after sending the request
+      setChatContext([]);
     }
   };
 
@@ -428,13 +475,26 @@ export default function Home() {
                 {t('header.title')}
               </h1>
             </div>
-            <ProjectSelector
-              projects={projects}
-              selectedProject={selectedProject}
-              onProjectChange={setSelectedProject}
-              onCreateProject={() => setIsCreateProjectModalOpen(true)}
-              onDeleteProject={() => setIsDeleteProjectModalOpen(true)}
-            />
+            <div className="flex items-center gap-4">
+              {/* Documents Button */}
+              <button
+                onClick={() => setIsDocumentModalOpen(true)}
+                disabled={!selectedProject}
+                className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300"
+                title={t('documents.title')}
+              >
+                <FileText className="w-5 h-5" />
+                <span className="font-medium">{t('documents.title')}</span>
+              </button>
+
+              <ProjectSelector
+                projects={projects}
+                selectedProject={selectedProject}
+                onProjectChange={setSelectedProject}
+                onCreateProject={() => setIsCreateProjectModalOpen(true)}
+                onDeleteProject={() => setIsDeleteProjectModalOpen(true)}
+              />
+            </div>
           </div>
         </div>
       </header>
@@ -450,6 +510,7 @@ export default function Home() {
                 {t('newRequest.title')}
               </h2>
               <ChatInput onSubmit={handleChatSubmit} disabled={isStreaming} />
+              <ContextPills context={chatContext} onRemove={handleRemoveFromContext} />
             </div>
 
             {/* Status Message */}
@@ -490,28 +551,10 @@ export default function Home() {
             )}
           </div>
 
-          {/* Right Column: Documents & Backlog */}
-          <div className="flex flex-col space-y-6 h-full overflow-hidden">
-            {/* Document Manager */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              {isLoadingDocuments ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="flex items-center gap-3">
-                    <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
-                    <p className="text-gray-600">{t('documents.loading')}</p>
-                  </div>
-                </div>
-              ) : (
-                <DocumentManager
-                  projectId={selectedProject}
-                  documents={documents}
-                  onUploadSuccess={handleDocumentUploadSuccess}
-                />
-              )}
-            </div>
-
+          {/* Right Column: Backlog */}
+          <div className="flex flex-col h-full overflow-hidden">
             {/* Backlog */}
-            <div className="bg-white rounded-lg shadow-sm p-6 flex-1 overflow-hidden flex flex-col">
+            <div className="bg-white rounded-lg shadow-sm p-6 h-full overflow-hidden flex flex-col">
               {isLoadingBacklog ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="flex items-center gap-3">
@@ -520,7 +563,10 @@ export default function Home() {
                   </div>
                 </div>
               ) : (
-                <BacklogView items={backlogItems} />
+                <BacklogView
+                  items={backlogItems}
+                  onSelectItem={handleSelectWorkItem}
+                />
               )}
             </div>
           </div>
@@ -551,6 +597,16 @@ export default function Home() {
         onClose={() => setIsDeleteProjectModalOpen(false)}
         onDeleteProject={handleDeleteProject}
         projectName={selectedProject}
+      />
+
+      {/* Document Management Modal */}
+      <DocumentManagementModal
+        isOpen={isDocumentModalOpen}
+        onClose={() => setIsDocumentModalOpen(false)}
+        projectId={selectedProject}
+        documents={documents}
+        onDocumentsChange={handleDocumentUploadSuccess}
+        onSelectDocument={handleSelectDocument}
       />
     </div>
   );
