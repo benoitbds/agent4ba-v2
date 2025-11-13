@@ -12,17 +12,21 @@ from langgraph.graph import END, StateGraph
 from litellm import completion
 
 from agent4ba.ai import backlog_agent, document_agent
+from agent4ba.core.logger import setup_logger
 from agent4ba.core.registry_service import load_agent_registry
 from agent4ba.core.storage import ProjectContextService
 
 # Charger les variables d'environnement
 load_dotenv()
 
+# Configurer le logger
+logger = setup_logger(__name__)
+
 # Charger la configuration des agents et des intentions
-print("[GRAPH] Loading agent registry configuration...")
+logger.info("Loading agent registry configuration...")
 _AGENT_REGISTRY = load_agent_registry()
-print(f"[GRAPH] Loaded {len(_AGENT_REGISTRY.agents)} agents and "
-      f"{len(_AGENT_REGISTRY.intent_mapping)} intent mappings")
+logger.info(f"Loaded {len(_AGENT_REGISTRY.agents)} agents and "
+            f"{len(_AGENT_REGISTRY.intent_mapping)} intent mappings")
 
 # Créer un dictionnaire de lookup pour accéder rapidement aux mappings d'intentions
 INTENT_CONFIG_MAP = {
@@ -77,17 +81,17 @@ def entry_node(state: GraphState) -> dict[str, Any]:
     Returns:
         Mise à jour partielle de l'état
     """
-    print(f"[ENTRY_NODE] Processing query for project: {state['project_id']}")
-    print(f"[ENTRY_NODE] User query: {state['user_query']}")
+    logger.info(f"[ENTRY_NODE] Processing query for project: {state['project_id']}")
+    logger.info(f"[ENTRY_NODE] User query: {state['user_query']}")
 
     # Logger le contexte si présent
     context = state.get("context")
     if context:
-        print(f"[ENTRY_NODE] Context provided: {len(context)} items")
+        logger.info(f"[ENTRY_NODE] Context provided: {len(context)} items")
         for ctx_item in context:
-            print(f"[ENTRY_NODE]   - {ctx_item['type']}: {ctx_item['id']}")
+            logger.info(f"[ENTRY_NODE]   - {ctx_item['type']}: {ctx_item['id']}")
     else:
-        print("[ENTRY_NODE] No context provided")
+        logger.info("[ENTRY_NODE] No context provided")
 
     return {}
 
@@ -102,7 +106,7 @@ def task_rewriter_node(state: GraphState) -> dict[str, Any]:
     Returns:
         Mise à jour partielle de l'état avec la tâche reformulée
     """
-    print("[TASK_REWRITER_NODE] Rewriting user query into explicit task...")
+    logger.info("[TASK_REWRITER_NODE] Rewriting user query into explicit task...")
 
     # Charger le prompt
     prompt_config = load_task_rewriter_prompt()
@@ -126,9 +130,9 @@ def task_rewriter_node(state: GraphState) -> dict[str, Any]:
                 context_parts.append(f"{ctx_type} '{ctx_id}'")
 
         context_summary = ", ".join(context_parts)
-        print(f"[TASK_REWRITER_NODE] Context summary: {context_summary}")
+        logger.info(f"[TASK_REWRITER_NODE] Context summary: {context_summary}")
     else:
-        print("[TASK_REWRITER_NODE] No context provided")
+        logger.info("[TASK_REWRITER_NODE] No context provided")
 
     # Préparer le prompt utilisateur
     user_prompt = prompt_config["user_prompt_template"].replace(
@@ -141,7 +145,7 @@ def task_rewriter_node(state: GraphState) -> dict[str, Any]:
     model = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
     temperature = float(os.getenv("LLM_TEMPERATURE", "0.0"))
 
-    print(f"[TASK_REWRITER_NODE] Using model: {model}")
+    logger.info(f"[TASK_REWRITER_NODE] Using model: {model}")
 
     try:
         # Appeler le LLM
@@ -157,14 +161,14 @@ def task_rewriter_node(state: GraphState) -> dict[str, Any]:
         # Extraire la réponse (tâche reformulée)
         rewritten_task = response.choices[0].message.content.strip()
 
-        print(f"[TASK_REWRITER_NODE] Rewritten task: {rewritten_task}")
+        logger.info(f"[TASK_REWRITER_NODE] Rewritten task: {rewritten_task}")
 
         return {
             "rewritten_task": rewritten_task,
         }
 
     except Exception as e:
-        print(f"[TASK_REWRITER_NODE] Error calling LLM: {e}")
+        logger.error("[TASK_REWRITER_NODE] Error calling LLM.", exc_info=True)
         # Fallback: utiliser la requête originale
         return {
             "rewritten_task": state["user_query"],
@@ -186,10 +190,10 @@ def router_node(state: GraphState) -> dict[str, Any]:
     """
     rewritten_task = state.get("rewritten_task", "")
 
-    print(f"[ROUTER_NODE] Routing based on rewritten task: {rewritten_task}")
+    logger.info(f"[ROUTER_NODE] Routing based on rewritten task: {rewritten_task}")
 
     if not rewritten_task:
-        print("[ROUTER_NODE] No rewritten task found, routing to end")
+        logger.warning("[ROUTER_NODE] No rewritten task found, routing to end")
         return {
             "next_node": "end",
             "agent_id": "none",
@@ -224,9 +228,9 @@ def router_node(state: GraphState) -> dict[str, Any]:
         # Par défaut, on suppose que c'est une décomposition d'objectif
         agent_task = "decompose_objective"
 
-    print(f"[ROUTER_NODE] Selected agent: {agent_id}")
-    print(f"[ROUTER_NODE] Selected task: {agent_task}")
-    print("[ROUTER_NODE] Routing to agent node")
+    logger.info(f"[ROUTER_NODE] Selected agent: {agent_id}")
+    logger.info(f"[ROUTER_NODE] Selected task: {agent_task}")
+    logger.info("[ROUTER_NODE] Routing to agent node")
 
     return {
         "next_node": "agent",
@@ -288,9 +292,9 @@ def agent_node(state: GraphState) -> dict[str, Any]:
     agent_id = state.get("agent_id", "unknown")
     agent_task = state.get("agent_task", "unknown_task")
 
-    print("[AGENT_NODE] Routing to specific agent...")
-    print(f"[AGENT_NODE] Agent ID: {agent_id}")
-    print(f"[AGENT_NODE] Agent task: {agent_task}")
+    logger.info("[AGENT_NODE] Routing to specific agent...")
+    logger.info(f"[AGENT_NODE] Agent ID: {agent_id}")
+    logger.info(f"[AGENT_NODE] Agent task: {agent_task}")
 
     # Dispatcher vers le bon agent selon agent_id
     if agent_id == "backlog_agent":
@@ -352,45 +356,45 @@ def approval_node(state: GraphState) -> dict[str, Any]:
     Returns:
         Mise à jour partielle de l'état avec le résultat final
     """
-    print("[APPROVAL_NODE] Processing approval decision...")
+    logger.info("[APPROVAL_NODE] Processing approval decision...")
 
     approval_decision = state.get("approval_decision")
     project_id = state.get("project_id", "")
 
     if approval_decision is None:
-        print("[APPROVAL_NODE] No approval decision found, workflow interrupted")
+        logger.info("[APPROVAL_NODE] No approval decision found, workflow interrupted")
         return {
             "status": "interrupted",
             "result": "Workflow interrupted, awaiting approval decision",
         }
 
     if not approval_decision:
-        print("[APPROVAL_NODE] ImpactPlan rejected by user")
+        logger.info("[APPROVAL_NODE] ImpactPlan rejected by user")
         return {
             "status": "rejected",
             "result": "ImpactPlan rejected. No changes were applied to the backlog.",
         }
 
     # L'utilisateur a approuvé, on applique l'ImpactPlan
-    print("[APPROVAL_NODE] ImpactPlan approved by user, applying changes...")
+    logger.info("[APPROVAL_NODE] ImpactPlan approved by user, applying changes...")
 
     impact_plan = state.get("impact_plan", {})
     new_items = impact_plan.get("new_items", [])
     modified_items = impact_plan.get("modified_items", [])
     deleted_items = impact_plan.get("deleted_items", [])
 
-    print(f"[APPROVAL_NODE] Changes to apply: {len(new_items)} new, "
-          f"{len(modified_items)} modified, {len(deleted_items)} deleted")
+    logger.info(f"[APPROVAL_NODE] Changes to apply: {len(new_items)} new, "
+                f"{len(modified_items)} modified, {len(deleted_items)} deleted")
 
     # Charger le backlog existant
     storage = ProjectContextService()
 
     try:
         existing_items = storage.load_context(project_id)
-        print(f"[APPROVAL_NODE] Loaded {len(existing_items)} existing work items")
+        logger.info(f"[APPROVAL_NODE] Loaded {len(existing_items)} existing work items")
     except FileNotFoundError:
         existing_items = []
-        print("[APPROVAL_NODE] No existing backlog found, starting fresh")
+        logger.info("[APPROVAL_NODE] No existing backlog found, starting fresh")
 
     from agent4ba.core.models import WorkItem
 
@@ -415,13 +419,13 @@ def approval_node(state: GraphState) -> dict[str, Any]:
                 if existing_item.id == after_item.id:
                     existing_items[i] = after_item
                     modified_count += 1
-                    print(f"[APPROVAL_NODE] Updated item {after_item.id}")
+                    logger.info(f"[APPROVAL_NODE] Updated item {after_item.id}")
                     break
 
     # Construire le nouveau backlog complet
     updated_backlog = existing_items + new_work_items
 
-    print(f"[APPROVAL_NODE] New backlog size: {len(updated_backlog)} work items")
+    logger.info(f"[APPROVAL_NODE] New backlog size: {len(updated_backlog)} work items")
 
     # Sauvegarder le nouveau backlog (crée une nouvelle version)
     storage.save_backlog(project_id, updated_backlog)
@@ -429,7 +433,7 @@ def approval_node(state: GraphState) -> dict[str, Any]:
     # Déterminer le numéro de version qui a été créé
     latest_version = storage._find_latest_backlog_version(project_id)
 
-    print(f"[APPROVAL_NODE] Successfully saved backlog_v{latest_version}.json")
+    logger.info(f"[APPROVAL_NODE] Successfully saved backlog_v{latest_version}.json")
 
     result_parts = []
     if len(new_work_items) > 0:
@@ -455,9 +459,9 @@ def end_node(state: GraphState) -> dict[str, Any]:
     Returns:
         Mise à jour partielle de l'état
     """
-    print("[END_NODE] Workflow completed")
-    print(f"[END_NODE] Final result: {state.get('result', 'No result')}")
-    print(f"[END_NODE] Status: {state.get('status', 'unknown')}")
+    logger.info("[END_NODE] Workflow completed")
+    logger.info(f"[END_NODE] Final result: {state.get('result', 'No result')}")
+    logger.info(f"[END_NODE] Status: {state.get('status', 'unknown')}")
     return {}
 
 

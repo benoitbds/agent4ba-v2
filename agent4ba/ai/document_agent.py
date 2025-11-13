@@ -12,12 +12,16 @@ from litellm import completion
 
 from agent4ba.api.event_queue import get_event_queue
 from agent4ba.core.document_ingestion import DocumentIngestionService
+from agent4ba.core.logger import setup_logger
 from agent4ba.core.models import WorkItem
 from agent4ba.core.storage import ProjectContextService
 from agent4ba.core.workitem_utils import assign_sequential_ids
 
 # Charger les variables d'environnement
 load_dotenv()
+
+# Configurer le logger
+logger = setup_logger(__name__)
 
 
 def load_extract_requirements_prompt() -> dict[str, Any]:
@@ -50,20 +54,20 @@ def extract_requirements(state: Any) -> dict[str, Any]:
     Returns:
         Mise à jour de l'état avec impact_plan et status
     """
-    print("[DOCUMENT_AGENT] Extracting requirements using RAG...")
+    logger.info("Extracting requirements using RAG...")
 
     # Récupérer le project_id et la requête utilisateur
     project_id = state.get("project_id", "")
     user_query = state.get("user_query", "")
 
     if not user_query or not user_query.strip():
-        print("[DOCUMENT_AGENT] No user query provided")
+        logger.warning("No user query provided")
         return {
             "status": "error",
             "result": "No user query provided for requirement extraction",
         }
 
-    print(f"[DOCUMENT_AGENT] User query: {user_query}")
+    logger.info(f"User query: {user_query}")
 
     # Récupérer le thread_id et la queue d'événements
     thread_id = state.get("thread_id", "")
@@ -118,7 +122,7 @@ def extract_requirements(state: Any) -> dict[str, Any]:
 
         # Compter le nombre de documents dans le vectorstore
         doc_count = len(vectorstore.docstore._dict) if hasattr(vectorstore, 'docstore') else 0
-        print(f"[DOCUMENT_AGENT] Vector store loaded successfully with {doc_count} documents")
+        logger.info(f"Vector store loaded successfully with {doc_count} documents")
 
         vectorstore_event_completed = {
             "type": "tool_used",
@@ -133,7 +137,7 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         if event_queue:
             event_queue.put(vectorstore_event_completed)
     except FileNotFoundError as e:
-        print(f"[DOCUMENT_AGENT] No vectorstore found: {e}")
+        logger.warning(f"No vectorstore found: {e}")
         vectorstore_event_error = {
             "type": "tool_used",
             "tool_run_id": vectorstore_run_id,
@@ -152,7 +156,7 @@ def extract_requirements(state: Any) -> dict[str, Any]:
             "agent_events": agent_events,
         }
     except Exception as e:
-        print(f"[DOCUMENT_AGENT] Error loading vectorstore: {e}")
+        logger.error("Error loading vectorstore.", exc_info=True)
         vectorstore_event_error = {
             "type": "tool_used",
             "tool_run_id": vectorstore_run_id,
@@ -178,7 +182,7 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         for ctx_item in context:
             if ctx_item.get("type") == "document":
                 document_context = ctx_item.get("id")
-                print(f"[DOCUMENT_AGENT] Document context provided: {document_context}")
+                logger.info(f"Document context provided: {document_context}")
                 break
 
     # Créer un retriever pour rechercher les documents pertinents
@@ -188,10 +192,10 @@ def extract_requirements(state: Any) -> dict[str, Any]:
     if document_context:
         # Filtrer uniquement sur le document spécifié
         search_kwargs["filter"] = {"source": document_context}
-        print(f"[DOCUMENT_AGENT] Applying document filter: {document_context}")
+        logger.info(f"Applying document filter: {document_context}")
 
     retriever = vectorstore.as_retriever(search_kwargs=search_kwargs)
-    print(f"[DOCUMENT_AGENT] Retriever created with k=3{' and document filter' if document_context else ''}")
+    logger.info(f"Retriever created with k=3{' and document filter' if document_context else ''}")
 
     # Émettre l'événement de recherche RAG
     rag_run_id = str(uuid.uuid4())
@@ -211,7 +215,7 @@ def extract_requirements(state: Any) -> dict[str, Any]:
     # Récupérer les documents pertinents
     try:
         retrieved_docs = retriever.invoke(user_query)
-        print(f"[DOCUMENT_AGENT] Retrieved {len(retrieved_docs)} relevant chunks")
+        logger.info(f"Retrieved {len(retrieved_docs)} relevant chunks")
         rag_event_completed = {
             "type": "tool_used",
             "tool_run_id": rag_run_id,
@@ -225,7 +229,7 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         if event_queue:
             event_queue.put(rag_event_completed)
     except Exception as e:
-        print(f"[DOCUMENT_AGENT] Error retrieving documents: {e}")
+        logger.error("Error retrieving documents.", exc_info=True)
         rag_event_error = {
             "type": "tool_used",
             "tool_run_id": rag_run_id,
@@ -252,18 +256,18 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         context_chunks.append(f"[Chunk {i} - Source: {source}, Page: {page}]\n{doc.page_content}")
 
     context = "\n\n---\n\n".join(context_chunks)
-    print(f"[DOCUMENT_AGENT] Context prepared: {len(context)} characters")
+    logger.info(f"Context prepared: {len(context)} characters")
 
     # Charger le contexte du projet (backlog existant)
     storage = ProjectContextService()
     try:
         existing_items = storage.load_context(project_id)
         backlog_summary = f"Backlog actuel avec {len(existing_items)} work items"
-        print(f"[DOCUMENT_AGENT] Loaded {len(existing_items)} existing work items")
+        logger.info(f"Loaded {len(existing_items)} existing work items")
     except FileNotFoundError:
         existing_items = []
         backlog_summary = "Nouveau projet sans backlog existant"
-        print("[DOCUMENT_AGENT] No existing backlog found")
+        logger.info("No existing backlog found")
 
     # Charger le prompt
     prompt_config = load_extract_requirements_prompt()
@@ -279,7 +283,7 @@ def extract_requirements(state: Any) -> dict[str, Any]:
     model = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
     temperature = float(os.getenv("LLM_TEMPERATURE", "0.0"))
 
-    print(f"[DOCUMENT_AGENT] Using model: {model}")
+    logger.info(f"Using model: {model}")
 
     # Émettre l'événement d'appel LLM
     llm_run_id = str(uuid.uuid4())
@@ -316,7 +320,7 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         # Extraire la réponse
         response_text = response.choices[0].message.content
 
-        print(f"[DOCUMENT_AGENT] LLM response received: {len(response_text)} characters")
+        logger.info(f"LLM response received: {len(response_text)} characters")
 
         # Créer un résumé de la réponse
         response_preview = response_text[:300] + "..." if len(response_text) > 300 else response_text
@@ -347,11 +351,11 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         if not isinstance(work_items_data, list):
             raise ValueError("LLM response is not a list of work items")
 
-        print(f"[DOCUMENT_AGENT] Extracted {len(work_items_data)} work items")
+        logger.info(f"Extracted {len(work_items_data)} work items")
 
         # Assigner des ID séquentiels uniques basés sur le préfixe du projet
         work_items_data = assign_sequential_ids(project_id, existing_items, work_items_data)
-        print(f"[DOCUMENT_AGENT] Assigned sequential IDs starting with project prefix")
+        logger.info("Assigned sequential IDs starting with project prefix")
 
         # Valider et convertir en WorkItem
         new_items = []
@@ -365,7 +369,7 @@ def extract_requirements(state: Any) -> dict[str, Any]:
             work_item = WorkItem(**item_data)
             new_items.append(work_item)
 
-            print(f"[DOCUMENT_AGENT]   - {work_item.type}: {work_item.title} (ID: {work_item.id})")
+            logger.info(f"  - {work_item.type}: {work_item.title} (ID: {work_item.id})")
 
         # Construire l'ImpactPlan
         impact_plan = {
@@ -374,9 +378,9 @@ def extract_requirements(state: Any) -> dict[str, Any]:
             "deleted_items": [],
         }
 
-        print("[DOCUMENT_AGENT] ImpactPlan created successfully")
-        print(f"[DOCUMENT_AGENT] - {len(new_items)} new items")
-        print("[DOCUMENT_AGENT] Workflow paused, awaiting human approval")
+        logger.info("ImpactPlan created successfully")
+        logger.info(f"- {len(new_items)} new items")
+        logger.info("Workflow paused, awaiting human approval")
 
         # Émettre l'événement de construction de l'ImpactPlan
         plan_build_run_id = str(uuid.uuid4())
@@ -401,7 +405,7 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         }
 
     except json.JSONDecodeError as e:
-        print(f"[DOCUMENT_AGENT] Error parsing JSON: {e}")
+        logger.error("Error parsing JSON.", exc_info=True)
         llm_event_error = {
             "type": "tool_used",
             "tool_run_id": llm_run_id,
@@ -423,7 +427,7 @@ def extract_requirements(state: Any) -> dict[str, Any]:
             "agent_events": agent_events,
         }
     except Exception as e:
-        print(f"[DOCUMENT_AGENT] Error: {e}")
+        logger.error("Error during requirement extraction.", exc_info=True)
         if agent_events and agent_events[-1].get("status") == "running":
             error_event = agent_events[-1]
             error_event["status"] = "error"
