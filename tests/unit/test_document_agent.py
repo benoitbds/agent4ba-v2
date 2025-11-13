@@ -119,7 +119,7 @@ def test_extract_requirements_success():
             assert "description" in item
             assert "project_id" in item
             assert item["project_id"] == "TEST"
-            assert item["validation_status"] == "pending_validation"
+            assert item["validation_status"] == "ia_generated"
 
         # 5. Vérifier le status de retour
         assert result["status"] == "awaiting_approval"

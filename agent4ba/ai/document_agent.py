@@ -362,8 +362,8 @@ def extract_requirements(state: Any) -> dict[str, Any]:
         for item_data in work_items_data:
             # Ajouter le project_id
             item_data["project_id"] = project_id
-            # Marquer comme généré par l'IA
-            item_data["validation_status"] = "pending_validation"
+            # Marquer comme généré par l'IA (utilise la valeur par défaut "ia_generated")
+            # Pas besoin de définir explicitement validation_status
 
             # Créer le WorkItem (validation Pydantic)
             work_item = WorkItem(**item_data)
