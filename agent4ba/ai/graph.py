@@ -434,6 +434,24 @@ def approval_node(state: GraphState) -> dict[str, Any]:
                     logger.info(f"[APPROVAL_NODE] Updated item {after_item.id}")
                     break
 
+    # Gérer les deleted_items (supprimer les items par leur ID)
+    deleted_ids = set()
+    for item_data in deleted_items:
+        # L'item peut être un dict avec un champ "id" ou directement un ID string
+        if isinstance(item_data, dict):
+            item_id = item_data.get("id")
+        else:
+            item_id = str(item_data)
+
+        if item_id:
+            deleted_ids.add(item_id)
+            logger.info(f"[APPROVAL_NODE] Marking item {item_id} for deletion")
+
+    # Filtrer les items supprimés de existing_items
+    if deleted_ids:
+        existing_items = [item for item in existing_items if item.id not in deleted_ids]
+        logger.info(f"[APPROVAL_NODE] Removed {len(deleted_ids)} items from backlog")
+
     # Construire le nouveau backlog complet
     updated_backlog = existing_items + new_work_items
 
@@ -452,6 +470,8 @@ def approval_node(state: GraphState) -> dict[str, Any]:
         result_parts.append(f"Added {len(new_work_items)} new work items")
     if modified_count > 0:
         result_parts.append(f"Modified {modified_count} work items")
+    if len(deleted_ids) > 0:
+        result_parts.append(f"Deleted {len(deleted_ids)} work items")
 
     result_message = "ImpactPlan approved and applied successfully. " + ". ".join(result_parts) + f". Backlog saved as version {latest_version}."
 
