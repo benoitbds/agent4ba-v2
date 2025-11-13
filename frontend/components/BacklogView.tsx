@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Check, ChevronRight, ChevronDown } from "lucide-react";
+import { ClipboardPlus, ChevronRight, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import type { WorkItem } from "@/types/events";
 import EditWorkItemModal from "./EditWorkItemModal";
@@ -228,11 +228,14 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
           {/* Select button for context */}
           {onSelectItem && (
             <button
-              onClick={() => onSelectItem(item)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectItem(item);
+              }}
               className="flex-shrink-0 p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
               title={t("backlog.addToContext")}
             >
-              <Check className="w-5 h-5" />
+              <ClipboardPlus className="w-5 h-5" />
             </button>
           )}
         </div>
@@ -381,7 +384,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
                         className="flex-shrink-0 p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
                         title={t("backlog.addToContext")}
                       >
-                        <Check className="w-5 h-5" />
+                        <ClipboardPlus className="w-5 h-5" />
                       </button>
                     )}
                   </div>
