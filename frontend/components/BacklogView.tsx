@@ -1,11 +1,12 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ClipboardPlus, ChevronRight, ChevronDown } from "lucide-react";
+import { ClipboardPlus, ChevronRight, ChevronDown, Sparkles, CheckCircle } from "lucide-react";
 import { useState } from "react";
 import type { WorkItem } from "@/types/events";
 import EditWorkItemModal from "./EditWorkItemModal";
-import { updateWorkItem } from "@/lib/api";
+import { updateWorkItem, validateWorkItem } from "@/lib/api";
+import { toast } from "sonner";
 
 interface BacklogViewProps {
   items: WorkItem[];
@@ -113,6 +114,22 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
     }
   };
 
+  // Fonction pour valider un WorkItem
+  const handleValidateWorkItem = async (item: WorkItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await validateWorkItem(projectId, item.id);
+      toast.success(t("backlog.validationSuccess", { title: item.title }));
+      // Rafraîchir le backlog pour afficher le nouveau statut
+      if (onItemUpdated) {
+        onItemUpdated();
+      }
+    } catch (error) {
+      toast.error(t("backlog.validationError"));
+      console.error("Error validating work item:", error);
+    }
+  };
+
   if (items.length === 0) {
     return (
       <div className="flex flex-col h-full">
@@ -161,6 +178,13 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
               <span className="text-xs text-gray-500 font-mono">
                 {item.id}
               </span>
+              {/* Badge IA pour les items en attente de validation */}
+              {item.attributes?.validation_status === "pending_validation" && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
+                  <Sparkles className="w-3 h-3" />
+                  IA
+                </span>
+              )}
             </div>
             {item.description && (
               <p className="text-sm text-gray-600 mt-1">
@@ -225,19 +249,32 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
             )}
           </div>
 
-          {/* Select button for context */}
-          {onSelectItem && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectItem(item);
-              }}
-              className="flex-shrink-0 p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
-              title={t("backlog.addToContext")}
-            >
-              <ClipboardPlus className="w-5 h-5" />
-            </button>
-          )}
+          {/* Boutons d'action */}
+          <div className="flex-shrink-0 flex gap-2">
+            {/* Bouton de validation (uniquement pour les items en attente) */}
+            {item.attributes?.validation_status === "pending_validation" && (
+              <button
+                onClick={(e) => handleValidateWorkItem(item, e)}
+                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                title={t("backlog.validateItem")}
+              >
+                <CheckCircle className="w-5 h-5" />
+              </button>
+            )}
+            {/* Select button for context */}
+            {onSelectItem && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectItem(item);
+                }}
+                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
+                title={t("backlog.addToContext")}
+              >
+                <ClipboardPlus className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -299,6 +336,13 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
                         <span className="text-xs text-gray-500 font-mono">
                           {hierarchicalItem.item.id}
                         </span>
+                        {/* Badge IA pour les items en attente de validation */}
+                        {hierarchicalItem.item.attributes?.validation_status === "pending_validation" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
+                            <Sparkles className="w-3 h-3" />
+                            IA
+                          </span>
+                        )}
                       </div>
                       {hierarchicalItem.item.description && (
                         <p className="text-sm text-gray-600 mt-1">
@@ -374,19 +418,32 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
                       )}
                     </div>
 
-                    {/* Select button for context */}
-                    {onSelectItem && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectItem(hierarchicalItem.item);
-                        }}
-                        className="flex-shrink-0 p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
-                        title={t("backlog.addToContext")}
-                      >
-                        <ClipboardPlus className="w-5 h-5" />
-                      </button>
-                    )}
+                    {/* Boutons d'action */}
+                    <div className="flex-shrink-0 flex gap-2">
+                      {/* Bouton de validation (uniquement pour les items en attente) */}
+                      {hierarchicalItem.item.attributes?.validation_status === "pending_validation" && (
+                        <button
+                          onClick={(e) => handleValidateWorkItem(hierarchicalItem.item, e)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          title={t("backlog.validateItem")}
+                        >
+                          <CheckCircle className="w-5 h-5" />
+                        </button>
+                      )}
+                      {/* Select button for context */}
+                      {onSelectItem && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectItem(hierarchicalItem.item);
+                          }}
+                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
+                          title={t("backlog.addToContext")}
+                        >
+                          <ClipboardPlus className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

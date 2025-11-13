@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { locales } from '@/i18n/request';
+import { Toaster } from 'sonner';
 import "../globals.css";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -38,6 +39,7 @@ export default async function RootLayout({
       <body className="antialiased">
         <NextIntlClientProvider messages={messages}>
           {children}
+          <Toaster position="top-right" />
         </NextIntlClientProvider>
       </body>
     </html>
