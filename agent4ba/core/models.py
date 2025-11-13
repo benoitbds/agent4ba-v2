@@ -5,6 +5,28 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class User(BaseModel):
+    """Représente un utilisateur du système."""
+
+    id: str = Field(..., description="Identifiant unique de l'utilisateur (UUID)")
+    username: str = Field(..., description="Nom d'utilisateur unique")
+    hashed_password: str = Field(..., description="Mot de passe hashé")
+    is_active: bool = Field(default=True, description="Indique si l'utilisateur est actif")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "username": "john_doe",
+                    "hashed_password": "$2b$12$...",
+                    "is_active": True,
+                }
+            ]
+        }
+    }
+
+
 class WorkItem(BaseModel):
     """Représente un élément de travail (user story, task, bug, etc.)."""
 

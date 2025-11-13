@@ -3,13 +3,14 @@
 import asyncio
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from agent4ba.ai.graph import app as workflow_app
 from agent4ba.api.app_factory import create_app
+from agent4ba.api.auth import get_current_user, router as auth_router
 from agent4ba.api.event_queue import cleanup_event_queue, get_event_queue
 from agent4ba.api.events import (
     AgentPlanEvent,
@@ -28,6 +29,7 @@ from agent4ba.api.schemas import (
     CreateProjectRequest,
 )
 from agent4ba.core.document_ingestion import DocumentIngestionService
+from agent4ba.core.models import User
 from agent4ba.core.storage import ProjectContextService
 
 app = FastAPI(
@@ -39,6 +41,9 @@ app = FastAPI(
 # Création de l'application via la factory
 # La configuration CORS et autres middlewares sont gérés dans app_factory.py
 app = create_app()
+
+# Enregistrer le router d'authentification
+app.include_router(auth_router)
 
 
 @app.get("/health")
@@ -365,9 +370,14 @@ async def continue_workflow(thread_id: str, request: ApprovalRequest) -> ChatRes
 
 
 @app.get("/projects")
-async def list_projects() -> JSONResponse:
+async def list_projects(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> JSONResponse:
     """
     Liste tous les projets disponibles.
+
+    Args:
+        current_user: Utilisateur authentifié (injecté par la dépendance)
 
     Returns:
         JSONResponse avec la liste des identifiants de projets

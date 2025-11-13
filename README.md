@@ -47,6 +47,22 @@ LLM_TEMPERATURE=0.0
 
 **Note:** Sans clé API valide, le système fonctionnera mais toutes les requêtes de classification échoueront gracieusement avec un message d'erreur approprié.
 
+### Configuration JWT pour l'authentification
+
+Le système utilise JWT (JSON Web Tokens) pour l'authentification. Configurez les variables suivantes dans votre fichier `.env` :
+
+```bash
+# Configuration JWT (obligatoire pour l'authentification)
+SECRET_KEY=your-secret-key-change-this-in-production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
+
+**IMPORTANT :** En production, générez une clé secrète sécurisée avec :
+```bash
+openssl rand -hex 32
+```
+
 ## Démarrage du serveur
 
 Lancer le serveur de développement :
@@ -67,10 +83,81 @@ Pour modifier cette limite, éditez la constante `MAX_UPLOAD_SIZE` dans le fichi
 
 ## Endpoints disponibles
 
+### Authentification
+
+- `POST /auth/register` - Créer un nouveau compte utilisateur
+- `POST /auth/login` - Se connecter et obtenir un token JWT
+
+### Routes protégées (nécessitent authentification)
+
+- `GET /projects` - Lister tous les projets (nécessite un token JWT valide)
+
+### Routes publiques
+
 - `GET /health` - Point de contrôle de santé de l'API
 - `POST /chat` - Interaction avec l'agent via le workflow LangGraph
 - `GET /docs` - Documentation interactive Swagger UI
 - `GET /redoc` - Documentation alternative ReDoc
+
+### Exemple d'utilisation de l'authentification
+
+**1. Créer un compte utilisateur :**
+
+```bash
+curl -X POST http://127.0.0.1:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "john_doe", "password": "securePass123"}'
+```
+
+Réponse :
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "username": "john_doe"
+}
+```
+
+**2. Se connecter et obtenir un token :**
+
+```bash
+curl -X POST http://127.0.0.1:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "john_doe", "password": "securePass123"}'
+```
+
+Réponse :
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+**3. Utiliser le token pour accéder aux routes protégées :**
+
+```bash
+curl -X GET http://127.0.0.1:8000/projects \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+Réponse :
+```json
+["demo", "project1", "project2"]
+```
+
+### Flux d'authentification
+
+1. **Inscription** : L'utilisateur s'inscrit via `POST /auth/register` avec un username et un mot de passe
+2. **Login** : L'utilisateur se connecte via `POST /auth/login` et reçoit un token JWT
+3. **Accès protégé** : L'utilisateur utilise le token dans le header `Authorization: Bearer <token>` pour accéder aux routes protégées
+4. **Expiration** : Le token expire après 30 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`)
+
+### Sécurité
+
+- Les mots de passe sont hashés avec **bcrypt** avant stockage
+- Les tokens JWT sont signés avec **HS256**
+- Les routes protégées vérifient automatiquement la validité du token
+- Un token invalide ou expiré renvoie une erreur **HTTP 401 Unauthorized**
 
 ### Exemple d'utilisation du endpoint /chat
 
