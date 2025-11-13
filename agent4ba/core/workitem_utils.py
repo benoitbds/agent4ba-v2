@@ -106,29 +106,45 @@ def assign_sequential_ids(
     WorkItems (typiquement générés par le LLM) et leur assigne des ID
     séquentiels uniques basés sur le préfixe du projet.
 
+    IMPORTANT: Cette fonction met également à jour les parent_id pour maintenir
+    la cohérence des relations hiérarchiques après le remplacement des IDs.
+
     Args:
         project_id: L'identifiant du projet
         existing_items: Liste des WorkItems existants dans le backlog
         new_items_data: Liste de dictionnaires représentant les nouveaux items
 
     Returns:
-        La même liste de dictionnaires avec les ID mis à jour
+        La même liste de dictionnaires avec les ID et parent_id mis à jour
 
     Examples:
         >>> new_items = [
-        ...     {"id": "temp-1", "title": "Feature 1", ...},
-        ...     {"id": "temp-2", "title": "Story 1", ...}
+        ...     {"id": "temp-1", "title": "Feature 1", "parent_id": null, ...},
+        ...     {"id": "temp-2", "title": "Story 1", "parent_id": "temp-1", ...}
         ... ]
         >>> assign_sequential_ids("recette-mvp", [], new_items)
         [
-            {"id": "REC-1", "title": "Feature 1", ...},
-            {"id": "REC-2", "title": "Story 1", ...}
+            {"id": "REC-1", "title": "Feature 1", "parent_id": null, ...},
+            {"id": "REC-2", "title": "Story 1", "parent_id": "REC-1", ...}
         ]
     """
     prefix, start_index = get_next_sequential_index(project_id, existing_items)
 
+    # Créer un mapping des anciens IDs vers les nouveaux IDs
+    id_mapping = {}
     for i, item_data in enumerate(new_items_data):
-        # Remplacer l'ID (qu'il soit temp-X ou autre) par le nouveau ID séquentiel
+        old_id = item_data["id"]
+        new_id = f"{prefix}-{start_index + i}"
+        id_mapping[old_id] = new_id
+
+    # Première passe : remplacer les IDs
+    for i, item_data in enumerate(new_items_data):
         item_data["id"] = f"{prefix}-{start_index + i}"
+
+    # Deuxième passe : mettre à jour les parent_id en utilisant le mapping
+    for item_data in new_items_data:
+        parent_id = item_data.get("parent_id")
+        if parent_id and parent_id in id_mapping:
+            item_data["parent_id"] = id_mapping[parent_id]
 
     return new_items_data
