@@ -51,7 +51,10 @@
     "priority": "Priorité:",
     "points": "Points:",
     "status": "Statut:",
-    "addToContext": "Ajouter au contexte du chat"
+    "addToContext": "Ajouter au contexte du chat",
+    "validateItem": "Valider cet item",
+    "validationSuccess": "L'item \"{title}\" a été validé avec succès",
+    "validationError": "Erreur lors de la validation de l'item"
   },
   "timeline": {
     "title": "Timeline d'exécution",

@@ -313,3 +313,30 @@ export async function updateWorkItem(
 
   return response.json();
 }
+
+/**
+ * Validate a WorkItem (mark as human-validated)
+ */
+export async function validateWorkItem(
+  projectId: string,
+  itemId: string
+): Promise<WorkItem> {
+  const response = await fetch(
+    `${API_URL}/projects/${projectId}/backlog/${itemId}/validate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
