@@ -123,3 +123,390 @@ def test_decompose_objective_success():
         # 8. Vérifier que modified_items et deleted_items sont vides
         assert impact_plan["modified_items"] == []
         assert impact_plan["deleted_items"] == []
+
+
+def test_decompose_objective_llm_error():
+    """
+    Test de decompose_objective lorsque le LLM lève une exception.
+
+    Vérifie que la fonction gère correctement les erreurs LLM en retournant
+    un état avec status "error" et un message d'erreur approprié.
+    """
+    # Préparer le state initial
+    state = {
+        "project_id": "TEST",
+        "intent": {
+            "args": {
+                "objective": "Créer un formulaire de connexion"
+            }
+        },
+        "thread_id": "test-thread-123"
+    }
+
+    # Appliquer les patches
+    with patch('agent4ba.ai.backlog_agent.completion', side_effect=Exception("LLM service unavailable")) as mock_completion, \
+         patch('agent4ba.ai.backlog_agent.ProjectContextService') as mock_storage_class, \
+         patch('agent4ba.ai.backlog_agent.get_event_queue', return_value=None):
+
+        # Configurer le mock du storage pour retourner une liste vide
+        mock_storage_instance = Mock()
+        mock_storage_instance.load_context.return_value = []
+        mock_storage_class.return_value = mock_storage_instance
+
+        # Appeler la fonction
+        result = backlog_agent.decompose_objective(state)
+
+        # Vérifications
+        assert result is not None
+        assert "status" in result
+        assert result["status"] == "error"
+        assert "result" in result
+        assert "Failed to decompose objective" in result["result"]
+        assert "LLM service unavailable" in result["result"]
+        # Vérifier qu'aucun impact_plan n'a été créé
+        assert "impact_plan" not in result or result.get("impact_plan") is None
+
+
+def test_decompose_objective_json_parse_error():
+    """
+    Test de decompose_objective lorsque le LLM retourne un JSON invalide.
+
+    Vérifie que la fonction gère correctement les erreurs de parsing JSON
+    en retournant un état avec status "error".
+    """
+    # Préparer le state initial
+    state = {
+        "project_id": "TEST",
+        "intent": {
+            "args": {
+                "objective": "Créer un formulaire de connexion"
+            }
+        },
+        "thread_id": "test-thread-123"
+    }
+
+    # Créer le mock de la réponse LLM avec du JSON invalide
+    mock_llm_response = Mock()
+    mock_llm_response.choices = [Mock()]
+    mock_llm_response.choices[0].message = Mock()
+    mock_llm_response.choices[0].message.content = "Ceci n'est pas du JSON valide { invalid"
+
+    # Appliquer les patches
+    with patch('agent4ba.ai.backlog_agent.completion', return_value=mock_llm_response), \
+         patch('agent4ba.ai.backlog_agent.ProjectContextService') as mock_storage_class, \
+         patch('agent4ba.ai.backlog_agent.get_event_queue', return_value=None):
+
+        # Configurer le mock du storage pour retourner une liste vide
+        mock_storage_instance = Mock()
+        mock_storage_instance.load_context.return_value = []
+        mock_storage_class.return_value = mock_storage_instance
+
+        # Appeler la fonction
+        result = backlog_agent.decompose_objective(state)
+
+        # Vérifications
+        assert result is not None
+        assert "status" in result
+        assert result["status"] == "error"
+        assert "result" in result
+        assert "Failed to parse LLM response as JSON" in result["result"]
+        # Vérifier qu'aucun impact_plan n'a été créé
+        assert "impact_plan" not in result or result.get("impact_plan") is None
+
+
+def test_decompose_objective_no_objective():
+    """
+    Test de decompose_objective lorsque aucun objectif n'est fourni.
+
+    Vérifie que la fonction se termine gracieusement sans créer d'ImpactPlan
+    lorsque la clé objective est absente ou vide.
+    """
+    # Créer un state sans objectif
+    state = {
+        "project_id": "TEST",
+        "intent": {
+            "args": {}  # Pas de clé objective
+        },
+        "thread_id": "test-thread-123"
+    }
+
+    # Appliquer les patches (bien que le LLM ne devrait pas être appelé)
+    with patch('agent4ba.ai.backlog_agent.completion') as mock_completion, \
+         patch('agent4ba.ai.backlog_agent.ProjectContextService') as mock_storage_class, \
+         patch('agent4ba.ai.backlog_agent.get_event_queue', return_value=None):
+
+        # Configurer le mock du storage pour retourner une liste vide
+        mock_storage_instance = Mock()
+        mock_storage_instance.load_context.return_value = []
+        mock_storage_class.return_value = mock_storage_instance
+
+        # Appeler la fonction
+        result = backlog_agent.decompose_objective(state)
+
+        # Vérifications
+        assert result is not None
+        assert "status" in result
+        assert result["status"] == "error"
+        assert "result" in result
+        assert "No objective provided" in result["result"]
+        # Vérifier que le LLM n'a pas été appelé
+        mock_completion.assert_not_called()
+        # Vérifier qu'aucun impact_plan n'a été créé
+        assert "impact_plan" not in result or result.get("impact_plan") is None
+
+
+def test_improve_description_success():
+    """
+    Test du cas nominal de la fonction improve_description.
+
+    Vérifie que la fonction améliore correctement la description d'un work item
+    existant et retourne un ImpactPlan avec une opération de type update.
+    """
+    # Préparer le state initial avec un item_id
+    state = {
+        "project_id": "TEST",
+        "intent": {},
+        "intent_args": {
+            "work_item_id": "TEST-1"
+        },
+        "thread_id": "test-thread-123"
+    }
+
+    # Créer un WorkItem existant à améliorer
+    from agent4ba.core.models import WorkItem
+    existing_item = WorkItem(
+        id="TEST-1",
+        project_id="TEST",
+        type="story",
+        title="Formulaire de connexion",
+        description="Description basique",
+        parent_id=None,
+        attributes={}
+    )
+
+    # Créer le mock de la réponse LLM avec la nouvelle description
+    mock_llm_response = Mock()
+    mock_llm_response.choices = [Mock()]
+    mock_llm_response.choices[0].message = Mock()
+    mock_llm_response.choices[0].message.content = "En tant qu'utilisateur, je veux me connecter avec mon email et mot de passe pour accéder à mon compte de manière sécurisée."
+
+    # Appliquer les patches
+    with patch('agent4ba.ai.backlog_agent.completion', return_value=mock_llm_response), \
+         patch('agent4ba.ai.backlog_agent.ProjectContextService') as mock_storage_class, \
+         patch('agent4ba.ai.backlog_agent.get_event_queue', return_value=None):
+
+        # Configurer le mock du storage pour retourner l'item existant
+        mock_storage_instance = Mock()
+        mock_storage_instance.load_context.return_value = [existing_item]
+        mock_storage_class.return_value = mock_storage_instance
+
+        # Appeler la fonction
+        result = backlog_agent.improve_description(state)
+
+        # Vérifications
+        assert result is not None
+        assert "impact_plan" in result
+        assert result["impact_plan"] is not None
+
+        impact_plan = result["impact_plan"]
+        assert "modified_items" in impact_plan
+        assert isinstance(impact_plan["modified_items"], list)
+        assert len(impact_plan["modified_items"]) == 1
+
+        # Vérifier la structure de l'opération de modification
+        modified_item = impact_plan["modified_items"][0]
+        assert "before" in modified_item
+        assert "after" in modified_item
+
+        # Vérifier que la description a été modifiée
+        assert modified_item["before"]["description"] == "Description basique"
+        assert modified_item["after"]["description"] != "Description basique"
+        assert "En tant qu'utilisateur" in modified_item["after"]["description"]
+
+        # Vérifier que le validation_status a été ajouté
+        assert modified_item["after"]["validation_status"] == "pending_validation"
+
+        # Vérifier le statut de retour
+        assert result["status"] == "awaiting_approval"
+
+        # Vérifier que new_items et deleted_items sont vides
+        assert impact_plan["new_items"] == []
+        assert impact_plan["deleted_items"] == []
+
+
+def test_improve_description_item_not_found():
+    """
+    Test de improve_description lorsque le work item n'est pas trouvé.
+
+    Vérifie que la fonction gère correctement le cas où l'item_id fourni
+    ne correspond à aucun work item dans le backlog.
+    """
+    # Préparer le state initial avec un item_id inexistant
+    state = {
+        "project_id": "TEST",
+        "intent": {},
+        "intent_args": {
+            "work_item_id": "TEST-999"  # ID qui n'existe pas
+        },
+        "thread_id": "test-thread-123"
+    }
+
+    # Créer un WorkItem existant (mais pas celui recherché)
+    from agent4ba.core.models import WorkItem
+    existing_item = WorkItem(
+        id="TEST-1",
+        project_id="TEST",
+        type="story",
+        title="Autre story",
+        description="Description",
+        parent_id=None,
+        attributes={}
+    )
+
+    # Appliquer les patches
+    with patch('agent4ba.ai.backlog_agent.completion') as mock_completion, \
+         patch('agent4ba.ai.backlog_agent.ProjectContextService') as mock_storage_class, \
+         patch('agent4ba.ai.backlog_agent.get_event_queue', return_value=None):
+
+        # Configurer le mock du storage pour retourner un item différent
+        mock_storage_instance = Mock()
+        mock_storage_instance.load_context.return_value = [existing_item]
+        mock_storage_class.return_value = mock_storage_instance
+
+        # Appeler la fonction
+        result = backlog_agent.improve_description(state)
+
+        # Vérifications
+        assert result is not None
+        assert "status" in result
+        assert result["status"] == "error"
+        assert "result" in result
+        assert "TEST-999" in result["result"]
+        assert "not found" in result["result"]
+
+        # Vérifier que le LLM n'a pas été appelé
+        mock_completion.assert_not_called()
+
+        # Vérifier qu'aucun impact_plan n'a été créé
+        assert "impact_plan" not in result or result.get("impact_plan") is None
+
+
+def test_review_quality_success():
+    """
+    Test du cas nominal de la fonction review_quality.
+
+    Vérifie que la fonction analyse correctement la qualité des User Stories
+    selon les critères INVEST et retourne un ImpactPlan avec les scores ajoutés.
+    """
+    # Préparer le state initial
+    state = {
+        "project_id": "TEST",
+        "intent": {},
+        "thread_id": "test-thread-123"
+    }
+
+    # Créer plusieurs User Stories existantes
+    from agent4ba.core.models import WorkItem
+    story1 = WorkItem(
+        id="TEST-1",
+        project_id="TEST",
+        type="story",
+        title="Connexion utilisateur",
+        description="En tant qu'utilisateur, je veux me connecter",
+        parent_id=None,
+        attributes={}
+    )
+    story2 = WorkItem(
+        id="TEST-2",
+        project_id="TEST",
+        type="story",
+        title="Déconnexion",
+        description="En tant qu'utilisateur, je veux me déconnecter",
+        parent_id=None,
+        attributes={}
+    )
+    feature1 = WorkItem(
+        id="TEST-3",
+        project_id="TEST",
+        type="feature",
+        title="Authentification",
+        description="Feature d'authentification",
+        parent_id=None,
+        attributes={}
+    )
+
+    # Préparer le mock de l'analyse INVEST
+    mock_invest_analysis = {
+        "invest_analysis": {
+            "Independent": {"score": 0.9, "reason": "La story est indépendante"},
+            "Negotiable": {"score": 0.8, "reason": "La story est négociable"},
+            "Valuable": {"score": 0.95, "reason": "La story apporte de la valeur"},
+            "Estimable": {"score": 0.85, "reason": "La story est estimable"},
+            "Small": {"score": 0.7, "reason": "La story est relativement petite"},
+            "Testable": {"score": 0.9, "reason": "La story est testable"}
+        }
+    }
+
+    # Créer le mock de la réponse LLM
+    mock_llm_response = Mock()
+    mock_llm_response.choices = [Mock()]
+    mock_llm_response.choices[0].message = Mock()
+    mock_llm_response.choices[0].message.content = json.dumps(mock_invest_analysis)
+
+    # Appliquer les patches
+    with patch('agent4ba.ai.backlog_agent.completion', return_value=mock_llm_response), \
+         patch('agent4ba.ai.backlog_agent.ProjectContextService') as mock_storage_class, \
+         patch('agent4ba.ai.backlog_agent.get_event_queue', return_value=None):
+
+        # Configurer le mock du storage pour retourner les items (2 stories + 1 feature)
+        mock_storage_instance = Mock()
+        mock_storage_instance.load_context.return_value = [story1, story2, feature1]
+        mock_storage_class.return_value = mock_storage_instance
+
+        # Appeler la fonction
+        result = backlog_agent.review_quality(state)
+
+        # Vérifications
+        assert result is not None
+        assert "impact_plan" in result
+        assert result["impact_plan"] is not None
+
+        impact_plan = result["impact_plan"]
+        assert "modified_items" in impact_plan
+        assert isinstance(impact_plan["modified_items"], list)
+        # Seules les 2 stories doivent être analysées (pas la feature)
+        assert len(impact_plan["modified_items"]) == 2
+
+        # Vérifier la structure de chaque modification
+        for modified_item in impact_plan["modified_items"]:
+            assert "before" in modified_item
+            assert "after" in modified_item
+
+            # Vérifier que l'analyse INVEST a été ajoutée dans les attributes
+            assert "invest_analysis" not in modified_item["before"]["attributes"]
+            assert "invest_analysis" in modified_item["after"]["attributes"]
+
+            invest_analysis = modified_item["after"]["attributes"]["invest_analysis"]
+            assert "Independent" in invest_analysis
+            assert "Negotiable" in invest_analysis
+            assert "Valuable" in invest_analysis
+            assert "Estimable" in invest_analysis
+            assert "Small" in invest_analysis
+            assert "Testable" in invest_analysis
+
+            # Vérifier que chaque critère a un score et une raison
+            for criterion, data in invest_analysis.items():
+                assert "score" in data
+                assert "reason" in data
+                assert isinstance(data["score"], (int, float))
+                assert isinstance(data["reason"], str)
+
+            # Vérifier que le validation_status a été ajouté
+            assert modified_item["after"]["validation_status"] == "pending_validation"
+
+        # Vérifier le statut de retour
+        assert result["status"] == "awaiting_approval"
+
+        # Vérifier que new_items et deleted_items sont vides
+        assert impact_plan["new_items"] == []
+        assert impact_plan["deleted_items"] == []
