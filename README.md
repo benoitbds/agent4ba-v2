@@ -309,6 +309,33 @@ poetry run mypy agent4ba/
 poetry run pytest
 ```
 
+### Suite de tests
+
+Le projet contient une suite complète de tests unitaires et d'intégration :
+
+**Tests d'authentification** (`tests/` - 20 tests) :
+- Tests d'inscription utilisateur (validation, doublons, hashage de mots de passe)
+- Tests de connexion (tokens JWT, gestion d'erreurs)
+- Tests de protection des routes (authentification requise sur `/projects`)
+
+**Tests fonctionnels** (racine du projet) :
+- Tests du workflow LangGraph et du router
+- Tests du registre des agents
+- Tests de contexte et de gestion de documents
+- Tests d'IDs séquentiels pour les work items
+
+**Exécuter uniquement les tests d'authentification :**
+```bash
+poetry run pytest tests/
+```
+
+**Exécuter les tests avec détails :**
+```bash
+poetry run pytest -v
+```
+
+**Note** : Les fixtures pytest sont configurées dans `conftest.py` (racine) et `tests/conftest.py` pour garantir l'isolation complète entre les tests. Chaque test d'authentification utilise un fichier de stockage temporaire unique.
+
 ## Licence
 
 Propriétaire

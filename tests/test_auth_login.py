@@ -1,51 +1,9 @@
 """Tests for user login endpoint."""
 
-import tempfile
-from pathlib import Path
-
 import pytest
-from fastapi.testclient import TestClient
-from jose import jwt
+from jose import jwt  # type: ignore[import-untyped]
 
-from agent4ba.api.main import app
 from agent4ba.core.config import settings
-from agent4ba.services.user_service import UserService
-
-
-@pytest.fixture
-def temp_user_storage():
-    """Create a temporary user storage file for testing."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        temp_path = Path(f.name)
-        f.write("[]")
-    yield temp_path
-    # Cleanup
-    if temp_path.exists():
-        temp_path.unlink()
-
-
-@pytest.fixture
-def client(temp_user_storage, monkeypatch):
-    """Create a test client with temporary user storage."""
-    # Monkey patch the UserService to use temp storage
-    original_init = UserService.__init__
-
-    def patched_init(self, storage_path=None):
-        original_init(self, storage_path=temp_user_storage)
-
-    monkeypatch.setattr(UserService, "__init__", patched_init)
-    return TestClient(app)
-
-
-@pytest.fixture
-def registered_user(client):
-    """Register a test user for login tests."""
-    response = client.post(
-        "/auth/register",
-        json={"username": "loginuser", "password": "loginpass123"},
-    )
-    assert response.status_code == 201
-    return {"username": "loginuser", "password": "loginpass123"}
 
 
 def test_login_success(client, registered_user):
@@ -70,11 +28,11 @@ def test_login_success(client, registered_user):
     assert "exp" in payload  # Token should have expiration
 
 
-def test_login_invalid_username(client, registered_user):
+def test_login_invalid_username(client):
     """Test login with non-existent username."""
     response = client.post(
         "/auth/login",
-        json={"username": "nonexistent", "password": "anypassword"},
+        json={"username": "nonexistent_user_xyz", "password": "anypassword"},
     )
 
     assert response.status_code == 401
@@ -87,7 +45,7 @@ def test_login_invalid_password(client, registered_user):
         "/auth/login",
         json={
             "username": registered_user["username"],
-            "password": "wrongpassword",
+            "password": "wrongpassword123",
         },
     )
 
@@ -118,16 +76,16 @@ def test_login_missing_fields(client):
 
 def test_login_case_sensitive(client):
     """Test that username is case-sensitive."""
-    # Register user
+    # Register user with specific case
     client.post(
         "/auth/register",
-        json={"username": "CaseSensitive", "password": "password123"},
+        json={"username": "CaseSensitiveUser", "password": "password123"},
     )
 
     # Try login with different case
     response = client.post(
         "/auth/login",
-        json={"username": "casesensitive", "password": "password123"},
+        json={"username": "casesensitiveuser", "password": "password123"},
     )
     assert response.status_code == 401
 
@@ -154,10 +112,7 @@ def test_multiple_logins(client, registered_user):
     assert response2.status_code == 200
     token2 = response2.json()["access_token"]
 
-    # Tokens should be different (due to different exp times)
-    # Note: This might fail if both requests happen at exactly the same second
-    # but it's unlikely in practice
-    # We check that both tokens are valid instead
+    # Both tokens should be valid
     payload1 = jwt.decode(token1, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     payload2 = jwt.decode(token2, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     assert payload1["sub"] == payload2["sub"] == registered_user["username"]
