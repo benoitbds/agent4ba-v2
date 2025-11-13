@@ -51,17 +51,13 @@ export function Header({
             </h1>
           </button>
 
-          {/* Center: Project Selector (Desktop) */}
+          {/* Center: Project Selector + Actions (Desktop) */}
           <div className="hidden md:flex items-center gap-3">
             <ProjectSelector
               projects={projects}
               selectedProject={selectedProject}
               onProjectChange={onProjectChange}
             />
-          </div>
-
-          {/* Right: Action Menus (Desktop) */}
-          <div className="hidden md:flex items-center gap-3">
             <ProjectMenu
               selectedProject={selectedProject}
               onOpenDocuments={onOpenDocuments}
@@ -69,6 +65,10 @@ export function Header({
               onDeleteProject={onDeleteProject}
               disabled={!selectedProject}
             />
+          </div>
+
+          {/* Right: User Menu (Desktop) */}
+          <div className="hidden md:flex items-center gap-3">
             <UserMenu />
           </div>
 
