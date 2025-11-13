@@ -274,3 +274,46 @@ class ProjectContextService:
         self.save_backlog(project_id, work_items)
 
         return updated_item
+
+    def validate_work_item_in_backlog(self, project_id: str, item_id: str) -> WorkItem:
+        """
+        Valide un WorkItem dans le backlog d'un projet (marque comme validé par un humain).
+
+        Args:
+            project_id: Identifiant unique du projet
+            item_id: Identifiant du WorkItem à valider
+
+        Returns:
+            Le WorkItem validé
+
+        Raises:
+            FileNotFoundError: Si le projet ou le WorkItem n'existe pas
+        """
+        # Charger le backlog existant
+        work_items = self.load_context(project_id)
+
+        # Trouver l'item correspondant
+        item_index = None
+        for idx, item in enumerate(work_items):
+            if item.id == item_id:
+                item_index = idx
+                break
+
+        if item_index is None:
+            raise FileNotFoundError(
+                f"WorkItem '{item_id}' not found in project '{project_id}'"
+            )
+
+        # Mettre à jour le statut de validation
+        current_item = work_items[item_index]
+        item_dict = current_item.model_dump()
+        item_dict["validation_status"] = "human_validated"
+
+        # Créer un nouveau WorkItem avec le statut mis à jour
+        validated_item = WorkItem(**item_dict)
+        work_items[item_index] = validated_item
+
+        # Sauvegarder le backlog mis à jour
+        self.save_backlog(project_id, work_items)
+
+        return validated_item

@@ -1,6 +1,6 @@
 """Data models for Agent4BA."""
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,10 @@ class WorkItem(BaseModel):
         None,
         description="Identifiant du parent (pour les hiérarchies)",
     )
+    validation_status: Literal["pending_validation", "human_validated"] = Field(
+        default="human_validated",
+        description="Statut de validation (pending_validation pour les items générés par l'IA, human_validated pour les items validés)",
+    )
     attributes: dict[str, Any] = Field(
         default_factory=dict,
         description="Attributs additionnels (priority, status, etc.)",
@@ -32,6 +36,7 @@ class WorkItem(BaseModel):
                     "title": "Implémenter l'authentification utilisateur",
                     "description": "En tant qu'utilisateur, je veux me connecter...",
                     "parent_id": None,
+                    "validation_status": "human_validated",
                     "attributes": {
                         "priority": "high",
                         "status": "todo",
