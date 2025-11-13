@@ -698,3 +698,35 @@ async def update_work_item(project_id: str, item_id: str, item_data: dict) -> JS
             status_code=500,
             detail=f"Error updating WorkItem '{item_id}': {e}",
         ) from e
+
+
+@app.post("/projects/{project_id}/backlog/{item_id}/validate")
+async def validate_work_item(project_id: str, item_id: str) -> JSONResponse:
+    """
+    Valide un WorkItem dans le backlog d'un projet (marque comme validé par un humain).
+
+    Args:
+        project_id: Identifiant unique du projet
+        item_id: Identifiant du WorkItem à valider
+
+    Returns:
+        JSONResponse avec le WorkItem validé
+
+    Raises:
+        HTTPException: Si le projet ou le WorkItem n'existe pas
+    """
+    storage = ProjectContextService()
+
+    try:
+        validated_item = storage.validate_work_item_in_backlog(project_id, item_id)
+        return JSONResponse(content=validated_item.model_dump())
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project or WorkItem not found: {e}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error validating WorkItem '{item_id}': {e}",
+        ) from e
