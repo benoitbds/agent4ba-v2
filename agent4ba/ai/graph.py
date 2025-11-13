@@ -235,10 +235,19 @@ def router_node(state: GraphState) -> dict[str, Any]:
     logger.info(f"[ROUTER_NODE] Selected task: {agent_task}")
     logger.info("[ROUTER_NODE] Routing to agent node")
 
+    # Préparer les arguments pour l'agent
+    # La tâche reformulée devient l'objectif pour la décomposition
+    args = {"objective": state.get("rewritten_task", "")}
+
+    logger.info(f"[ROUTER_NODE] Prepared args with objective: {args.get('objective', '')}")
+
     return {
         "next_node": "agent",
         "agent_id": agent_id,
         "agent_task": agent_task,
+        "intent": {
+            "args": args
+        },
     }
 
 
