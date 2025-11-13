@@ -7,6 +7,16 @@ import type { SSEEvent, WorkItem, ContextItem } from "@/types/events";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
 
 /**
+ * Custom error class for authentication errors
+ */
+export class UnauthorizedError extends Error {
+  constructor(message: string = "Unauthorized") {
+    super(message);
+    this.name = "UnauthorizedError";
+  }
+}
+
+/**
  * Get authentication headers with Bearer token
  */
 function getAuthHeaders(): HeadersInit {
@@ -20,6 +30,23 @@ function getAuthHeaders(): HeadersInit {
   }
 
   return headers;
+}
+
+/**
+ * Handle API response and check for authentication errors
+ * If 401, clear localStorage and throw UnauthorizedError
+ */
+async function handleResponse(response: Response): Promise<Response> {
+  if (response.status === 401) {
+    // Clear authentication data from localStorage
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("auth_user");
+
+    // Throw a specific error that components can catch
+    throw new UnauthorizedError("Session expired. Please log in again.");
+  }
+
+  return response;
 }
 
 export interface ChatRequest {
@@ -44,6 +71,9 @@ export async function* streamChatEvents(
     headers: getAuthHeaders(),
     body: JSON.stringify(request),
   });
+
+  // Check for 401 errors
+  await handleResponse(response);
 
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
@@ -109,6 +139,9 @@ export async function sendApprovalDecision(
     body: JSON.stringify({ approved }),
   });
 
+  // Check for 401 errors
+  await handleResponse(response);
+
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
@@ -126,6 +159,9 @@ export async function getProjectBacklog(
     method: "GET",
     headers: getAuthHeaders(),
   });
+
+  // Check for 401 errors
+  await handleResponse(response);
 
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
@@ -145,6 +181,9 @@ export async function getProjectTimelineHistory(
     headers: getAuthHeaders(),
   });
 
+  // Check for 401 errors
+  await handleResponse(response);
+
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
@@ -159,6 +198,9 @@ export async function getProjects(): Promise<string[]> {
     method: "GET",
     headers: getAuthHeaders(),
   });
+
+  // Check for 401 errors
+  await handleResponse(response);
 
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
@@ -178,6 +220,9 @@ export async function createProject(
     headers: getAuthHeaders(),
     body: JSON.stringify({ project_id: projectId }),
   });
+
+  // Check for 401 errors
+  await handleResponse(response);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -199,6 +244,9 @@ export async function getProjectDocuments(
     method: "GET",
     headers: getAuthHeaders(),
   });
+
+  // Check for 401 errors
+  await handleResponse(response);
 
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
@@ -229,6 +277,9 @@ export async function uploadDocument(
     body: formData,
   });
 
+  // Check for 401 errors
+  await handleResponse(response);
+
   if (!response.ok) {
     // Gérer spécifiquement l'erreur 413 (Content Too Large)
     if (response.status === 413) {
@@ -257,6 +308,9 @@ export async function deleteProject(projectId: string): Promise<void> {
     headers: getAuthHeaders(),
   });
 
+  // Check for 401 errors
+  await handleResponse(response);
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(
@@ -279,6 +333,9 @@ export async function deleteDocument(
       headers: getAuthHeaders(),
     }
   );
+
+  // Check for 401 errors
+  await handleResponse(response);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -307,6 +364,9 @@ export async function updateWorkItem(
     }
   );
 
+  // Check for 401 errors
+  await handleResponse(response);
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(
@@ -331,6 +391,9 @@ export async function validateWorkItem(
       headers: getAuthHeaders(),
     }
   );
+
+  // Check for 401 errors
+  await handleResponse(response);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

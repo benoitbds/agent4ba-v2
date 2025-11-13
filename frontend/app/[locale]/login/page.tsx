@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/context/AuthContext";
@@ -16,11 +16,12 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Redirect if already authenticated
-  if (isAuthenticated) {
-    router.push("/");
-    return null;
-  }
+  // Redirect if already authenticated - use useEffect to avoid updating during render
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/");
+    }
+  }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +30,7 @@ export default function LoginPage() {
 
     try {
       await login(username, password);
-      router.push("/"); // Redirect to home after successful login
+      // Navigation will happen automatically via useEffect when isAuthenticated changes
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
