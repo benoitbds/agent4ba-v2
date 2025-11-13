@@ -81,6 +81,9 @@ def entry_node(state: GraphState) -> dict[str, Any]:
     Returns:
         Mise à jour partielle de l'état
     """
+    # LOG DEBUG 3/3: Afficher l'état complet reçu par le premier nœud
+    logger.debug(f"[DEBUG] Entry node received state: {state}")
+
     logger.info(f"[ENTRY_NODE] Processing query for project: {state['project_id']}")
     logger.info(f"[ENTRY_NODE] User query: {state['user_query']}")
 
