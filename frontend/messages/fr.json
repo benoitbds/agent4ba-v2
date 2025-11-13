@@ -179,5 +179,36 @@
     "empty": "(vide)",
     "thread": "Thread :",
     "token": "Token :"
+  },
+  "auth": {
+    "login": {
+      "title": "Connectez-vous à votre compte",
+      "username": "Nom d'utilisateur",
+      "usernamePlaceholder": "Entrez votre nom d'utilisateur",
+      "password": "Mot de passe",
+      "passwordPlaceholder": "Entrez votre mot de passe",
+      "signIn": "Se connecter",
+      "signingIn": "Connexion en cours...",
+      "noAccount": "Pas encore de compte ?",
+      "registerLink": "S'inscrire"
+    },
+    "register": {
+      "title": "Créez votre compte",
+      "username": "Nom d'utilisateur",
+      "usernamePlaceholder": "Choisissez un nom d'utilisateur (min. 3 caractères)",
+      "password": "Mot de passe",
+      "passwordPlaceholder": "Choisissez un mot de passe (min. 6 caractères)",
+      "confirmPassword": "Confirmer le mot de passe",
+      "confirmPasswordPlaceholder": "Confirmez votre mot de passe",
+      "signUp": "S'inscrire",
+      "creating": "Création du compte...",
+      "hasAccount": "Vous avez déjà un compte ?",
+      "loginLink": "Se connecter",
+      "success": "Compte créé avec succès ! Redirection vers la connexion...",
+      "passwordMismatch": "Les mots de passe ne correspondent pas",
+      "passwordTooShort": "Le mot de passe doit contenir au moins 6 caractères",
+      "usernameTooShort": "Le nom d'utilisateur doit contenir au moins 3 caractères"
+    },
+    "logout": "Déconnexion"
   }
 }

@@ -12,6 +12,8 @@ import BacklogView from "@/components/BacklogView";
 import ProjectSelector from "@/components/ProjectSelector";
 import DocumentManagementModal from "@/components/DocumentManagementModal";
 import ContextPills from "@/components/ContextPills";
+import { PrivateRoute } from "@/components/PrivateRoute";
+import { UserMenu } from "@/components/UserMenu";
 import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject } from "@/lib/api";
 import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent, ContextItem } from "@/types/events";
 
@@ -484,9 +486,10 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
+    <PrivateRoute>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
@@ -495,6 +498,8 @@ export default function Home() {
               </h1>
             </div>
             <div className="flex items-center gap-4">
+              {/* User Menu */}
+              <UserMenu />
               {/* Documents Button */}
               <button
                 onClick={() => setIsDocumentModalOpen(true)}
@@ -639,6 +644,7 @@ export default function Home() {
         onDocumentsChange={handleDocumentUploadSuccess}
         onSelectDocument={handleSelectDocument}
       />
-    </div>
+      </div>
+    </PrivateRoute>
   );
 }
