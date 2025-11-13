@@ -1,56 +1,6 @@
 """Tests for protected routes (projects endpoint with authentication)."""
 
-import tempfile
-from pathlib import Path
-
-import pytest
 from fastapi.testclient import TestClient
-
-from agent4ba.api.main import app
-from agent4ba.services.user_service import UserService
-
-
-@pytest.fixture
-def temp_user_storage():
-    """Create a temporary user storage file for testing."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        temp_path = Path(f.name)
-        f.write("[]")
-    yield temp_path
-    # Cleanup
-    if temp_path.exists():
-        temp_path.unlink()
-
-
-@pytest.fixture
-def client(temp_user_storage, monkeypatch):
-    """Create a test client with temporary user storage."""
-    # Monkey patch the UserService to use temp storage
-    original_init = UserService.__init__
-
-    def patched_init(self, storage_path=None):
-        original_init(self, storage_path=temp_user_storage)
-
-    monkeypatch.setattr(UserService, "__init__", patched_init)
-    return TestClient(app)
-
-
-@pytest.fixture
-def auth_token(client):
-    """Register a user and return an authentication token."""
-    # Register
-    client.post(
-        "/auth/register",
-        json={"username": "projectuser", "password": "projectpass123"},
-    )
-
-    # Login
-    response = client.post(
-        "/auth/login",
-        json={"username": "projectuser", "password": "projectpass123"},
-    )
-    assert response.status_code == 200
-    return response.json()["access_token"]
 
 
 def test_projects_without_token(client):
