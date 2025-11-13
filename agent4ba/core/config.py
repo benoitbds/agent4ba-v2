@@ -25,6 +25,11 @@ class Settings(BaseSettings):
         "http://192.168.1.95:3000",  # Frontend sur réseau local
     ]
 
+    # Configuration JWT
+    SECRET_KEY: str = "CHANGE_THIS_TO_A_SECURE_SECRET_KEY_IN_PRODUCTION"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
 
 # Instance unique des paramètres pour toute l'application
 settings = Settings()
