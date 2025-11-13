@@ -3,18 +3,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from 'next-intl';
-import { FileText } from "lucide-react";
 import ChatInput from "@/components/ChatInput";
 import TimelineView from "@/components/TimelineView";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
 import CreateProjectModal from "@/components/CreateProjectModal";
 import DeleteProjectModal from "@/components/DeleteProjectModal";
 import BacklogView from "@/components/BacklogView";
-import ProjectSelector from "@/components/ProjectSelector";
 import DocumentManagementModal from "@/components/DocumentManagementModal";
 import ContextPills from "@/components/ContextPills";
 import { PrivateRoute } from "@/components/PrivateRoute";
-import { UserMenu } from "@/components/UserMenu";
+import { Header } from "@/components/Header";
 import { useAuth } from "@/context/AuthContext";
 import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject, UnauthorizedError } from "@/lib/api";
 import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent, ContextItem } from "@/types/events";
@@ -515,42 +513,17 @@ export default function Home() {
     <PrivateRoute>
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                {t('header.title')}
-              </h1>
-            </div>
-            <div className="flex items-center gap-4">
-              {/* User Menu */}
-              <UserMenu />
-              {/* Documents Button */}
-              <button
-                onClick={() => setIsDocumentModalOpen(true)}
-                disabled={!selectedProject}
-                className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300"
-                title={t('documents.title')}
-              >
-                <FileText className="w-5 h-5" />
-                <span className="font-medium">{t('documents.title')}</span>
-              </button>
-
-              <ProjectSelector
-                projects={projects}
-                selectedProject={selectedProject}
-                onProjectChange={setSelectedProject}
-                onCreateProject={() => setIsCreateProjectModalOpen(true)}
-                onDeleteProject={() => setIsDeleteProjectModalOpen(true)}
-              />
-            </div>
-          </div>
-        </div>
-      </header>
+        <Header
+          projects={projects}
+          selectedProject={selectedProject}
+          onProjectChange={setSelectedProject}
+          onOpenDocuments={() => setIsDocumentModalOpen(true)}
+          onCreateProject={() => setIsCreateProjectModalOpen(true)}
+          onDeleteProject={() => setIsDeleteProjectModalOpen(true)}
+        />
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" style={{ height: 'calc(100vh - 140px)' }}>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" style={{ height: 'calc(100vh - 80px)' }}>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
           {/* Left Column: Interaction */}
           <div className="flex flex-col space-y-6 h-full overflow-hidden">
