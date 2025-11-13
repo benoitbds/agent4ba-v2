@@ -306,8 +306,42 @@ poetry run mypy agent4ba/
 
 **Tests avec Pytest :**
 ```bash
+# Exécuter tous les tests
 poetry run pytest
+
+# Exécuter avec mode verbose
+poetry run pytest -v
+
+# Exécuter uniquement les tests d'authentification
+poetry run pytest tests/test_auth_*
 ```
+
+### Tests Unitaires
+
+Le projet dispose d'une suite complète de tests unitaires pour le module d'authentification :
+
+- **Tests d'inscription** (`tests/test_auth_register.py`) - 6 tests
+  - Inscription réussie
+  - Gestion des doublons
+  - Validation des champs (username, password)
+  - Vérification du hashage des mots de passe
+
+- **Tests de login** (`tests/test_auth_login.py`) - 6 tests
+  - Login réussi avec génération de JWT
+  - Gestion des erreurs (username/password invalides)
+  - Validation des champs obligatoires
+  - Vérification de la sensibilité à la casse
+  - Tests de tokens multiples
+
+- **Tests des routes protégées** (`tests/test_projects_auth.py`) - 8 tests
+  - Accès sans token (HTTP 401)
+  - Accès avec token invalide
+  - Accès avec token valide
+  - Vérification de l'expiration des tokens
+
+**Statut des tests** : Tous les tests passent (20/20) ✓
+
+Les fixtures pytest sont centralisées dans `tests/conftest.py` pour garantir l'isolation des tests et éviter les effets de bord entre les différentes suites de tests.
 
 ## Licence
 
