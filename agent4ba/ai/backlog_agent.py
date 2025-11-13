@@ -11,12 +11,16 @@ from dotenv import load_dotenv
 from litellm import completion
 
 from agent4ba.api.event_queue import get_event_queue
+from agent4ba.core.logger import setup_logger
 from agent4ba.core.models import WorkItem
 from agent4ba.core.storage import ProjectContextService
 from agent4ba.core.workitem_utils import assign_sequential_ids
 
 # Charger les variables d'environnement
 load_dotenv()
+
+# Configurer le logger
+logger = setup_logger(__name__)
 
 
 def load_decompose_prompt() -> dict[str, Any]:
@@ -74,20 +78,20 @@ def decompose_objective(state: Any) -> dict[str, Any]:
     Returns:
         Mise à jour de l'état avec impact_plan et status
     """
-    print("[BACKLOG_AGENT] Decomposing objective into work items...")
+    logger.info("Decomposing objective into work items...")
 
     # Récupérer l'objectif depuis l'intention
     intent = state.get("intent", {})
     objective = intent.get("args", {}).get("objective", "")
 
     if not objective:
-        print("[BACKLOG_AGENT] No objective found in intent args")
+        logger.warning("No objective found in intent args")
         return {
             "status": "error",
             "result": "No objective provided for decomposition",
         }
 
-    print(f"[BACKLOG_AGENT] Objective: {objective}")
+    logger.info(f"Objective: {objective}")
 
     # Récupérer le thread_id et la queue d'événements
     thread_id = state.get("thread_id", "")
@@ -143,7 +147,7 @@ def decompose_objective(state: Any) -> dict[str, Any]:
     try:
         existing_items = storage.load_context(project_id)
         context_summary = f"Backlog actuel avec {len(existing_items)} work items"
-        print(f"[BACKLOG_AGENT] Loaded {len(existing_items)} existing work items")
+        logger.info(f"Loaded {len(existing_items)} existing work items")
         # Mettre à jour le statut
         load_event_completed = {
             "type": "tool_used",
@@ -160,7 +164,7 @@ def decompose_objective(state: Any) -> dict[str, Any]:
     except FileNotFoundError:
         existing_items = []
         context_summary = "Nouveau projet sans backlog existant"
-        print("[BACKLOG_AGENT] No existing backlog found")
+        logger.info("No existing backlog found")
         load_event_completed = {
             "type": "tool_used",
             "tool_run_id": load_run_id,
@@ -187,7 +191,7 @@ def decompose_objective(state: Any) -> dict[str, Any]:
     model = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
     temperature = float(os.getenv("LLM_TEMPERATURE", "0.0"))
 
-    print(f"[BACKLOG_AGENT] Using model: {model}")
+    logger.info(f"Using model: {model}")
 
     # Émettre l'événement d'appel LLM
     llm_run_id = str(uuid.uuid4())
@@ -218,7 +222,7 @@ def decompose_objective(state: Any) -> dict[str, Any]:
         # Extraire la réponse
         response_text = response.choices[0].message.content
 
-        print(f"[BACKLOG_AGENT] LLM response received: {len(response_text)} characters")
+        logger.info(f"LLM response received: {len(response_text)} characters")
 
         # Mettre à jour le statut
         llm_event_completed = {
@@ -244,11 +248,11 @@ def decompose_objective(state: Any) -> dict[str, Any]:
         if not isinstance(work_items_data, list):
             raise ValueError("LLM response is not a list of work items")
 
-        print(f"[BACKLOG_AGENT] Generated {len(work_items_data)} work items")
+        logger.info(f"Generated {len(work_items_data)} work items")
 
         # Assigner des ID séquentiels uniques basés sur le préfixe du projet
         work_items_data = assign_sequential_ids(project_id, existing_items, work_items_data)
-        print(f"[BACKLOG_AGENT] Assigned sequential IDs starting with project prefix")
+        logger.info("Assigned sequential IDs starting with project prefix")
 
         # Valider et convertir en WorkItem
         new_items = []
@@ -262,7 +266,7 @@ def decompose_objective(state: Any) -> dict[str, Any]:
             work_item = WorkItem(**item_data)
             new_items.append(work_item)
 
-            print(f"[BACKLOG_AGENT]   - {work_item.type}: {work_item.title} (ID: {work_item.id})")
+            logger.info(f"  - {work_item.type}: {work_item.title} (ID: {work_item.id})")
 
         # Construire l'ImpactPlan
         impact_plan = {
@@ -271,9 +275,9 @@ def decompose_objective(state: Any) -> dict[str, Any]:
             "deleted_items": [],
         }
 
-        print("[BACKLOG_AGENT] ImpactPlan created successfully")
-        print(f"[BACKLOG_AGENT] - {len(new_items)} new items")
-        print("[BACKLOG_AGENT] Workflow paused, awaiting human approval")
+        logger.info("ImpactPlan created successfully")
+        logger.info(f"- {len(new_items)} new items")
+        logger.info("Workflow paused, awaiting human approval")
 
         # Émettre l'événement de construction de l'ImpactPlan
         plan_build_run_id = str(uuid.uuid4())
@@ -298,7 +302,7 @@ def decompose_objective(state: Any) -> dict[str, Any]:
         }
 
     except json.JSONDecodeError as e:
-        print(f"[BACKLOG_AGENT] Error parsing JSON: {e}")
+        logger.error("Error parsing JSON.", exc_info=True)
         llm_event_error = {
             "type": "tool_used",
             "tool_run_id": llm_run_id,
@@ -320,7 +324,7 @@ def decompose_objective(state: Any) -> dict[str, Any]:
             "agent_events": agent_events,
         }
     except Exception as e:
-        print(f"[BACKLOG_AGENT] Error: {e}")
+        logger.error("Error during objective decomposition.", exc_info=True)
         if agent_events and agent_events[-1].get("status") == "running":
             error_event = agent_events[-1].copy()
             error_event["status"] = "error"
@@ -346,7 +350,7 @@ def improve_description(state: Any) -> dict[str, Any]:
     Returns:
         Mise à jour de l'état avec impact_plan et status
     """
-    print("[BACKLOG_AGENT] Improving work item description...")
+    logger.info("Improving work item description...")
 
     # Vérifier d'abord si un contexte de type "work_item" est fourni
     context = state.get("context", [])
@@ -355,7 +359,7 @@ def improve_description(state: Any) -> dict[str, Any]:
         for ctx_item in context:
             if ctx_item.get("type") == "work_item":
                 item_id = ctx_item.get("id")
-                print(f"[BACKLOG_AGENT] Work item context provided: {item_id}")
+                logger.info(f"Work item context provided: {item_id}")
                 break
 
     # Si pas de contexte, récupérer l'item_id depuis intent_args
@@ -365,15 +369,15 @@ def improve_description(state: Any) -> dict[str, Any]:
         item_id = intent_args.get("work_item_id") or intent_args.get("work_item")
 
     if not item_id:
-        print("[BACKLOG_AGENT] No item_id found in context or intent args")
+        logger.warning("No item_id found in context or intent args")
         intent_args = state.get("intent_args", {})
-        print(f"[BACKLOG_AGENT] intent_args content: {intent_args}")
+        logger.warning(f"intent_args content: {intent_args}")
         return {
             "status": "error",
             "result": "No item_id provided for description improvement",
         }
 
-    print(f"[BACKLOG_AGENT] Item ID: {item_id}")
+    logger.info(f"Item ID: {item_id}")
 
     # Récupérer le thread_id et la queue d'événements
     thread_id = state.get("thread_id", "")
@@ -428,7 +432,7 @@ def improve_description(state: Any) -> dict[str, Any]:
 
     try:
         existing_items = storage.load_context(project_id)
-        print(f"[BACKLOG_AGENT] Loaded {len(existing_items)} existing work items")
+        logger.info(f"Loaded {len(existing_items)} existing work items")
         load_event_completed = {
             "type": "tool_used",
             "tool_run_id": load_run_id,
@@ -442,7 +446,7 @@ def improve_description(state: Any) -> dict[str, Any]:
         if event_queue:
             event_queue.put(load_event_completed)
     except FileNotFoundError:
-        print("[BACKLOG_AGENT] No existing backlog found")
+        logger.warning("No existing backlog found")
         load_event_error = {
             "type": "tool_used",
             "tool_run_id": load_run_id,
@@ -469,15 +473,15 @@ def improve_description(state: Any) -> dict[str, Any]:
             break
 
     if target_item is None:
-        print(f"[BACKLOG_AGENT] Item {item_id} not found in backlog")
+        logger.warning(f"Item {item_id} not found in backlog")
         return {
             "status": "error",
             "result": f"Work item {item_id} not found in backlog",
             "agent_events": agent_events,
         }
 
-    print(f"[BACKLOG_AGENT] Found item: {target_item.type} - {target_item.title}")
-    print(f"[BACKLOG_AGENT] Current description: {target_item.description}")
+    logger.info(f"Found item: {target_item.type} - {target_item.title}")
+    logger.info(f"Current description: {target_item.description}")
 
     # Sauvegarder l'état "before"
     item_before = target_item.model_copy(deep=True)
@@ -500,7 +504,7 @@ def improve_description(state: Any) -> dict[str, Any]:
     model = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
     temperature = float(os.getenv("LLM_TEMPERATURE", "0.0"))
 
-    print(f"[BACKLOG_AGENT] Using model: {model}")
+    logger.info(f"Using model: {model}")
 
     # Émettre l'événement d'appel LLM
     llm_run_id = str(uuid.uuid4())
@@ -531,8 +535,8 @@ def improve_description(state: Any) -> dict[str, Any]:
         # Extraire la réponse
         improved_description = response.choices[0].message.content.strip()
 
-        print(f"[BACKLOG_AGENT] LLM response received: {len(improved_description)} characters")
-        print(f"[BACKLOG_AGENT] Improved description: {improved_description}")
+        logger.info(f"LLM response received: {len(improved_description)} characters")
+        logger.info(f"Improved description: {improved_description}")
 
         # Mettre à jour le statut
         llm_event_completed = {
@@ -571,9 +575,9 @@ def improve_description(state: Any) -> dict[str, Any]:
             "deleted_items": [],
         }
 
-        print("[BACKLOG_AGENT] ImpactPlan created successfully")
-        print("[BACKLOG_AGENT] - 1 modified item")
-        print("[BACKLOG_AGENT] Workflow paused, awaiting human approval")
+        logger.info("ImpactPlan created successfully")
+        logger.info("- 1 modified item")
+        logger.info("Workflow paused, awaiting human approval")
 
         # Émettre l'événement de construction de l'ImpactPlan
         plan_build_run_id = str(uuid.uuid4())
@@ -598,7 +602,7 @@ def improve_description(state: Any) -> dict[str, Any]:
         }
 
     except Exception as e:
-        print(f"[BACKLOG_AGENT] Error: {e}")
+        logger.error("Error during description improvement.", exc_info=True)
         llm_event_error = {
             "type": "tool_used",
             "tool_run_id": llm_run_id,
@@ -631,7 +635,7 @@ def review_quality(state: Any) -> dict[str, Any]:
     Returns:
         Mise à jour de l'état avec impact_plan et status
     """
-    print("[BACKLOG_AGENT] Reviewing backlog quality with INVEST criteria...")
+    logger.info("Reviewing backlog quality with INVEST criteria...")
 
     # Récupérer le thread_id et la queue d'événements
     thread_id = state.get("thread_id", "")
@@ -686,7 +690,7 @@ def review_quality(state: Any) -> dict[str, Any]:
 
     try:
         existing_items = storage.load_context(project_id)
-        print(f"[BACKLOG_AGENT] Loaded {len(existing_items)} existing work items")
+        logger.info(f"Loaded {len(existing_items)} existing work items")
         load_event_completed = {
             "type": "tool_used",
             "tool_run_id": load_run_id,
@@ -700,7 +704,7 @@ def review_quality(state: Any) -> dict[str, Any]:
         if event_queue:
             event_queue.put(load_event_completed)
     except FileNotFoundError:
-        print("[BACKLOG_AGENT] No existing backlog found")
+        logger.warning("No existing backlog found")
         load_event_error = {
             "type": "tool_used",
             "tool_run_id": load_run_id,
@@ -723,14 +727,14 @@ def review_quality(state: Any) -> dict[str, Any]:
     stories = [item for item in existing_items if item.type == "story"]
 
     if len(stories) == 0:
-        print("[BACKLOG_AGENT] No user stories found in backlog")
+        logger.info("No user stories found in backlog")
         return {
             "status": "completed",
             "result": "No user stories found in backlog to analyze",
             "agent_events": agent_events,
         }
 
-    print(f"[BACKLOG_AGENT] Found {len(stories)} user stories to analyze")
+    logger.info(f"Found {len(stories)} user stories to analyze")
 
     # Charger le prompt
     prompt_config = load_invest_analysis_prompt()
@@ -739,7 +743,7 @@ def review_quality(state: Any) -> dict[str, Any]:
     model = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
     temperature = float(os.getenv("LLM_TEMPERATURE", "0.0"))
 
-    print(f"[BACKLOG_AGENT] Using model: {model}")
+    logger.info(f"Using model: {model}")
 
     # Préparer le contexte du projet
     context_summary = f"Projet avec {len(existing_items)} work items dans le backlog ({len(stories)} user stories)"
@@ -748,7 +752,7 @@ def review_quality(state: Any) -> dict[str, Any]:
 
     # Analyser chaque story
     for story in stories:
-        print(f"[BACKLOG_AGENT] Analyzing story: {story.id} - {story.title}")
+        logger.info(f"Analyzing story: {story.id} - {story.title}")
 
         # Sauvegarder l'état "before"
         item_before = story.model_copy(deep=True)
@@ -789,13 +793,13 @@ def review_quality(state: Any) -> dict[str, Any]:
             # Extraire la réponse
             response_text = response.choices[0].message.content.strip()
 
-            print(f"[BACKLOG_AGENT] LLM response received for {story.id}")
+            logger.info(f"LLM response received for {story.id}")
 
             # Parser la réponse JSON
             analysis_result = json.loads(response_text)
 
             if "invest_analysis" not in analysis_result:
-                print(f"[BACKLOG_AGENT] Warning: No 'invest_analysis' in response for {story.id}")
+                logger.warning(f"No 'invest_analysis' in response for {story.id}")
                 llm_event_error = {
                     "type": "tool_used",
                     "tool_run_id": llm_run_id,
@@ -816,9 +820,9 @@ def review_quality(state: Any) -> dict[str, Any]:
 
             invest_analysis = analysis_result["invest_analysis"]
 
-            print(f"[BACKLOG_AGENT] INVEST scores for {story.id}:")
+            logger.info(f"INVEST scores for {story.id}:")
             for criterion, data in invest_analysis.items():
-                print(f"[BACKLOG_AGENT]   {criterion}: {data['score']:.2f} - {data['reason']}")
+                logger.info(f"  {criterion}: {data['score']:.2f} - {data['reason']}")
 
             # Calculer le score moyen
             avg_score = sum(data["score"] for data in invest_analysis.values()) / len(invest_analysis)
@@ -854,7 +858,7 @@ def review_quality(state: Any) -> dict[str, Any]:
             })
 
         except json.JSONDecodeError as e:
-            print(f"[BACKLOG_AGENT] Error parsing JSON for {story.id}: {e}")
+            logger.error(f"Error parsing JSON for {story.id}.", exc_info=True)
             llm_event_error = {
                 "type": "tool_used",
                 "tool_run_id": llm_run_id,
@@ -873,7 +877,7 @@ def review_quality(state: Any) -> dict[str, Any]:
                 event_queue.put(llm_event_error)
             continue
         except Exception as e:
-            print(f"[BACKLOG_AGENT] Error analyzing {story.id}: {e}")
+            logger.error(f"Error analyzing {story.id}.", exc_info=True)
             llm_event_error = {
                 "type": "tool_used",
                 "tool_run_id": llm_run_id,
@@ -893,7 +897,7 @@ def review_quality(state: Any) -> dict[str, Any]:
             continue
 
     if len(modified_items) == 0:
-        print("[BACKLOG_AGENT] No stories were successfully analyzed")
+        logger.warning("No stories were successfully analyzed")
         return {
             "status": "error",
             "result": "Failed to analyze any stories",
@@ -907,9 +911,9 @@ def review_quality(state: Any) -> dict[str, Any]:
         "deleted_items": [],
     }
 
-    print("[BACKLOG_AGENT] ImpactPlan created successfully")
-    print(f"[BACKLOG_AGENT] - {len(modified_items)} stories analyzed with INVEST criteria")
-    print("[BACKLOG_AGENT] Workflow paused, awaiting human approval")
+    logger.info("ImpactPlan created successfully")
+    logger.info(f"- {len(modified_items)} stories analyzed with INVEST criteria")
+    logger.info("Workflow paused, awaiting human approval")
 
     # Émettre l'événement de construction de l'ImpactPlan
     plan_build_run_id = str(uuid.uuid4())
