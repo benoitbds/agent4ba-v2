@@ -6,6 +6,7 @@ toute l'application.
 """
 
 import logging
+import os
 import sys
 
 
@@ -15,6 +16,9 @@ def setup_logger(name: str) -> logging.Logger:
     Cette fonction crée un logger avec un handler sur stdout et un format
     unifié pour tous les messages de log. Elle évite d'ajouter plusieurs
     handlers au même logger en cas d'appels multiples.
+
+    Le niveau de log peut être configuré via la variable d'environnement LOG_LEVEL.
+    Par défaut, le niveau est DEBUG pour faciliter le diagnostic.
 
     Args:
         name: Le nom du logger, généralement le nom du module (__name__).
@@ -31,11 +35,15 @@ def setup_logger(name: str) -> logging.Logger:
 
     # Éviter d'ajouter des handlers multiples si le logger en a déjà
     if not logger.handlers:
-        logger.setLevel(logging.INFO)
+        # Lire le niveau de log depuis la variable d'environnement
+        log_level_str = os.getenv("LOG_LEVEL", "DEBUG").upper()
+        log_level = getattr(logging, log_level_str, logging.DEBUG)
+
+        logger.setLevel(log_level)
 
         # Créer un handler pour écrire sur stdout
         handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(logging.INFO)
+        handler.setLevel(log_level)
 
         # Définir le format des messages de log
         formatter = logging.Formatter(

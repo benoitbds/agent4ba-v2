@@ -29,8 +29,12 @@ from agent4ba.api.schemas import (
     CreateProjectRequest,
 )
 from agent4ba.core.document_ingestion import DocumentIngestionService
+from agent4ba.core.logger import setup_logger
 from agent4ba.core.models import User
 from agent4ba.core.storage import ProjectContextService
+
+# Configurer le logger
+logger = setup_logger(__name__)
 
 app = FastAPI(
     title="Agent4BA V2",
@@ -67,6 +71,9 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
     Yields:
         Chaînes formatées en SSE (data: {...}\\n\\n)
     """
+    # LOG DEBUG 1/3: Afficher le corps complet de la requête
+    logger.debug(f"[DEBUG] Received request body: {request.model_dump()}")
+
     # Générer un thread_id unique pour cette conversation
     thread_id = str(uuid.uuid4())
 
@@ -114,6 +121,9 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
             "agent_events": [],
             "thread_id": thread_id,  # Passer le thread_id dans le state
         }
+
+        # LOG DEBUG 2/3: Afficher l'état initial passé au graphe
+        logger.debug(f"[DEBUG] Initial state passed to graph: {initial_state}")
 
         # Configuration pour LangGraph avec thread_id
         config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
