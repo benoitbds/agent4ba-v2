@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from 'next-intl';
 import { FileText } from "lucide-react";
 import ChatInput from "@/components/ChatInput";
@@ -14,11 +15,14 @@ import DocumentManagementModal from "@/components/DocumentManagementModal";
 import ContextPills from "@/components/ContextPills";
 import { PrivateRoute } from "@/components/PrivateRoute";
 import { UserMenu } from "@/components/UserMenu";
-import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject, UnauthorizedError } from "@/lib/api";
 import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent, ContextItem } from "@/types/events";
 
 export default function Home() {
   const t = useTranslations();
+  const router = useRouter();
+  const { logout } = useAuth();
   const [projects, setProjects] = useState<string[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
@@ -36,6 +40,17 @@ export default function Home() {
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [chatContext, setChatContext] = useState<ContextItem[]>([]);
 
+  // Helper function to handle 401 errors - use useCallback to memoize
+  const handleUnauthorizedError = useCallback((error: unknown) => {
+    if (error instanceof UnauthorizedError) {
+      // Clear auth context and redirect to login
+      logout();
+      router.push("/login");
+      return true;
+    }
+    return false;
+  }, [logout, router]);
+
   // Load projects list on component mount
   useEffect(() => {
     const loadProjects = async () => {
@@ -47,12 +62,13 @@ export default function Home() {
           setSelectedProject(projectsList[0]);
         }
       } catch (error) {
+        if (handleUnauthorizedError(error)) return;
         console.error("Error loading projects:", error);
       }
     };
 
     loadProjects();
-  }, []);
+  }, [handleUnauthorizedError]);
 
   // Load backlog when selected project changes
   useEffect(() => {
@@ -64,6 +80,7 @@ export default function Home() {
         const items = await getProjectBacklog(selectedProject);
         setBacklogItems(items);
       } catch (error) {
+        if (handleUnauthorizedError(error)) return;
         console.error("Error loading backlog:", error);
         setBacklogItems([]);
       } finally {
@@ -72,7 +89,7 @@ export default function Home() {
     };
 
     loadBacklog();
-  }, [selectedProject]);
+  }, [selectedProject, handleUnauthorizedError]);
 
   // Load documents when selected project changes
   useEffect(() => {
@@ -83,13 +100,14 @@ export default function Home() {
         const docs = await getProjectDocuments(selectedProject);
         setDocuments(docs);
       } catch (error) {
+        if (handleUnauthorizedError(error)) return;
         console.error("Error loading documents:", error);
         setDocuments([]);
       }
     };
 
     loadDocuments();
-  }, [selectedProject]);
+  }, [selectedProject, handleUnauthorizedError]);
 
   // Reset context when project changes
   useEffect(() => {
@@ -165,6 +183,7 @@ export default function Home() {
         // Réinitialiser la timeline avec l'historique du nouveau projet
         setSessions(historySessions);
       } catch (error) {
+        if (handleUnauthorizedError(error)) return;
         console.error("Error loading timeline history:", error);
         // En cas d'erreur, réinitialiser la timeline à vide
         setSessions([]);
@@ -172,7 +191,7 @@ export default function Home() {
     };
 
     loadTimelineHistory();
-  }, [selectedProject]);
+  }, [selectedProject, handleUnauthorizedError, t]);
 
   // Function to refresh documents list after upload
   const handleDocumentUploadSuccess = async () => {
@@ -180,6 +199,7 @@ export default function Home() {
       const docs = await getProjectDocuments(selectedProject);
       setDocuments(docs);
     } catch (error) {
+      if (handleUnauthorizedError(error)) return;
       console.error("Error refreshing documents:", error);
     }
   };
@@ -341,6 +361,7 @@ export default function Home() {
         }
       }
     } catch (error) {
+      if (handleUnauthorizedError(error)) return;
       console.error("Error streaming events:", error);
       setStatusMessage(
         `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
@@ -384,9 +405,11 @@ export default function Home() {
         const items = await getProjectBacklog(selectedProject);
         setBacklogItems(items);
       } catch (error) {
+        if (handleUnauthorizedError(error)) return;
         console.error("Failed to refresh backlog:", error);
       }
     } catch (error) {
+      if (handleUnauthorizedError(error)) return;
       console.error("Error approving plan:", error);
       setStatusMessage(
         `${t('status.errorApproving')} ${error instanceof Error ? error.message : t('status.error')}`
@@ -410,6 +433,7 @@ export default function Home() {
       setImpactPlan(null);
       setThreadId(null);
     } catch (error) {
+      if (handleUnauthorizedError(error)) return;
       console.error("Error rejecting plan:", error);
       setStatusMessage(
         `${t('status.errorRejecting')} ${error instanceof Error ? error.message : t('status.error')}`
@@ -435,6 +459,7 @@ export default function Home() {
       setStatusType('success');
       setIsCreateProjectModalOpen(false);
     } catch (error) {
+      if (handleUnauthorizedError(error)) return;
       console.error("Error creating project:", error);
       setStatusMessage(
         `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
@@ -477,6 +502,7 @@ export default function Home() {
         setStatusType(null);
       }, 3000);
     } catch (error) {
+      if (handleUnauthorizedError(error)) return;
       console.error("Error deleting project:", error);
       setStatusMessage(
         `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
@@ -599,6 +625,7 @@ export default function Home() {
                       const items = await getProjectBacklog(selectedProject);
                       setBacklogItems(items);
                     } catch (error) {
+                      if (handleUnauthorizedError(error)) return;
                       console.error("Error refreshing backlog after update:", error);
                     }
                   }}
