@@ -6,6 +6,22 @@ import type { SSEEvent, WorkItem, ContextItem } from "@/types/events";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
 
+/**
+ * Get authentication headers with Bearer token
+ */
+function getAuthHeaders(): HeadersInit {
+  const token = localStorage.getItem("auth_token");
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
 export interface ChatRequest {
   project_id: string;
   query: string;
@@ -25,9 +41,7 @@ export async function* streamChatEvents(
 ): AsyncGenerator<SSEEvent, void, unknown> {
   const response = await fetch(`${API_URL}/chat`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: getAuthHeaders(),
     body: JSON.stringify(request),
   });
 
@@ -91,9 +105,7 @@ export async function sendApprovalDecision(
 }> {
   const response = await fetch(`${API_URL}/agent/run/${threadId}/continue`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ approved }),
   });
 
@@ -112,9 +124,7 @@ export async function getProjectBacklog(
 ): Promise<WorkItem[]> {
   const response = await fetch(`${API_URL}/projects/${projectId}/backlog`, {
     method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -132,9 +142,7 @@ export async function getProjectTimelineHistory(
 ): Promise<Array<{ timestamp: string; events: SSEEvent[] }>> {
   const response = await fetch(`${API_URL}/projects/${projectId}/timeline`, {
     method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -149,9 +157,7 @@ export async function getProjectTimelineHistory(
 export async function getProjects(): Promise<string[]> {
   const response = await fetch(`${API_URL}/projects`, {
     method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -169,9 +175,7 @@ export async function createProject(
 ): Promise<{ project_id: string; message: string }> {
   const response = await fetch(`${API_URL}/projects`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ project_id: projectId }),
   });
 
@@ -193,9 +197,7 @@ export async function getProjectDocuments(
 ): Promise<string[]> {
   const response = await fetch(`${API_URL}/projects/${projectId}/documents`, {
     method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -215,8 +217,15 @@ export async function uploadDocument(
   const formData = new FormData();
   formData.append("file", file);
 
+  const token = localStorage.getItem("auth_token");
+  const headers: HeadersInit = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_URL}/projects/${projectId}/documents`, {
     method: "POST",
+    headers: headers,
     body: formData,
   });
 
@@ -245,9 +254,7 @@ export async function uploadDocument(
 export async function deleteProject(projectId: string): Promise<void> {
   const response = await fetch(`${API_URL}/projects/${projectId}`, {
     method: "DELETE",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -269,9 +276,7 @@ export async function deleteDocument(
     `${API_URL}/projects/${projectId}/documents/${encodeURIComponent(documentName)}`,
     {
       method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: getAuthHeaders(),
     }
   );
 
@@ -297,9 +302,7 @@ export async function updateWorkItem(
     `${API_URL}/projects/${projectId}/backlog/${itemId}`,
     {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(updatedData),
     }
   );
@@ -325,9 +328,7 @@ export async function validateWorkItem(
     `${API_URL}/projects/${projectId}/backlog/${itemId}/validate`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: getAuthHeaders(),
     }
   );
 

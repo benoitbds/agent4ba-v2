@@ -343,6 +343,161 @@ Le projet dispose d'une suite complète de tests unitaires pour le module d'auth
 
 Les fixtures pytest sont centralisées dans `tests/conftest.py` pour garantir l'isolation des tests et éviter les effets de bord entre les différentes suites de tests.
 
+## Frontend UI
+
+Le projet dispose d'une interface utilisateur web construite avec **Next.js 15**, **React 19**, **TypeScript** et **TailwindCSS**.
+
+### Installation et lancement
+
+**1. Naviguer vers le dossier frontend :**
+
+```bash
+cd frontend
+```
+
+**2. Installer les dépendances :**
+
+```bash
+npm install
+```
+
+**3. Configurer l'URL de l'API backend :**
+
+Créer un fichier `.env.local` :
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8002
+```
+
+**4. Lancer le serveur de développement :**
+
+```bash
+npm run dev
+```
+
+Le frontend sera accessible sur `http://localhost:3000`.
+
+### Fonctionnalités du frontend
+
+#### Authentification JWT
+
+L'interface utilisateur implémente un système complet d'authentification JWT :
+
+- **Page d'inscription** (`/register`) : Création de compte avec validation (username min. 3 caractères, password min. 6 caractères)
+- **Page de connexion** (`/login`) : Authentification avec récupération du token JWT
+- **Protection des routes** : Redirection automatique vers `/login` si l'utilisateur n'est pas authentifié
+- **Déconnexion** : Bouton de logout dans le header qui efface le token et redirige vers `/login`
+- **Persistance** : Le token est stocké dans `localStorage` et réutilisé automatiquement
+- **Affichage utilisateur** : Le nom d'utilisateur est affiché dans le header
+
+#### Gestion des projets
+
+- **Liste des projets** : Affichage de tous les projets disponibles
+- **Création de projet** : Modal pour créer un nouveau projet
+- **Suppression de projet** : Modal de confirmation pour supprimer un projet
+- **Sélection de projet** : Dropdown pour changer de projet actif
+
+#### Interface de chat agent IA
+
+- **Chat avec l'agent** : Zone de saisie pour interagir avec l'agent IA
+- **Contexte** : Ajout de documents et work items au contexte de la conversation
+- **Timeline** : Visualisation en temps réel de l'exécution de l'agent (outils utilisés, étapes, etc.)
+- **Streaming SSE** : Affichage en temps réel des événements du backend
+
+#### Gestion du backlog
+
+- **Affichage du backlog** : Liste des work items du projet sélectionné
+- **Édition** : Modal pour éditer les work items
+- **Validation** : Marquage des work items comme validés par un humain
+- **Ajout au contexte** : Sélection de work items pour le contexte du chat
+
+#### Gestion des documents
+
+- **Upload de documents** : Upload de fichiers PDF (max. 50 Mo)
+- **Liste des documents** : Affichage des documents uploadés
+- **Suppression** : Suppression de documents avec leurs vecteurs associés
+- **Sélection pour contexte** : Ajout de documents au contexte du chat
+
+### Architecture du frontend
+
+```
+frontend/
+├── app/                          # Next.js App Router
+│   └── [locale]/                 # Routes avec i18n
+│       ├── layout.tsx            # Layout principal avec AuthProvider
+│       ├── page.tsx              # Page principale (protégée)
+│       ├── login/
+│       │   └── page.tsx          # Page de connexion
+│       └── register/
+│           └── page.tsx          # Page d'inscription
+├── components/                   # Composants React
+│   ├── ClientProviders.tsx      # Wrapper pour AuthProvider
+│   ├── PrivateRoute.tsx         # Protection des routes
+│   ├── UserMenu.tsx             # Menu utilisateur avec logout
+│   ├── ProjectSelector.tsx      # Sélecteur de projets
+│   ├── ChatInput.tsx            # Zone de saisie chat
+│   ├── TimelineView.tsx         # Visualisation de la timeline
+│   ├── BacklogView.tsx          # Liste du backlog
+│   └── ...                       # Autres composants
+├── context/                      # Contextes React
+│   └── AuthContext.tsx          # Gestion de l'authentification JWT
+├── lib/                          # Utilitaires
+│   └── api.ts                   # Fonctions d'appel API avec auth
+├── messages/                     # Traductions i18n
+│   ├── en.json                  # Anglais
+│   └── fr.json                  # Français
+└── types/                        # Types TypeScript
+    └── events.ts                # Types pour les événements SSE
+```
+
+### Flux d'authentification dans le frontend
+
+1. **Visite initiale** : L'utilisateur accède à `/` → redirigé vers `/login` (si pas authentifié)
+2. **Inscription** : L'utilisateur s'inscrit via `/register` → compte créé → redirigé vers `/login`
+3. **Connexion** : L'utilisateur se connecte via `/login` → token JWT reçu et stocké dans `localStorage` → redirigé vers `/`
+4. **Navigation** : L'utilisateur navigue sur l'application → toutes les requêtes API incluent automatiquement le header `Authorization: Bearer <token>`
+5. **Déconnexion** : L'utilisateur clique sur "Logout" → token supprimé du `localStorage` → redirigé vers `/login`
+
+### Internationalisation (i18n)
+
+Le frontend supporte plusieurs langues via **next-intl** :
+
+- **Langues disponibles** : Anglais (en), Français (fr)
+- **Détection automatique** : Basée sur les préférences du navigateur
+- **Changement de langue** : Via l'URL (`/en/...` ou `/fr/...`)
+
+Toutes les chaînes de caractères, y compris celles liées à l'authentification, sont traduites dans `messages/en.json` et `messages/fr.json`.
+
+### Sécurité frontend
+
+- **Stockage du token** : `localStorage` (accessible uniquement côté client)
+- **Protection CSRF** : Les tokens JWT ne sont pas dans les cookies (protection CSRF native)
+- **Expiration** : Le token expire côté serveur après 30 minutes
+- **Redirection automatique** : Si le serveur renvoie une erreur 401, l'utilisateur est redirigé vers `/login`
+- **Validation côté client** : Validation des formulaires avant envoi (longueur username/password, correspondance des mots de passe)
+
+### Tests manuels
+
+Pour tester l'intégration complète :
+
+1. **Démarrer le backend** : `poetry run uvicorn agent4ba.api.main:app --reload` (port 8002)
+2. **Démarrer le frontend** : `cd frontend && npm run dev` (port 3000)
+3. **Tester l'inscription** : Aller sur `http://localhost:3000/register` → créer un compte
+4. **Tester la connexion** : Se connecter avec le compte créé → vérifier la redirection vers `/`
+5. **Tester l'accès protégé** : Vérifier que la liste des projets s'affiche (requête avec token)
+6. **Tester la déconnexion** : Cliquer sur "Logout" → vérifier la redirection vers `/login`
+7. **Tester la protection** : Tenter d'accéder à `/` sans être connecté → vérifier la redirection vers `/login`
+
+### Build de production
+
+```bash
+cd frontend
+npm run build
+npm start
+```
+
+L'application sera optimisée et servie en mode production.
+
 ## Licence
 
 Propriétaire

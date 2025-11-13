@@ -179,5 +179,36 @@
     "empty": "(empty)",
     "thread": "Thread:",
     "token": "Token:"
+  },
+  "auth": {
+    "login": {
+      "title": "Sign in to your account",
+      "username": "Username",
+      "usernamePlaceholder": "Enter your username",
+      "password": "Password",
+      "passwordPlaceholder": "Enter your password",
+      "signIn": "Sign in",
+      "signingIn": "Signing in...",
+      "noAccount": "Don't have an account?",
+      "registerLink": "Sign up"
+    },
+    "register": {
+      "title": "Create your account",
+      "username": "Username",
+      "usernamePlaceholder": "Choose a username (min. 3 characters)",
+      "password": "Password",
+      "passwordPlaceholder": "Choose a password (min. 6 characters)",
+      "confirmPassword": "Confirm Password",
+      "confirmPasswordPlaceholder": "Confirm your password",
+      "signUp": "Sign up",
+      "creating": "Creating account...",
+      "hasAccount": "Already have an account?",
+      "loginLink": "Sign in",
+      "success": "Account created successfully! Redirecting to login...",
+      "passwordMismatch": "Passwords do not match",
+      "passwordTooShort": "Password must be at least 6 characters",
+      "usernameTooShort": "Username must be at least 3 characters"
+    },
+    "logout": "Logout"
   }
 }
