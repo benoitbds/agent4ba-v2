@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Trash2, Check, X, Plus } from "lucide-react";
+import { Trash2, Check, X, Plus, ClipboardPlus } from "lucide-react";
 import UploadDocumentModal from "./UploadDocumentModal";
 import { deleteDocument } from "@/lib/api";
 
@@ -133,7 +133,7 @@ export default function DocumentManagementModal({
                           className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
                           title={t("documents.select")}
                         >
-                          <Check className="w-5 h-5" />
+                          <ClipboardPlus className="w-5 h-5" />
                         </button>
 
                         {/* Delete Button */}
