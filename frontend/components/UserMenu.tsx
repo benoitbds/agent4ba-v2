@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/context/AuthContext";
-import { LogOut, User, Settings, ChevronDown } from "lucide-react";
+import { LogOut, User, Settings } from "lucide-react";
 
 /**
  * UserMenu - Dropdown menu for user actions
@@ -35,24 +35,15 @@ export function UserMenu() {
 
   return (
     <div className="relative" ref={menuRef}>
-      {/* User Button */}
+      {/* User Avatar Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        className="flex items-center justify-center w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-semibold text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         aria-expanded={isOpen}
         aria-haspopup="true"
+        title={user.username}
       >
-        <div className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full font-semibold text-sm">
-          {user.username.charAt(0).toUpperCase()}
-        </div>
-        <span className="text-sm font-medium text-gray-700 hidden sm:inline">
-          {user.username}
-        </span>
-        <ChevronDown
-          className={`w-4 h-4 text-gray-600 transition-transform ${
-            isOpen ? "rotate-180" : ""
-          }`}
-        />
+        {user.username.charAt(0).toUpperCase()}
       </button>
 
       {/* Dropdown Menu */}
