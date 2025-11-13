@@ -210,5 +210,12 @@
       "usernameTooShort": "Le nom d'utilisateur doit contenir au moins 3 caractères"
     },
     "logout": "Déconnexion"
+  },
+  "userMenu": {
+    "profile": "Profil",
+    "settings": "Paramètres"
+  },
+  "projectMenu": {
+    "actions": "Actions projet"
   }
 }

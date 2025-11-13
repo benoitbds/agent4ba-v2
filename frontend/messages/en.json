@@ -210,5 +210,12 @@
       "usernameTooShort": "Username must be at least 3 characters"
     },
     "logout": "Logout"
+  },
+  "userMenu": {
+    "profile": "Profile",
+    "settings": "Settings"
+  },
+  "projectMenu": {
+    "actions": "Project actions"
   }
 }

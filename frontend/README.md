@@ -10,6 +10,9 @@ Interface utilisateur Next.js pour Agent4BA V2, permettant d'interagir avec le b
 - 🔄 **SSE Streaming** - Événements streamés en temps réel depuis le backend
 - 🎨 **Tailwind CSS** - Interface moderne et responsive
 - ⚡ **TypeScript** - Code entièrement typé pour une meilleure maintenabilité
+- 📱 **Responsive Design** - Header optimisé avec menu hamburger pour mobile
+- 👤 **User Menu** - Dropdown pour profil, paramètres et déconnexion
+- 📂 **Project Menu** - Actions projet regroupées dans un menu contextuel
 
 ## Prérequis
 
@@ -66,6 +69,10 @@ frontend/
 │   ├── page.tsx             # Page d'accueil avec orchestration
 │   └── globals.css          # Styles globaux Tailwind
 ├── components/
+│   ├── Header.tsx           # 🆕 Header modulaire avec responsive
+│   ├── UserMenu.tsx         # 🆕 Menu utilisateur dropdown
+│   ├── ProjectMenu.tsx      # 🆕 Menu actions projet dropdown
+│   ├── ProjectSelector.tsx  # Sélecteur de projet
 │   ├── ChatInput.tsx        # Composant de saisie
 │   ├── AgentTimeline.tsx    # Timeline des événements
 │   └── ImpactPlanModal.tsx  # Modal d'approbation
@@ -73,8 +80,83 @@ frontend/
 │   └── api.ts               # Fonctions API (SSE streaming, approbation)
 ├── types/
 │   └── events.ts            # Types TypeScript pour les événements SSE
+├── messages/
+│   ├── fr.json              # Traductions françaises
+│   └── en.json              # Traductions anglaises
 ├── .env.local               # Configuration (non versionné)
 └── README.md                # Ce fichier
+```
+
+## UI – Header Refactorisé
+
+Le header a été refactorisé pour améliorer la clarté et l'expérience utilisateur :
+
+### Architecture des Composants
+
+#### 1. **Header.tsx** (Composant principal)
+- Header sticky en haut de l'application
+- Layout responsive avec breakpoints mobile/desktop
+- Intègre tous les sous-composants (logo, menus, sélecteur)
+- Menu hamburger automatique sur mobile (< 768px)
+
+#### 2. **UserMenu.tsx** (Menu utilisateur)
+- Dropdown avec avatar circulaire (première lettre du username)
+- Options : **Profil**, **Paramètres**, **Déconnexion**
+- Fermeture automatique lors du clic extérieur
+- Design accessible avec zones cliquables > 44px
+
+#### 3. **ProjectMenu.tsx** (Menu actions projet)
+- Regroupe les actions projet : **Documents**, **Nouveau projet**, **Supprimer projet**
+- Dropdown contextuel avec icônes lucide-react
+- Désactivé automatiquement si aucun projet sélectionné
+
+### Disposition Desktop (≥ 768px)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 🌟 Agent4BA    [Projet: ▼] [Actions ▼]    [👤 User ▼]     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **Gauche** : Logo + Titre de l'application
+- **Centre** : Sélecteur de projet (visible)
+- **Droite** : Menu Actions projet + Menu Utilisateur
+
+### Disposition Mobile (< 768px)
+
+```
+┌─────────────────────────────────────────────┐
+│ 🌟 Agent4BA      [👤 User ▼] [☰]           │
+└─────────────────────────────────────────────┘
+```
+
+- **Gauche** : Logo seul (titre caché)
+- **Droite** : Menu Utilisateur + Bouton hamburger
+- **Menu hamburger** : Ouvre un panneau avec sélecteur projet + actions
+
+### Avantages du Refactoring
+
+✅ **Clarté visuelle** - Moins de boutons dans le header
+✅ **Hiérarchie** - Actions secondaires regroupées logiquement
+✅ **Responsive** - Menu hamburger natif sur mobile
+✅ **Accessibilité** - Zones cliquables conformes (> 44px), contrastes respectés
+✅ **Maintenabilité** - Composants modulaires et réutilisables
+✅ **TypeScript** - Interfaces strictes pour tous les props
+
+### Traductions Ajoutées
+
+Nouvelles clés dans `messages/fr.json` et `messages/en.json` :
+
+```json
+{
+  "userMenu": {
+    "profile": "Profil",
+    "settings": "Paramètres"
+  },
+  "projectMenu": {
+    "actions": "Actions projet"
+  }
+}
 ```
 
 ## Utilisation
