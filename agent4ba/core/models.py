@@ -1,6 +1,6 @@
 """Data models for Agent4BA."""
 
-from typing import Any, Literal
+from typing import Any, List, Literal
 
 from pydantic import BaseModel, Field
 
@@ -27,6 +27,27 @@ class User(BaseModel):
     }
 
 
+class TestCaseStep(BaseModel):
+    """Représente une étape d'un cas de test."""
+
+    step: str = Field(..., description="Description of the action to perform.")
+    expected_result: str = Field(..., description="The expected outcome of the action.")
+
+
+class TestCase(BaseModel):
+    """Représente un cas de test structuré."""
+
+    title: str = Field(..., description="A concise title for the test case.")
+    scenario: str = Field(
+        ...,
+        description="The user scenario being tested, often in Gherkin format (Given/When/Then).",
+    )
+    steps: List[TestCaseStep] = Field(
+        default_factory=list,
+        description="A list of detailed steps for the test case.",
+    )
+
+
 class WorkItem(BaseModel):
     """Représente un élément de travail (user story, task, bug, etc.)."""
 
@@ -42,6 +63,10 @@ class WorkItem(BaseModel):
     acceptance_criteria: list[str] = Field(
         default_factory=list,
         description="Liste des critères d'acceptation pour ce work item",
+    )
+    test_cases: List[TestCase] = Field(
+        default_factory=list,
+        description="A list of test cases associated with this work item.",
     )
     validation_status: Literal["ia_generated", "human_validated", "ia_modified"] = Field(
         default="ia_generated",
