@@ -13,8 +13,8 @@ def test_generate_test_cases_success():
     """
     Test du cas nominal de la fonction generate_test_cases.
 
-    Vérifie que la fonction génère correctement les cas de test pour un work item
-    lorsque le LLM retourne une réponse valide.
+    Vérifie que la fonction génère correctement des WorkItems de type test_case
+    pour une User Story parente lorsque le LLM retourne une réponse valide.
     """
     # Préparer le state initial
     state = {
@@ -23,7 +23,7 @@ def test_generate_test_cases_success():
         "thread_id": "test-thread-123",
     }
 
-    # Créer un WorkItem de test
+    # Créer un WorkItem de test (User Story parente)
     test_work_item = WorkItem(
         id="TEST-1",
         project_id="TEST",
@@ -37,31 +37,51 @@ def test_generate_test_cases_success():
         ],
     )
 
-    # Préparer les cas de test que le LLM devrait retourner
+    # Préparer les cas de test que le LLM devrait retourner (nouveau format)
     mock_test_cases = [
         {
             "title": "Connexion réussie avec des identifiants valides",
-            "description": "Vérifier que l'utilisateur peut se connecter avec des identifiants corrects",
-            "preconditions": "L'utilisateur doit avoir un compte actif",
+            "scenario": "Given l'utilisateur a un compte actif dans le système\nWhen l'utilisateur saisit des identifiants valides et clique sur 'Se connecter'\nThen l'utilisateur est redirigé vers le tableau de bord",
             "steps": [
-                "Naviguer vers la page de connexion",
-                "Entrer un email valide",
-                "Entrer un mot de passe valide",
-                "Cliquer sur le bouton 'Se connecter'",
+                {
+                    "step": "Naviguer vers la page de connexion",
+                    "expected_result": "La page de connexion s'affiche avec les champs Email et Mot de passe",
+                },
+                {
+                    "step": "Entrer un email valide dans le champ Email",
+                    "expected_result": "L'email est affiché dans le champ",
+                },
+                {
+                    "step": "Entrer un mot de passe valide dans le champ Mot de passe",
+                    "expected_result": "Le mot de passe est masqué dans le champ",
+                },
+                {
+                    "step": "Cliquer sur le bouton 'Se connecter'",
+                    "expected_result": "L'utilisateur est redirigé vers le tableau de bord",
+                },
             ],
-            "expected_result": "L'utilisateur est redirigé vers le tableau de bord",
         },
         {
             "title": "Échec de connexion avec un mot de passe incorrect",
-            "description": "Vérifier que le système refuse la connexion avec un mot de passe incorrect",
-            "preconditions": "L'utilisateur doit avoir un compte actif",
+            "scenario": "Given l'utilisateur a un compte actif dans le système\nWhen l'utilisateur saisit un email valide mais un mot de passe incorrect\nThen un message d'erreur s'affiche",
             "steps": [
-                "Naviguer vers la page de connexion",
-                "Entrer un email valide",
-                "Entrer un mot de passe incorrect",
-                "Cliquer sur le bouton 'Se connecter'",
+                {
+                    "step": "Naviguer vers la page de connexion",
+                    "expected_result": "La page de connexion s'affiche",
+                },
+                {
+                    "step": "Entrer un email valide dans le champ Email",
+                    "expected_result": "L'email est affiché dans le champ",
+                },
+                {
+                    "step": "Entrer un mot de passe incorrect dans le champ Mot de passe",
+                    "expected_result": "Le mot de passe est masqué dans le champ",
+                },
+                {
+                    "step": "Cliquer sur le bouton 'Se connecter'",
+                    "expected_result": "Un message d'erreur 'Email ou mot de passe incorrect' s'affiche",
+                },
             ],
-            "expected_result": "Un message d'erreur s'affiche",
         },
     ]
 
@@ -91,35 +111,48 @@ def test_generate_test_cases_success():
         assert "impact_plan" in result
         assert result["impact_plan"] is not None
 
-        # 2. Vérifier que l'impact_plan contient une liste de modified_items
+        # 2. Vérifier que l'impact_plan contient une liste de new_items
         impact_plan = result["impact_plan"]
+        assert "new_items" in impact_plan
+        assert isinstance(impact_plan["new_items"], list)
+        assert len(impact_plan["new_items"]) == 2
+
+        # 3. Vérifier que modified_items est vide
         assert "modified_items" in impact_plan
-        assert isinstance(impact_plan["modified_items"], list)
-        assert len(impact_plan["modified_items"]) == 1
+        assert len(impact_plan["modified_items"]) == 0
 
-        # 3. Vérifier la structure du modified_item
-        modified_item = impact_plan["modified_items"][0]
-        assert "before" in modified_item
-        assert "after" in modified_item
+        # 4. Vérifier la structure du premier nouveau WorkItem (test_case)
+        test_case_item = impact_plan["new_items"][0]
+        assert test_case_item["type"] == "test_case"
+        assert test_case_item["parent_id"] == "TEST-1"
+        assert test_case_item["project_id"] == "TEST"
+        assert test_case_item["id"] == "TEST-1-TC001"
+        assert test_case_item["title"] == "Connexion réussie avec des identifiants valides"
+        assert "scenario" in test_case_item
+        assert "Given" in test_case_item["scenario"]
+        assert "When" in test_case_item["scenario"]
+        assert "Then" in test_case_item["scenario"]
 
-        # 4. Vérifier que l'item "after" contient les cas de test
-        item_after = modified_item["after"]
-        assert "test_cases" in item_after
-        assert isinstance(item_after["test_cases"], list)
-        assert len(item_after["test_cases"]) == 2
+        # 5. Vérifier la structure des steps
+        assert "steps" in test_case_item
+        assert isinstance(test_case_item["steps"], list)
+        assert len(test_case_item["steps"]) == 4
+        first_step = test_case_item["steps"][0]
+        assert "step" in first_step
+        assert "expected_result" in first_step
+        assert first_step["step"] == "Naviguer vers la page de connexion"
 
-        # 5. Vérifier la structure d'un cas de test
-        test_case = item_after["test_cases"][0]
-        assert "title" in test_case
-        assert "description" in test_case
-        assert "steps" in test_case
-        assert "expected_result" in test_case
-        assert test_case["title"] == "Connexion réussie avec des identifiants valides"
+        # 6. Vérifier le deuxième WorkItem test_case
+        second_test_case = impact_plan["new_items"][1]
+        assert second_test_case["type"] == "test_case"
+        assert second_test_case["parent_id"] == "TEST-1"
+        assert second_test_case["id"] == "TEST-1-TC002"
+        assert second_test_case["title"] == "Échec de connexion avec un mot de passe incorrect"
 
-        # 6. Vérifier que le statut est "awaiting_approval"
+        # 7. Vérifier que le statut est "awaiting_approval"
         assert result["status"] == "awaiting_approval"
 
-        # 7. Vérifier que le LLM a été appelé avec les bons paramètres
+        # 8. Vérifier que le LLM a été appelé avec les bons paramètres
         mock_completion.assert_called_once()
         call_args = mock_completion.call_args
         assert call_args is not None

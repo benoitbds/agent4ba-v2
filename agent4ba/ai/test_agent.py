@@ -12,7 +12,7 @@ from litellm import completion
 
 from agent4ba.api.event_queue import get_event_queue
 from agent4ba.core.logger import setup_logger
-from agent4ba.core.models import TestCase
+from agent4ba.core.models import TestCase, TestCaseStep, WorkItem
 from agent4ba.core.storage import ProjectContextService
 
 # Charger les variables d'environnement
@@ -181,9 +181,6 @@ def generate_test_cases(state: Any) -> dict[str, Any]:
     logger.info(f"Current description: {target_item.description}")
     logger.info(f"Acceptance criteria: {target_item.acceptance_criteria}")
 
-    # Sauvegarder l'état "before"
-    item_before = target_item.model_copy(deep=True)
-
     # Charger le prompt
     prompt_config = load_generate_test_cases_prompt()
 
@@ -246,20 +243,34 @@ def generate_test_cases(state: Any) -> dict[str, Any]:
 
         logger.info(f"Generated {len(test_cases_data)} test cases")
 
-        # Valider et convertir en TestCase
-        test_cases = []
+        # Valider et convertir en TestCase, puis créer des WorkItems pour chaque cas de test
+        new_work_items = []
         for i, test_case_data in enumerate(test_cases_data, 1):
             try:
                 # Créer le TestCase (validation Pydantic)
                 test_case = TestCase(**test_case_data)
-                test_cases.append(test_case)
                 logger.info(f"  {i}. {test_case.title}")
+
+                # Créer un nouveau WorkItem de type test_case
+                test_case_work_item = WorkItem(
+                    id=f"{item_id}-TC{i:03d}",  # Format: WI-001-TC001, WI-001-TC002, etc.
+                    project_id=project_id,
+                    type="test_case",
+                    title=test_case.title,
+                    description=test_case.scenario,
+                    parent_id=item_id,
+                    scenario=test_case.scenario,
+                    steps=[TestCaseStep(**step) for step in test_case.steps],
+                    validation_status="ia_generated",
+                    attributes={},
+                )
+                new_work_items.append(test_case_work_item)
             except Exception as e:
                 logger.warning(f"Failed to parse test case {i}: {e}")
                 # Continuer avec les autres cas de test
                 continue
 
-        if not test_cases:
+        if not new_work_items:
             raise ValueError("No valid test cases could be generated")
 
         # Mettre à jour le statut de l'événement
@@ -274,35 +285,22 @@ def generate_test_cases(state: Any) -> dict[str, Any]:
                 "model": model,
                 "temperature": temperature,
                 "item_id": item_id,
-                "test_cases_count": len(test_cases),
+                "test_cases_count": len(new_work_items),
             },
         }
         agent_events[-1] = llm_event_completed
         if event_queue:
             event_queue.put(llm_event_completed)
 
-        # Créer l'état "after" avec les cas de test
-        item_after = target_item.model_copy(deep=True)
-        item_after.test_cases = test_cases
-        # Marquer l'item comme modifié par l'IA
-        if item_before.validation_status == "human_validated":
-            item_after.validation_status = "ia_modified"
-        # Sinon, il garde son statut actuel (ia_generated ou ia_modified)
-
-        # Construire l'ImpactPlan avec modified_items au format {before, after}
+        # Construire l'ImpactPlan avec new_items (les nouveaux WorkItems de type test_case)
         impact_plan = {
-            "new_items": [],
-            "modified_items": [
-                {
-                    "before": item_before.model_dump(),
-                    "after": item_after.model_dump(),
-                }
-            ],
+            "new_items": [item.model_dump() for item in new_work_items],
+            "modified_items": [],
             "deleted_items": [],
         }
 
         logger.info("ImpactPlan created successfully")
-        logger.info(f"- 1 modified item with {len(test_cases)} test cases")
+        logger.info(f"- {len(new_work_items)} new test case work items created")
         logger.info("Workflow paused, awaiting human approval")
 
         # Émettre l'événement de construction de l'ImpactPlan
@@ -312,9 +310,9 @@ def generate_test_cases(state: Any) -> dict[str, Any]:
             "tool_run_id": plan_build_run_id,
             "tool_name": "Construction ImpactPlan",
             "tool_icon": "📋",
-            "description": "Création du plan d'impact avec les cas de test générés",
+            "description": "Création du plan d'impact avec les nouveaux work items de test",
             "status": "completed",
-            "details": {"modified_items_count": 1, "test_cases_count": len(test_cases)},
+            "details": {"new_items_count": len(new_work_items), "parent_id": item_id},
         }
         agent_events.append(plan_build_event)
         if event_queue:
@@ -323,7 +321,7 @@ def generate_test_cases(state: Any) -> dict[str, Any]:
         return {
             "impact_plan": impact_plan,
             "status": "awaiting_approval",
-            "result": f"Generated {len(test_cases)} test cases for work item: {item_id}",
+            "result": f"Generated {len(new_work_items)} test case work items for: {item_id}",
             "agent_events": agent_events,
         }
 
