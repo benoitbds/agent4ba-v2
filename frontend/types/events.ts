@@ -9,6 +9,7 @@ export interface WorkItem {
   title: string;
   description: string;
   parent_id: string | null;
+  acceptance_criteria?: string[];
   validation_status: "ia_generated" | "human_validated" | "ia_modified";
   attributes: {
     priority?: string;

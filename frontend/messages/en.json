@@ -54,7 +54,10 @@
     "addToContext": "Add to chat context",
     "validateItem": "Validate this item",
     "validationSuccess": "Item \"{title}\" has been successfully validated",
-    "validationError": "Error validating the item"
+    "validationError": "Error validating the item",
+    "generateAcceptanceCriteria": "Generate acceptance criteria",
+    "acceptanceCriteriaGenerated": "Acceptance criteria for \"{title}\" have been successfully generated",
+    "acceptanceCriteriaError": "Error generating acceptance criteria"
   },
   "timeline": {
     "title": "Execution Timeline",
@@ -170,6 +173,7 @@
     "titleRequired": "Title is required",
     "descriptionLabel": "Description",
     "descriptionPlaceholder": "Work item description...",
+    "acceptanceCriteria": "Acceptance Criteria",
     "cancel": "Cancel",
     "save": "Save",
     "saving": "Saving...",
