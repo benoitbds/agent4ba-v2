@@ -43,6 +43,11 @@ Le prompt a été complètement réécrit avec les sections suivantes :
 **Fichier**: `agent4ba/ai/graph.py`
 
 - Import de `RouterDecision` depuis `agent4ba.ai.schemas`
+- **Nettoyage robuste de la sortie LLM** :
+  - Extraction du JSON entre la première `{` et la dernière `}`
+  - Suppression automatique des balises markdown (```json)
+  - Gestion du texte avant/après le JSON
+  - Logs DEBUG pour tracer les chaînes brutes et nettoyées
 - Parsing de la réponse LLM en objet `RouterDecision`
 - **LOG CRUCIAL**: `logger.info(f"[ROUTER_THOUGHT] {router_decision.thought}")`
 - Extraction de `decision` et utilisation comme avant
@@ -53,6 +58,23 @@ Le prompt a été complètement réécrit avec les sections suivantes :
   - Tous redirigent vers `fallback_agent` en cas d'échec
 
 ## 🧪 Tests de Validation
+
+### Script de Test du Nettoyage JSON
+
+**Fichier**: `test_json_cleaning.py`
+
+Ce script teste la robustesse de la logique de nettoyage JSON :
+
+```bash
+# Tester la logique de nettoyage
+python test_json_cleaning.py
+```
+
+Le test valide que le nettoyage gère correctement :
+- ✅ JSON pur (sans modification)
+- ✅ JSON avec balises markdown ```json (suppression des balises)
+- ✅ JSON avec texte avant/après (texte ignoré)
+- ✅ Texte sans JSON (erreur gérée gracieusement)
 
 ### Script de Test Automatisé
 
