@@ -193,6 +193,7 @@
     "generateAC": "Générer les AC",
     "generatingAC": "Génération...",
     "acceptanceCriteriaFailed": "Erreur lors de la génération",
+    "delete": "Supprimer",
     "humanValidated": "Validé",
     "iaGenerated": "Généré par IA",
     "iaModified": "Modifié par IA"

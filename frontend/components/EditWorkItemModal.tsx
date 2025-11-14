@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from 'next-intl';
-import { CheckCircle, UserCheck, Sparkles, ListChecks } from "lucide-react";
+import { CheckCircle, UserCheck, Sparkles, ListChecks, Trash2 } from "lucide-react";
 import type { WorkItem } from "@/types/events";
 
 interface EditWorkItemModalProps {
@@ -11,6 +11,7 @@ interface EditWorkItemModalProps {
   onSave: (itemId: string, updatedData: { title: string; description: string | null }) => Promise<void>;
   onValidate?: (item: WorkItem) => Promise<void>;
   onGenerateAcceptanceCriteria?: (item: WorkItem) => Promise<void>;
+  onDelete?: (item: WorkItem) => void;
   item: WorkItem | null;
 }
 
@@ -20,6 +21,7 @@ export default function EditWorkItemModal({
   onSave,
   onValidate,
   onGenerateAcceptanceCriteria,
+  onDelete,
   item,
 }: EditWorkItemModalProps) {
   const t = useTranslations();
@@ -229,6 +231,22 @@ export default function EditWorkItemModal({
                 >
                   <ListChecks className="w-4 h-4" />
                   {isGeneratingAC ? t('editWorkItem.generatingAC') : t('editWorkItem.generateAC')}
+                </button>
+              )}
+
+              {/* Bouton de suppression */}
+              {onDelete && item && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDelete(item);
+                    handleClose();
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 inline-flex items-center gap-2"
+                  disabled={isSaving || isValidating || isGeneratingAC}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {t('editWorkItem.delete')}
                 </button>
               )}
             </div>
