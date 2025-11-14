@@ -5,6 +5,38 @@ from typing import Any, List, Literal
 from pydantic import BaseModel, Field
 
 
+class TestCase(BaseModel):
+    """Représente un cas de test pour un work item."""
+
+    title: str = Field(..., description="Titre du cas de test")
+    description: str = Field(..., description="Description détaillée du scénario de test")
+    preconditions: str | None = Field(None, description="Préconditions pour exécuter le test")
+    steps: list[str] = Field(
+        default_factory=list,
+        description="Liste des étapes à exécuter dans le test",
+    )
+    expected_result: str = Field(..., description="Résultat attendu du test")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "title": "Test de connexion avec des identifiants valides",
+                    "description": "Vérifier que l'utilisateur peut se connecter avec des identifiants corrects",
+                    "preconditions": "L'utilisateur doit avoir un compte actif",
+                    "steps": [
+                        "Naviguer vers la page de connexion",
+                        "Entrer un email valide",
+                        "Entrer un mot de passe valide",
+                        "Cliquer sur le bouton 'Se connecter'",
+                    ],
+                    "expected_result": "L'utilisateur est redirigé vers le tableau de bord",
+                }
+            ]
+        }
+    }
+
+
 class User(BaseModel):
     """Représente un utilisateur du système."""
 
@@ -64,9 +96,9 @@ class WorkItem(BaseModel):
         default_factory=list,
         description="Liste des critères d'acceptation pour ce work item",
     )
-    test_cases: List[TestCase] = Field(
+    test_cases: list[TestCase] = Field(
         default_factory=list,
-        description="A list of test cases associated with this work item.",
+        description="Liste des cas de test pour ce work item",
     )
     validation_status: Literal["ia_generated", "human_validated", "ia_modified"] = Field(
         default="ia_generated",

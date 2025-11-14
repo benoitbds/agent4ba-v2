@@ -24,6 +24,9 @@ agents:
   - id: document_agent
     description: "Agent spécialisé dans l'extraction d'exigences depuis des documents non structurés via RAG (Retrieval-Augmented Generation). Utilise une base vectorielle pour rechercher et extraire les informations pertinentes."
 
+  - id: test_agent
+    description: "Agent spécialisé dans la génération de cas de test structurés pour les work items. Génère des scénarios de test détaillés avec préconditions, étapes et résultats attendus."
+
 
 # --------------------------------------------------------------------
 # Mapping des intentions utilisateur vers les tâches d'agent
@@ -82,6 +85,15 @@ intent_mapping:
     agent_task: generate_acceptance_criteria
     prompt_file: prompts/generate_acceptance_criteria.yaml
     description: "Génère les critères d'acceptation pour une User Story ou une Feature."
+
+  # ----------------------------------------------------------------
+  # Intention : Générer les cas de test
+  # ----------------------------------------------------------------
+  - intent_id: generate_test_cases
+    agent_id: test_agent
+    agent_task: generate_test_cases
+    prompt_file: prompts/generate_test_cases.yaml
+    description: "Génère les cas de test structurés pour un work item avec préconditions, étapes et résultats attendus."
 
   # ----------------------------------------------------------------
   # Intentions non implémentées (stubs)
