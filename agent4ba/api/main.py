@@ -336,6 +336,9 @@ async def continue_workflow(thread_id: str, request: ApprovalRequest) -> ChatRes
     Raises:
         HTTPException: Si le thread_id n'existe pas ou le workflow n'est pas en pause
     """
+    # Liste pour accumuler tous les événements de cette session pour l'historique
+    timeline_events: list[dict[str, Any]] = []
+
     # Configuration pour reprendre le thread spécifique
     config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
 
@@ -354,6 +357,15 @@ async def continue_workflow(thread_id: str, request: ApprovalRequest) -> ChatRes
             status_code=400,
             detail="Workflow is not in a paused state (no next node to execute)",
         )
+
+    # Ajouter le thread_id event
+    thread_id_event = ThreadIdEvent(thread_id=thread_id)
+    timeline_events.append(thread_id_event.model_dump())
+
+    # Ajouter un événement pour indiquer la décision d'approbation
+    approval_message = "Approved" if request.approved else "Rejected"
+    user_request_event = UserRequestEvent(query=f"Approval decision: {approval_message}")
+    timeline_events.append(user_request_event.model_dump())
 
     # Mettre à jour l'état avec la décision d'approbation
     workflow_app.update_state(
@@ -374,6 +386,22 @@ async def continue_workflow(thread_id: str, request: ApprovalRequest) -> ChatRes
     result = accumulated_state.get("result", "")
     status = accumulated_state.get("status", "completed")
     project_id = accumulated_state.get("project_id", "")
+
+    # Ajouter l'événement WorkflowCompleteEvent
+    complete_event = WorkflowCompleteEvent(
+        result=result if result else "Workflow completed",
+        status=status,
+    )
+    timeline_events.append(complete_event.model_dump())
+
+    # Sauvegarder les événements dans l'historique de la timeline
+    if project_id:
+        try:
+            storage = ProjectContextService()
+            storage.save_timeline_events(project_id, timeline_events)
+            logger.info(f"[CONTINUE] Saved {len(timeline_events)} events to timeline history")
+        except Exception as save_error:
+            logger.error(f"Failed to save timeline events: {save_error}")
 
     return ChatResponse(
         result=result if result else "Workflow completed",
@@ -409,6 +437,17 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
     # Générer un conversation_id unique
     session_manager = get_session_manager()
     conversation_id = session_manager.create_session()
+
+    # Liste pour accumuler tous les événements de cette session pour l'historique
+    timeline_events: list[dict[str, Any]] = []
+
+    # Ajouter le thread_id event
+    thread_id_event = ThreadIdEvent(thread_id=conversation_id)
+    timeline_events.append(thread_id_event.model_dump())
+
+    # Ajouter la requête de l'utilisateur
+    user_request_event = UserRequestEvent(query=request.query)
+    timeline_events.append(user_request_event.model_dump())
 
     # Convertir le context en liste de dictionnaires si présent
     context_list = None
@@ -454,6 +493,20 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
             # Sauvegarder le checkpoint
             session_manager.save_checkpoint(conversation_id, final_state)
 
+            # Ajouter un événement pour la clarification
+            # Note: On pourrait créer un événement spécifique pour la clarification
+            # Pour l'instant, on utilise WorkflowCompleteEvent avec le status
+            clarification_event = WorkflowCompleteEvent(
+                result=clarification_question,
+                status="clarification_needed",
+            )
+            timeline_events.append(clarification_event.model_dump())
+
+            # Sauvegarder les événements dans l'historique de la timeline
+            storage = ProjectContextService()
+            storage.save_timeline_events(request.project_id, timeline_events)
+            logger.info(f"[EXECUTE] Saved {len(timeline_events)} events to timeline history")
+
             # Retourner HTTP 202 avec la question
             return JSONResponse(
                 status_code=202,
@@ -477,6 +530,19 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
             logger.info("[EXECUTE] Workflow awaiting approval (interrupted before approval node)")
             logger.info(f"[EXECUTE] Thread ID for resuming: {conversation_id}")
 
+            # Ajouter l'événement ImpactPlanReadyEvent
+            impact_plan_event = ImpactPlanReadyEvent(
+                impact_plan=impact_plan,
+                thread_id=conversation_id,
+                status=status,
+            )
+            timeline_events.append(impact_plan_event.model_dump())
+
+            # Sauvegarder les événements dans l'historique de la timeline
+            storage = ProjectContextService()
+            storage.save_timeline_events(request.project_id, timeline_events)
+            logger.info(f"[EXECUTE] Saved {len(timeline_events)} events to timeline history")
+
             return JSONResponse(
                 status_code=202,
                 content={
@@ -491,6 +557,18 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
         # Workflow vraiment terminé, nettoyer la session
         session_manager.delete_session(conversation_id)
 
+        # Ajouter l'événement WorkflowCompleteEvent
+        complete_event = WorkflowCompleteEvent(
+            result=result if result else "Workflow completed",
+            status=status,
+        )
+        timeline_events.append(complete_event.model_dump())
+
+        # Sauvegarder les événements dans l'historique de la timeline
+        storage = ProjectContextService()
+        storage.save_timeline_events(request.project_id, timeline_events)
+        logger.info(f"[EXECUTE] Saved {len(timeline_events)} events to timeline history")
+
         return JSONResponse(
             status_code=200,
             content={
@@ -502,6 +580,24 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
 
     except Exception as e:
         logger.error(f"[EXECUTE] Error during workflow execution: {e}", exc_info=True)
+
+        # Ajouter un événement d'erreur
+        error_event = ErrorEvent(
+            error=str(e),
+            details="An error occurred during workflow execution",
+        )
+        timeline_events.append(error_event.model_dump())
+
+        # Même en cas d'erreur, sauvegarder les événements
+        try:
+            storage = ProjectContextService()
+            storage.save_timeline_events(request.project_id, timeline_events)
+            logger.info(
+                f"[EXECUTE] Saved {len(timeline_events)} events to "
+                "timeline history (after error)"
+            )
+        except Exception as save_error:
+            logger.error(f"Failed to save timeline events: {save_error}")
 
         # Nettoyer la session en cas d'erreur
         if session_manager.session_exists(conversation_id):
@@ -534,6 +630,9 @@ async def respond_to_clarification(request: ClarificationResponse) -> ChatRespon
     logger.info(f"[RESPOND] Resuming workflow for conversation: {request.conversation_id}")
     logger.info(f"[RESPOND] User response: {request.user_response}")
 
+    # Liste pour accumuler tous les événements de cette session pour l'historique
+    timeline_events: list[dict[str, Any]] = []
+
     session_manager = get_session_manager()
 
     # Vérifier que la session existe
@@ -546,6 +645,14 @@ async def respond_to_clarification(request: ClarificationResponse) -> ChatRespon
     try:
         # Récupérer le checkpoint
         checkpoint = session_manager.get_checkpoint(request.conversation_id)
+
+        # Ajouter le thread_id event
+        thread_id_event = ThreadIdEvent(thread_id=request.conversation_id)
+        timeline_events.append(thread_id_event.model_dump())
+
+        # Ajouter la réponse de l'utilisateur comme événement
+        user_request_event = UserRequestEvent(query=f"Clarification: {request.user_response}")
+        timeline_events.append(user_request_event.model_dump())
 
         # Mettre à jour l'état avec la réponse de l'utilisateur
         checkpoint["user_response"] = request.user_response
@@ -565,6 +672,22 @@ async def respond_to_clarification(request: ClarificationResponse) -> ChatRespon
 
         logger.info(f"[RESPOND] Workflow completed with status: {status}")
 
+        # Ajouter l'événement WorkflowCompleteEvent
+        complete_event = WorkflowCompleteEvent(
+            result=result if result else "Workflow completed",
+            status=status,
+        )
+        timeline_events.append(complete_event.model_dump())
+
+        # Sauvegarder les événements dans l'historique de la timeline
+        if project_id:
+            try:
+                storage = ProjectContextService()
+                storage.save_timeline_events(project_id, timeline_events)
+                logger.info(f"[RESPOND] Saved {len(timeline_events)} events to timeline history")
+            except Exception as save_error:
+                logger.error(f"Failed to save timeline events: {save_error}")
+
         # Nettoyer la session
         session_manager.delete_session(request.conversation_id)
 
@@ -578,6 +701,27 @@ async def respond_to_clarification(request: ClarificationResponse) -> ChatRespon
 
     except Exception as e:
         logger.error(f"[RESPOND] Error resuming workflow: {e}", exc_info=True)
+
+        # Ajouter un événement d'erreur
+        error_event = ErrorEvent(
+            error=str(e),
+            details="An error occurred while resuming workflow",
+        )
+        timeline_events.append(error_event.model_dump())
+
+        # Même en cas d'erreur, sauvegarder les événements si on a le checkpoint
+        try:
+            checkpoint = session_manager.get_checkpoint(request.conversation_id)
+            project_id = checkpoint.get("project_id", "")
+            if project_id:
+                storage = ProjectContextService()
+                storage.save_timeline_events(project_id, timeline_events)
+                logger.info(
+                    f"[RESPOND] Saved {len(timeline_events)} events to "
+                    "timeline history (after error)"
+                )
+        except Exception as save_error:
+            logger.error(f"Failed to save timeline events: {save_error}")
 
         # Nettoyer la session en cas d'erreur
         if session_manager.session_exists(request.conversation_id):
