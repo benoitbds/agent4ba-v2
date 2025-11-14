@@ -20,16 +20,20 @@ system_prompt: |
   [
     {
       "title": "Titre court et descriptif du cas de test",
-      "description": "Description détaillée du scénario de test",
-      "preconditions": "Préconditions nécessaires pour exécuter ce test (optionnel)",
+      "scenario": "Scénario de test au format Gherkin:\nGiven (Étant donné) [préconditions]\nWhen (Quand) [actions]\nThen (Alors) [résultats attendus]",
       "steps": [
-        "Étape 1 : Action à effectuer",
-        "Étape 2 : Action suivante",
-        "..."
-      ],
-      "expected_result": "Résultat attendu après l'exécution de toutes les étapes"
+        {
+          "step": "Action à effectuer",
+          "expected_result": "Résultat attendu pour cette action"
+        }
+      ]
     }
   ]
+
+  Note importante sur le format :
+  - "scenario" doit être un texte Gherkin (Given/When/Then) décrivant le scénario global
+  - "steps" est une liste d'objets, chaque objet contenant "step" et "expected_result"
+  - Chaque étape doit être détaillée et testable indépendamment
 
   ATTENTION : Réponds UNIQUEMENT avec le JSON, sans texte supplémentaire avant ou après.
 
@@ -44,39 +48,69 @@ examples:
       [
         {
           "title": "Connexion réussie avec des identifiants valides",
-          "description": "Vérifier que l'utilisateur peut se connecter avec des identifiants corrects et accéder au tableau de bord",
-          "preconditions": "L'utilisateur doit avoir un compte actif dans le système",
+          "scenario": "Given l'utilisateur a un compte actif dans le système\nWhen l'utilisateur saisit des identifiants valides et clique sur 'Se connecter'\nThen l'utilisateur est redirigé vers le tableau de bord",
           "steps": [
-            "Naviguer vers la page de connexion",
-            "Entrer un email valide dans le champ Email",
-            "Entrer un mot de passe valide dans le champ Mot de passe",
-            "Cliquer sur le bouton 'Se connecter'"
-          ],
-          "expected_result": "L'utilisateur est redirigé vers le tableau de bord et peut voir ses informations personnelles"
+            {
+              "step": "Naviguer vers la page de connexion",
+              "expected_result": "La page de connexion s'affiche avec les champs Email et Mot de passe"
+            },
+            {
+              "step": "Entrer un email valide dans le champ Email",
+              "expected_result": "L'email est affiché dans le champ"
+            },
+            {
+              "step": "Entrer un mot de passe valide dans le champ Mot de passe",
+              "expected_result": "Le mot de passe est masqué dans le champ"
+            },
+            {
+              "step": "Cliquer sur le bouton 'Se connecter'",
+              "expected_result": "L'utilisateur est redirigé vers le tableau de bord et peut voir ses informations personnelles"
+            }
+          ]
         },
         {
           "title": "Échec de connexion avec un mot de passe incorrect",
-          "description": "Vérifier que le système refuse la connexion avec un mot de passe incorrect",
-          "preconditions": "L'utilisateur doit avoir un compte actif dans le système",
+          "scenario": "Given l'utilisateur a un compte actif dans le système\nWhen l'utilisateur saisit un email valide mais un mot de passe incorrect\nThen un message d'erreur s'affiche",
           "steps": [
-            "Naviguer vers la page de connexion",
-            "Entrer un email valide dans le champ Email",
-            "Entrer un mot de passe incorrect dans le champ Mot de passe",
-            "Cliquer sur le bouton 'Se connecter'"
-          ],
-          "expected_result": "Un message d'erreur 'Email ou mot de passe incorrect' s'affiche et l'utilisateur reste sur la page de connexion"
+            {
+              "step": "Naviguer vers la page de connexion",
+              "expected_result": "La page de connexion s'affiche"
+            },
+            {
+              "step": "Entrer un email valide dans le champ Email",
+              "expected_result": "L'email est affiché dans le champ"
+            },
+            {
+              "step": "Entrer un mot de passe incorrect dans le champ Mot de passe",
+              "expected_result": "Le mot de passe est masqué dans le champ"
+            },
+            {
+              "step": "Cliquer sur le bouton 'Se connecter'",
+              "expected_result": "Un message d'erreur 'Email ou mot de passe incorrect' s'affiche et l'utilisateur reste sur la page de connexion"
+            }
+          ]
         },
         {
           "title": "Validation du format d'email invalide",
-          "description": "Vérifier que le système valide le format de l'email avant la soumission",
-          "preconditions": "Aucune",
+          "scenario": "Given l'utilisateur accède à la page de connexion\nWhen l'utilisateur saisit un email au format invalide\nThen un message d'erreur de validation s'affiche",
           "steps": [
-            "Naviguer vers la page de connexion",
-            "Entrer un email invalide (ex: 'test@') dans le champ Email",
-            "Entrer un mot de passe dans le champ Mot de passe",
-            "Cliquer sur le bouton 'Se connecter'"
-          ],
-          "expected_result": "Un message d'erreur 'Format d'email invalide' s'affiche sous le champ Email"
+            {
+              "step": "Naviguer vers la page de connexion",
+              "expected_result": "La page de connexion s'affiche"
+            },
+            {
+              "step": "Entrer un email invalide (ex: 'test@') dans le champ Email",
+              "expected_result": "L'email est affiché dans le champ"
+            },
+            {
+              "step": "Entrer un mot de passe dans le champ Mot de passe",
+              "expected_result": "Le mot de passe est masqué dans le champ"
+            },
+            {
+              "step": "Cliquer sur le bouton 'Se connecter'",
+              "expected_result": "Un message d'erreur 'Format d'email invalide' s'affiche sous le champ Email"
+            }
+          ]
         }
       ]
 
@@ -90,38 +124,65 @@ examples:
       [
         {
           "title": "Filtrage par une seule catégorie",
-          "description": "Vérifier que le filtrage par catégorie fonctionne correctement",
-          "preconditions": "Au moins 10 produits de différentes catégories doivent être présents dans la base de données",
+          "scenario": "Given au moins 10 produits de différentes catégories sont présents dans la base de données\nWhen l'utilisateur sélectionne la catégorie 'Électronique'\nThen seuls les produits de cette catégorie sont affichés",
           "steps": [
-            "Naviguer vers la page de catalogue produits",
-            "Cocher la case de la catégorie 'Électronique'",
-            "Observer la liste des produits affichés"
-          ],
-          "expected_result": "Seuls les produits de la catégorie 'Électronique' sont affichés, le nombre de résultats est mis à jour"
+            {
+              "step": "Naviguer vers la page de catalogue produits",
+              "expected_result": "La page de catalogue s'affiche avec tous les produits et les filtres sur le côté"
+            },
+            {
+              "step": "Cocher la case de la catégorie 'Électronique'",
+              "expected_result": "La case est cochée et la liste de produits se met à jour automatiquement"
+            },
+            {
+              "step": "Observer la liste des produits affichés",
+              "expected_result": "Seuls les produits de la catégorie 'Électronique' sont affichés, le nombre de résultats est mis à jour"
+            }
+          ]
         },
         {
           "title": "Filtrage par fourchette de prix",
-          "description": "Vérifier que le filtrage par prix fonctionne avec des valeurs min et max",
-          "preconditions": "Des produits avec des prix variés (0-1000€) doivent être présents",
+          "scenario": "Given des produits avec des prix variés (0-1000€) sont présents\nWhen l'utilisateur définit une fourchette de prix de 50€ à 200€\nThen seuls les produits dans cette fourchette sont affichés",
           "steps": [
-            "Naviguer vers la page de catalogue produits",
-            "Entrer '50' dans le champ Prix minimum",
-            "Entrer '200' dans le champ Prix maximum",
-            "Observer la liste des produits affichés"
-          ],
-          "expected_result": "Seuls les produits dont le prix est compris entre 50€ et 200€ sont affichés"
+            {
+              "step": "Naviguer vers la page de catalogue produits",
+              "expected_result": "La page de catalogue s'affiche avec tous les produits"
+            },
+            {
+              "step": "Entrer '50' dans le champ Prix minimum",
+              "expected_result": "La valeur 50 est affichée dans le champ"
+            },
+            {
+              "step": "Entrer '200' dans le champ Prix maximum",
+              "expected_result": "La valeur 200 est affichée dans le champ et la liste se met à jour"
+            },
+            {
+              "step": "Observer la liste des produits affichés",
+              "expected_result": "Seuls les produits dont le prix est compris entre 50€ et 200€ sont affichés"
+            }
+          ]
         },
         {
           "title": "Message 'Aucun résultat' avec filtres stricts",
-          "description": "Vérifier que le message approprié s'affiche quand aucun produit ne correspond aux filtres",
-          "preconditions": "Aucune",
+          "scenario": "Given l'utilisateur applique des filtres très restrictifs\nWhen aucun produit ne correspond aux critères\nThen un message 'Aucun résultat' s'affiche",
           "steps": [
-            "Naviguer vers la page de catalogue produits",
-            "Cocher une catégorie très spécifique",
-            "Entrer une fourchette de prix très restrictive (ex: 0.01€ - 0.02€)",
-            "Observer le résultat"
-          ],
-          "expected_result": "Le message 'Aucun résultat trouvé pour ces critères' s'affiche, le compteur de résultats indique 0"
+            {
+              "step": "Naviguer vers la page de catalogue produits",
+              "expected_result": "La page de catalogue s'affiche"
+            },
+            {
+              "step": "Cocher une catégorie très spécifique",
+              "expected_result": "La catégorie est sélectionnée"
+            },
+            {
+              "step": "Entrer une fourchette de prix très restrictive (ex: 0.01€ - 0.02€)",
+              "expected_result": "Les valeurs sont saisies dans les champs"
+            },
+            {
+              "step": "Observer le résultat",
+              "expected_result": "Le message 'Aucun résultat trouvé pour ces critères' s'affiche, le compteur de résultats indique 0"
+            }
+          ]
         }
       ]
 
