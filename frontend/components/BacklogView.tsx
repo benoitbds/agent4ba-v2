@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ClipboardPlus, ChevronRight, ChevronDown, Sparkles, UserCheck, ListChecks } from "lucide-react";
+import { ClipboardPlus, ChevronRight, ChevronDown, Sparkles, UserCheck } from "lucide-react";
 import { useState } from "react";
 import type { WorkItem } from "@/types/events";
 import EditWorkItemModal from "./EditWorkItemModal";
@@ -80,9 +80,6 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedItemForEdit, setSelectedItemForEdit] = useState<WorkItem | null>(null);
 
-  // État pour gérer la génération des critères d'acceptation
-  const [generatingItemId, setGeneratingItemId] = useState<string | null>(null);
-
   // Fonction pour toggler l'état d'une feature
   const toggleFeature = (featureId: string) => {
     setExpandedItems((prev) => {
@@ -134,10 +131,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
   };
 
   // Fonction pour générer les critères d'acceptation
-  const handleGenerateAcceptanceCriteria = async (item: WorkItem, e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    setGeneratingItemId(item.id);
+  const handleGenerateAcceptanceCriteria = async (item: WorkItem) => {
     try {
       await generateAcceptanceCriteria(projectId, item.id);
       toast.success(t("backlog.acceptanceCriteriaGenerated", { title: item.title }));
@@ -148,8 +142,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
     } catch (error) {
       toast.error(t("backlog.acceptanceCriteriaError"));
       console.error("Error generating acceptance criteria:", error);
-    } finally {
-      setGeneratingItemId(null);
+      throw error; // Re-throw pour que la modal puisse gérer l'erreur
     }
   };
 
@@ -286,21 +279,6 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
 
           {/* Boutons d'action */}
           <div className="flex-shrink-0 flex gap-2">
-            {/* Generate Acceptance Criteria button - only for stories */}
-            {item.type === "story" && (
-              <button
-                onClick={(e) => handleGenerateAcceptanceCriteria(item, e)}
-                disabled={generatingItemId === item.id}
-                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                title={t("backlog.generateAcceptanceCriteria")}
-              >
-                {generatingItemId === item.id ? (
-                  <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <ListChecks className="w-5 h-5" />
-                )}
-              </button>
-            )}
             {/* Select button for context */}
             {onSelectItem && (
               <button
@@ -472,21 +450,6 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
 
                     {/* Boutons d'action */}
                     <div className="flex-shrink-0 flex gap-2">
-                      {/* Generate Acceptance Criteria button - only for stories */}
-                      {hierarchicalItem.item.type === "story" && (
-                        <button
-                          onClick={(e) => handleGenerateAcceptanceCriteria(hierarchicalItem.item, e)}
-                          disabled={generatingItemId === hierarchicalItem.item.id}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                          title={t("backlog.generateAcceptanceCriteria")}
-                        >
-                          {generatingItemId === hierarchicalItem.item.id ? (
-                            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <ListChecks className="w-5 h-5" />
-                          )}
-                        </button>
-                      )}
                       {/* Select button for context */}
                       {onSelectItem && (
                         <button
@@ -524,6 +487,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
         onClose={() => setIsEditModalOpen(false)}
         onSave={handleSaveWorkItem}
         onValidate={handleValidateWorkItem}
+        onGenerateAcceptanceCriteria={handleGenerateAcceptanceCriteria}
         item={selectedItemForEdit}
       />
     </div>

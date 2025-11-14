@@ -181,6 +181,9 @@
     "validate": "Valider",
     "validating": "Validation...",
     "validationFailed": "Erreur lors de la validation",
+    "generateAC": "Générer les AC",
+    "generatingAC": "Génération...",
+    "acceptanceCriteriaFailed": "Erreur lors de la génération",
     "humanValidated": "Validé",
     "iaGenerated": "Généré par IA",
     "iaModified": "Modifié par IA"
