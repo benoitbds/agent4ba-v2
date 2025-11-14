@@ -45,6 +45,16 @@ system_prompt: |
   - Si la tâche mentionne un work item spécifique, extrait son ID
   - Réponds UNIQUEMENT avec le JSON, sans texte additionnel
 
+  RÈGLE DE FALLBACK (TRÈS IMPORTANT) :
+  - Si la tâche demandée NE correspond clairement à AUCUNE des capacités décrites ci-dessus,
+  - Si la requête est complètement hors-scope (météo, recettes, informations générales, etc.),
+  - Tu dois IMPÉRATIVEMENT retourner le JSON suivant :
+  {
+    "agent": "fallback_agent",
+    "task": "handle_unknown_intent",
+    "args": {}
+  }
+
 examples:
   - input: "Générer les cas de test pour le work item 'FIR-3'"
     output: |
@@ -152,6 +162,30 @@ examples:
         "args": {
           "objective": "Décomposer la feature 'EPIC-12' (Système de notification) en user stories."
         }
+      }
+
+  - input: "C'est quoi la météo aujourd'hui ?"
+    output: |
+      {
+        "agent": "fallback_agent",
+        "task": "handle_unknown_intent",
+        "args": {}
+      }
+
+  - input: "Donne-moi une recette de gâteau au chocolat."
+    output: |
+      {
+        "agent": "fallback_agent",
+        "task": "handle_unknown_intent",
+        "args": {}
+      }
+
+  - input: "Combien font 2 + 2 ?"
+    output: |
+      {
+        "agent": "fallback_agent",
+        "task": "handle_unknown_intent",
+        "args": {}
       }
 
 user_prompt_template: |

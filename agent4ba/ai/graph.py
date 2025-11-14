@@ -12,7 +12,7 @@ from langgraph.graph import END, StateGraph
 from litellm import completion
 
 from agent4ba.ai import backlog_agent, document_agent, test_agent
-from agent4ba.ai.nodes import ask_for_clarification
+from agent4ba.ai.nodes import ask_for_clarification, handle_unknown_intent
 from agent4ba.core.logger import setup_logger
 from agent4ba.core.registry_service import load_agent_registry
 from agent4ba.core.storage import ProjectContextService
@@ -371,27 +371,35 @@ def router_node(state: GraphState) -> dict[str, Any]:
 
 def route_after_router(
     state: GraphState,
-) -> Literal["ask_for_clarification", "agent", "end"]:
+) -> Literal["ask_for_clarification", "agent", "fallback", "end"]:
     """
     Fonction de routage conditionnel après le router_node.
 
     Vérifie si une ambiguïté a été détectée dans la requête utilisateur.
     Si oui, route vers le nœud de clarification.
+    Vérifie également si le routeur a sélectionné le fallback_agent.
+    Si oui, route vers le nœud de fallback.
     Sinon, continue vers l'agent ou la fin selon next_node.
 
     Args:
         state: État actuel du graphe
 
     Returns:
-        Nom du prochain nœud ("ask_for_clarification", "agent", ou "end")
+        Nom du prochain nœud ("ask_for_clarification", "agent", "fallback", ou "end")
     """
     # Vérifier si une ambiguïté a été détectée
     ambiguous_intent = state.get("ambiguous_intent", False)
     next_node = state.get("next_node", "end")
+    agent_id = state.get("agent_id", "")
 
     if ambiguous_intent:
         logger.info("[ROUTE_AFTER_ROUTER] Ambiguity detected, routing to clarification")
         return "ask_for_clarification"
+
+    # Vérifier si le routeur a sélectionné le fallback_agent
+    if agent_id == "fallback_agent":
+        logger.info("[ROUTE_AFTER_ROUTER] Fallback agent selected, routing to fallback")
+        return "fallback"
 
     # Sinon, router normalement
     if next_node == "agent":
@@ -670,6 +678,7 @@ workflow.add_node("entry", entry_node)
 workflow.add_node("task_rewriter", task_rewriter_node)
 workflow.add_node("router", router_node)
 workflow.add_node("ask_for_clarification", ask_for_clarification)
+workflow.add_node("fallback", handle_unknown_intent)
 workflow.add_node("agent", agent_node)
 workflow.add_node("approval", approval_node)
 workflow.add_node("end", end_node)
@@ -680,12 +689,13 @@ workflow.add_edge("entry", "task_rewriter")
 workflow.add_edge("task_rewriter", "router")
 
 # Routage conditionnel depuis le router
-# Utilise route_after_router pour gérer la clarification
+# Utilise route_after_router pour gérer la clarification et le fallback
 workflow.add_conditional_edges(
     "router",
     route_after_router,
     {
         "ask_for_clarification": "ask_for_clarification",
+        "fallback": "fallback",
         "agent": "agent",
         "end": "end",
     },
@@ -706,6 +716,10 @@ workflow.add_conditional_edges(
 # Arête depuis le nœud de clarification vers la fin
 # Pour ce MVP, le workflow s'arrête après avoir posé la question de clarification
 workflow.add_edge("ask_for_clarification", "end")
+
+# Arête depuis le nœud fallback vers la fin
+# Le workflow se termine après avoir retourné le message de fallback
+workflow.add_edge("fallback", "end")
 
 workflow.add_edge("approval", "end")
 workflow.add_edge("end", END)
