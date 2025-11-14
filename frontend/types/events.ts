@@ -2,6 +2,17 @@
  * Types pour les événements SSE du backend Agent4BA
  */
 
+export interface TestCaseStep {
+  step: string;
+  expected_result: string;
+}
+
+export interface TestCase {
+  title: string;
+  scenario: string;
+  steps: TestCaseStep[];
+}
+
 export interface WorkItem {
   id: string;
   project_id: string;
@@ -10,6 +21,7 @@ export interface WorkItem {
   description: string;
   parent_id: string | null;
   acceptance_criteria?: string[];
+  test_cases?: TestCase[];
   validation_status: "ia_generated" | "human_validated" | "ia_modified";
   attributes: {
     priority?: string;

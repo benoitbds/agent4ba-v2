@@ -58,6 +58,8 @@
     "generateAcceptanceCriteria": "Générer les critères d'acceptation",
     "acceptanceCriteriaGenerated": "Les critères d'acceptation pour \"{title}\" ont été générés avec succès",
     "acceptanceCriteriaError": "Erreur lors de la génération des critères d'acceptation",
+    "testCasesGenerated": "Les cas de test pour \"{title}\" ont été générés avec succès",
+    "testCasesError": "Erreur lors de la génération des cas de test",
     "addWorkItem": "Ajouter un Work Item",
     "editWorkItem": "Modifier",
     "deleteWorkItem": "Supprimer",
@@ -198,6 +200,9 @@
     "generateAC": "Générer les AC",
     "generatingAC": "Génération...",
     "acceptanceCriteriaFailed": "Erreur lors de la génération",
+    "generateTC": "Générer les Cas de Test",
+    "generatingTC": "Génération...",
+    "testCasesFailed": "Erreur lors de la génération des cas de test",
     "delete": "Supprimer",
     "humanValidated": "Validé",
     "iaGenerated": "Généré par IA",
@@ -268,5 +273,12 @@
   },
   "projectMenu": {
     "actions": "Actions projet"
+  },
+  "testCases": {
+    "title": "Cas de Test",
+    "scenario": "Scénario",
+    "steps": "Étapes de test",
+    "step": "Étape",
+    "expectedResult": "Résultat Attendu"
   }
 }

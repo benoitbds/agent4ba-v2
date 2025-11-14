@@ -7,7 +7,7 @@ import type { WorkItem } from "@/types/events";
 import EditWorkItemModal from "./EditWorkItemModal";
 import WorkItemFormModal from "./WorkItemFormModal";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
-import { updateWorkItem, validateWorkItem, generateAcceptanceCriteria, createWorkItem, deleteWorkItem } from "@/lib/api";
+import { updateWorkItem, validateWorkItem, generateAcceptanceCriteria, generateTestCases, createWorkItem, deleteWorkItem } from "@/lib/api";
 import { toast } from "sonner";
 
 interface BacklogViewProps {
@@ -154,6 +154,22 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
     } catch (error) {
       toast.error(t("backlog.acceptanceCriteriaError"));
       console.error("Error generating acceptance criteria:", error);
+      throw error; // Re-throw pour que la modal puisse gérer l'erreur
+    }
+  };
+
+  // Fonction pour générer les cas de test
+  const handleGenerateTestCases = async (item: WorkItem) => {
+    try {
+      await generateTestCases(projectId, item.id);
+      toast.success(t("backlog.testCasesGenerated", { title: item.title }));
+      // Rafraîchir le backlog pour afficher les nouveaux cas de test
+      if (onItemUpdated) {
+        onItemUpdated();
+      }
+    } catch (error) {
+      toast.error(t("backlog.testCasesError"));
+      console.error("Error generating test cases:", error);
       throw error; // Re-throw pour que la modal puisse gérer l'erreur
     }
   };
@@ -574,6 +590,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
         onSave={handleSaveWorkItem}
         onValidate={handleValidateWorkItem}
         onGenerateAcceptanceCriteria={handleGenerateAcceptanceCriteria}
+        onGenerateTestCases={handleGenerateTestCases}
         onDelete={handleDeleteClick}
         item={selectedItemForEdit}
       />

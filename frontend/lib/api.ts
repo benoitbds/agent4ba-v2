@@ -434,6 +434,34 @@ export async function generateAcceptanceCriteria(
 }
 
 /**
+ * Generate test cases for a WorkItem
+ */
+export async function generateTestCases(
+  projectId: string,
+  itemId: string
+): Promise<WorkItem> {
+  const response = await fetch(
+    `${API_URL}/projects/${projectId}/work_items/${itemId}/generate-test-cases`,
+    {
+      method: "POST",
+      headers: getAuthHeaders(),
+    }
+  );
+
+  // Check for 401 errors
+  await handleResponse(response);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
  * Create a new WorkItem
  */
 export async function createWorkItem(
