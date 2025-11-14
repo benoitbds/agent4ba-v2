@@ -39,6 +39,10 @@ class WorkItem(BaseModel):
         None,
         description="Identifiant du parent (pour les hiérarchies)",
     )
+    acceptance_criteria: list[str] = Field(
+        default_factory=list,
+        description="Liste des critères d'acceptation pour ce work item",
+    )
     validation_status: Literal["ia_generated", "human_validated", "ia_modified"] = Field(
         default="ia_generated",
         description="Statut de validation (ia_generated pour les items créés par l'IA, human_validated pour les items validés, ia_modified pour les items validés puis modifiés par l'IA)",

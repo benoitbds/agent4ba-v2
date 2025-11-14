@@ -68,6 +68,21 @@ def load_invest_analysis_prompt() -> dict[str, Any]:
         return result
 
 
+def load_generate_acceptance_criteria_prompt() -> dict[str, Any]:
+    """
+    Charge le prompt de génération de critères d'acceptation depuis le fichier YAML.
+
+    Returns:
+        Dictionnaire contenant le prompt et les exemples
+    """
+    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "generate_acceptance_criteria.yaml"
+    with prompt_path.open("r", encoding="utf-8") as f:
+        result = yaml.safe_load(f)
+        if not isinstance(result, dict):
+            raise ValueError("Invalid prompt configuration")
+        return result
+
+
 def decompose_objective(state: Any) -> dict[str, Any]:
     """
     Décompose un objectif métier en work items structurés.
@@ -940,3 +955,298 @@ def review_quality(state: Any) -> dict[str, Any]:
         "result": f"Analyzed {len(modified_items)} user stories with INVEST criteria",
         "agent_events": agent_events,
     }
+
+
+def generate_acceptance_criteria(state: Any) -> dict[str, Any]:
+    """
+    Génère les critères d'acceptation pour une User Story existante.
+
+    Args:
+        state: État actuel du graphe contenant project_id, intent avec item_id
+
+    Returns:
+        Mise à jour de l'état avec impact_plan et status
+    """
+    logger.info("Generating acceptance criteria for work item...")
+
+    # Vérifier d'abord si un contexte de type "work_item" est fourni
+    context = state.get("context", [])
+    item_id = None
+    if context:
+        for ctx_item in context:
+            if ctx_item.get("type") == "work_item":
+                item_id = ctx_item.get("id")
+                logger.info(f"Work item context provided: {item_id}")
+                break
+
+    # Si pas de contexte, récupérer l'item_id depuis intent_args
+    if not item_id:
+        # Accepter à la fois "work_item_id" et "work_item" pour compatibilité
+        intent_args = state.get("intent_args", {})
+        item_id = intent_args.get("work_item_id") or intent_args.get("work_item")
+
+    if not item_id:
+        logger.warning("No item_id found in context or intent args")
+        intent_args = state.get("intent_args", {})
+        logger.warning(f"intent_args content: {intent_args}")
+        return {
+            "status": "error",
+            "result": "No item_id provided for acceptance criteria generation",
+        }
+
+    logger.info(f"Item ID: {item_id}")
+
+    # Récupérer le thread_id et la queue d'événements
+    thread_id = state.get("thread_id", "")
+    event_queue = get_event_queue(thread_id) if thread_id else None
+
+    # Initialiser la liste d'événements
+    agent_events = []
+
+    # Émettre l'événement AgentStart
+    start_event = {
+        "type": "agent_start",
+        "thought": f"Je vais générer les critères d'acceptation pour le work item {item_id}.",
+        "agent_name": "BacklogAgent",
+    }
+    agent_events.append(start_event)
+    if event_queue:
+        event_queue.put(start_event)
+
+    # Émettre le plan d'action
+    plan_event = {
+        "type": "agent_plan",
+        "steps": [
+            "Chargement du contexte du projet",
+            "Recherche du work item",
+            "Génération des critères d'acceptation via LLM",
+            "Construction de l'ImpactPlan",
+        ],
+        "agent_name": "BacklogAgent",
+    }
+    agent_events.append(plan_event)
+    if event_queue:
+        event_queue.put(plan_event)
+
+    # Charger le contexte du projet
+    project_id = state.get("project_id", "")
+    storage = ProjectContextService()
+
+    # Émettre l'événement de chargement du contexte
+    load_run_id = str(uuid.uuid4())
+    load_event = {
+        "type": "tool_used",
+        "tool_run_id": load_run_id,
+        "tool_name": "Chargement du contexte",
+        "tool_icon": "📚",
+        "description": "Chargement du backlog existant du projet",
+        "status": "running",
+        "details": {},
+    }
+    agent_events.append(load_event)
+    if event_queue:
+        event_queue.put(load_event)
+
+    try:
+        existing_items = storage.load_context(project_id)
+        logger.info(f"Loaded {len(existing_items)} existing work items")
+        load_event_completed = {
+            "type": "tool_used",
+            "tool_run_id": load_run_id,
+            "tool_name": "Chargement du contexte",
+            "tool_icon": "📚",
+            "description": "Chargement du backlog existant du projet",
+            "status": "completed",
+            "details": {"items_count": len(existing_items)},
+        }
+        agent_events[-1] = load_event_completed
+        if event_queue:
+            event_queue.put(load_event_completed)
+    except FileNotFoundError:
+        logger.warning("No existing backlog found")
+        load_event_error = {
+            "type": "tool_used",
+            "tool_run_id": load_run_id,
+            "tool_name": "Chargement du contexte",
+            "tool_icon": "📚",
+            "description": "Chargement du backlog existant du projet",
+            "status": "error",
+            "details": {"error": f"No backlog found for project {project_id}"},
+        }
+        agent_events[-1] = load_event_error
+        if event_queue:
+            event_queue.put(load_event_error)
+        return {
+            "status": "error",
+            "result": f"No backlog found for project {project_id}",
+            "agent_events": agent_events,
+        }
+
+    # Trouver l'item correspondant
+    target_item = None
+    for item in existing_items:
+        if item.id == item_id:
+            target_item = item
+            break
+
+    if target_item is None:
+        logger.warning(f"Item {item_id} not found in backlog")
+        return {
+            "status": "error",
+            "result": f"Work item {item_id} not found in backlog",
+            "agent_events": agent_events,
+        }
+
+    logger.info(f"Found item: {target_item.type} - {target_item.title}")
+    logger.info(f"Current description: {target_item.description}")
+
+    # Sauvegarder l'état "before"
+    item_before = target_item.model_copy(deep=True)
+
+    # Charger le prompt
+    prompt_config = load_generate_acceptance_criteria_prompt()
+
+    # Préparer le prompt utilisateur
+    user_prompt = prompt_config["user_prompt_template"].format(
+        title=target_item.title,
+        description=target_item.description or "",
+    )
+
+    # Récupérer le modèle depuis l'environnement
+    model = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
+    temperature = float(os.getenv("LLM_TEMPERATURE", "0.0"))
+
+    logger.info(f"Using model: {model}")
+
+    # Émettre l'événement d'appel LLM
+    llm_run_id = str(uuid.uuid4())
+    llm_event = {
+        "type": "tool_used",
+        "tool_run_id": llm_run_id,
+        "tool_name": "Appel LLM",
+        "tool_icon": "🧠",
+        "description": f"Génération des critères d'acceptation avec {model}",
+        "status": "running",
+        "details": {"model": model, "temperature": temperature, "item_id": item_id},
+    }
+    agent_events.append(llm_event)
+    if event_queue:
+        event_queue.put(llm_event)
+
+    try:
+        # Appeler le LLM
+        response = completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": prompt_config["system_prompt"]},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=temperature,
+        )
+
+        # Extraire la réponse
+        response_text = response.choices[0].message.content.strip()
+
+        logger.info(f"LLM response received: {len(response_text)} characters")
+
+        # Parser la réponse en une liste de critères (lignes commençant par "- ")
+        acceptance_criteria = []
+        for line in response_text.split("\n"):
+            line = line.strip()
+            if line.startswith("- "):
+                # Retirer le "- " du début
+                criterion = line[2:].strip()
+                if criterion:
+                    acceptance_criteria.append(criterion)
+
+        logger.info(f"Generated {len(acceptance_criteria)} acceptance criteria")
+        for i, criterion in enumerate(acceptance_criteria, 1):
+            logger.info(f"  {i}. {criterion}")
+
+        # Mettre à jour le statut de l'événement
+        llm_event_completed = {
+            "type": "tool_used",
+            "tool_run_id": llm_run_id,
+            "tool_name": "Appel LLM",
+            "tool_icon": "🧠",
+            "description": f"Génération des critères d'acceptation avec {model}",
+            "status": "completed",
+            "details": {
+                "model": model,
+                "temperature": temperature,
+                "item_id": item_id,
+                "criteria_count": len(acceptance_criteria),
+            },
+        }
+        agent_events[-1] = llm_event_completed
+        if event_queue:
+            event_queue.put(llm_event_completed)
+
+        # Créer l'état "after" avec les critères d'acceptation
+        item_after = target_item.model_copy(deep=True)
+        item_after.acceptance_criteria = acceptance_criteria
+        # Marquer l'item comme modifié par l'IA
+        if item_before.validation_status == "human_validated":
+            item_after.validation_status = "ia_modified"
+        # Sinon, il garde son statut actuel (ia_generated ou ia_modified)
+
+        # Construire l'ImpactPlan avec modified_items au format {before, after}
+        impact_plan = {
+            "new_items": [],
+            "modified_items": [
+                {
+                    "before": item_before.model_dump(),
+                    "after": item_after.model_dump(),
+                }
+            ],
+            "deleted_items": [],
+        }
+
+        logger.info("ImpactPlan created successfully")
+        logger.info(f"- 1 modified item with {len(acceptance_criteria)} acceptance criteria")
+        logger.info("Workflow paused, awaiting human approval")
+
+        # Émettre l'événement de construction de l'ImpactPlan
+        plan_build_run_id = str(uuid.uuid4())
+        plan_build_event = {
+            "type": "tool_used",
+            "tool_run_id": plan_build_run_id,
+            "tool_name": "Construction ImpactPlan",
+            "tool_icon": "📋",
+            "description": "Création du plan d'impact avec les critères d'acceptation générés",
+            "status": "completed",
+            "details": {"modified_items_count": 1, "criteria_count": len(acceptance_criteria)},
+        }
+        agent_events.append(plan_build_event)
+        if event_queue:
+            event_queue.put(plan_build_event)
+
+        return {
+            "impact_plan": impact_plan,
+            "status": "awaiting_approval",
+            "result": f"Generated {len(acceptance_criteria)} acceptance criteria for work item: {item_id}",
+            "agent_events": agent_events,
+        }
+
+    except Exception as e:
+        logger.error("Error during acceptance criteria generation.", exc_info=True)
+        llm_event_error = {
+            "type": "tool_used",
+            "tool_run_id": llm_run_id,
+            "tool_name": "Appel LLM",
+            "tool_icon": "🧠",
+            "description": f"Génération des critères d'acceptation avec {model}",
+            "status": "error",
+            "details": {
+                "model": model,
+                "error": str(e),
+            },
+        }
+        agent_events[-1] = llm_event_error
+        if event_queue:
+            event_queue.put(llm_event_error)
+        return {
+            "status": "error",
+            "result": f"Failed to generate acceptance criteria: {e}",
+            "agent_events": agent_events,
+        }
