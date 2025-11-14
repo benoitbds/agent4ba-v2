@@ -145,3 +145,53 @@ class UpdateWorkItemRequest(BaseModel):
             ]
         }
     }
+
+
+class ClarificationResponse(BaseModel):
+    """Réponse de l'utilisateur à une demande de clarification."""
+
+    conversation_id: str = Field(
+        ...,
+        description="Identifiant de la conversation en attente de clarification",
+    )
+    user_response: str = Field(..., description="Réponse de l'utilisateur à la question")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "conversation_id": "123e4567-e89b-12d3-a456-426614174000",
+                    "user_response": "pour FIR-3",
+                }
+            ]
+        }
+    }
+
+
+class ClarificationNeededResponse(BaseModel):
+    """Réponse indiquant qu'une clarification est nécessaire."""
+
+    status: str = Field(
+        default="clarification_needed",
+        description="Statut indiquant qu'une clarification est nécessaire",
+    )
+    conversation_id: str = Field(
+        ...,
+        description="Identifiant unique de la conversation",
+    )
+    question: str = Field(
+        ...,
+        description="Question à poser à l'utilisateur pour clarifier sa demande",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "status": "clarification_needed",
+                    "conversation_id": "123e4567-e89b-12d3-a456-426614174000",
+                    "question": "Pour quel work item souhaitez-vous générer les cas de test ?",
+                }
+            ]
+        }
+    }

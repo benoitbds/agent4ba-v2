@@ -54,6 +54,9 @@ class GraphState(TypedDict):
     result: str
     agent_events: list[dict[str, Any]]
     thread_id: str  # Ajout du thread_id pour accéder à la queue
+    clarification_needed: bool  # Indique si une clarification est nécessaire
+    clarification_question: str  # Question à poser à l'utilisateur
+    user_response: str  # Réponse de l'utilisateur à la clarification
 
 
 def load_task_rewriter_prompt() -> dict[str, Any]:
@@ -200,6 +203,9 @@ def router_node(state: GraphState) -> dict[str, Any]:
     Utilise un LLM avec des exemples few-shot pour déterminer
     quel agent et quelle tâche exécuter, ainsi que les arguments nécessaires.
 
+    Si une user_response est présente (reprise après clarification), elle est
+    combinée avec la requête originale pour extraire les informations manquantes.
+
     Args:
         state: État actuel du graphe
 
@@ -207,6 +213,14 @@ def router_node(state: GraphState) -> dict[str, Any]:
         Mise à jour partielle de l'état avec next_node, agent_id, agent_task et intent_args
     """
     rewritten_task = state.get("rewritten_task", "")
+    user_response = state.get("user_response", "")
+
+    # Si on a une réponse utilisateur, combiner avec la tâche originale
+    if user_response:
+        logger.info(f"[ROUTER_NODE] User response provided: {user_response}")
+        # Combiner la tâche originale avec la réponse pour former une requête complète
+        rewritten_task = f"{rewritten_task} {user_response}"
+        logger.info(f"[ROUTER_NODE] Combined task: {rewritten_task}")
 
     logger.info(f"[ROUTER_NODE] Routing based on rewritten task: {rewritten_task}")
 
@@ -259,6 +273,36 @@ def router_node(state: GraphState) -> dict[str, Any]:
         logger.info(f"[ROUTER_NODE] Selected agent: {agent_id}")
         logger.info(f"[ROUTER_NODE] Selected task: {agent_task}")
         logger.info(f"[ROUTER_NODE] Extracted args: {args}")
+
+        # Vérifier si une clarification est nécessaire
+        # Par exemple, si generate_test_cases ou generate_acceptance_criteria
+        # sans item_id spécifié
+        clarification_needed = False
+        clarification_question = ""
+
+        if agent_task in ["generate_test_cases", "generate_acceptance_criteria", "improve_description"]:
+            if not args.get("item_id"):
+                clarification_needed = True
+                task_translations = {
+                    "generate_test_cases": "générer les cas de test",
+                    "generate_acceptance_criteria": "générer les critères d'acceptation",
+                    "improve_description": "améliorer la description",
+                }
+                task_label = task_translations.get(agent_task, "effectuer cette opération")
+                clarification_question = f"Pour quel work item souhaitez-vous {task_label} ? Veuillez préciser l'identifiant (ex: FIR-3, US-001)."
+
+        if clarification_needed:
+            logger.info(f"[ROUTER_NODE] Clarification needed: {clarification_question}")
+            return {
+                "next_node": "end",
+                "agent_id": "none",
+                "agent_task": "none",
+                "clarification_needed": True,
+                "clarification_question": clarification_question,
+                "status": "clarification_needed",
+                "result": "Clarification requise avant de continuer.",
+            }
+
         logger.info("[ROUTER_NODE] Routing to agent node")
 
         return {
