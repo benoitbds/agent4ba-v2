@@ -16,7 +16,7 @@ export interface TestCase {
 export interface WorkItem {
   id: string;
   project_id: string;
-  type: "feature" | "story" | "task";
+  type: "feature" | "story" | "task" | "test_case";
   title: string;
   description: string;
   parent_id: string | null;
