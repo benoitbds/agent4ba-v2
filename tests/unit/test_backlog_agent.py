@@ -512,3 +512,221 @@ def test_review_quality_success():
         # Vérifier que new_items et deleted_items sont vides
         assert impact_plan["new_items"] == []
         assert impact_plan["deleted_items"] == []
+
+
+def test_generate_acceptance_criteria_success():
+    """
+    Test du cas nominal de la fonction generate_acceptance_criteria.
+
+    Vérifie que la fonction génère correctement les critères d'acceptation
+    pour un WorkItem existant et retourne un ImpactPlan avec une opération de type update.
+    """
+    # Préparer le state initial avec un item_id
+    state = {
+        "project_id": "TEST",
+        "intent": {},
+        "intent_args": {
+            "work_item_id": "TEST-1"
+        },
+        "thread_id": "test-thread-123"
+    }
+
+    # Créer un WorkItem existant
+    from agent4ba.core.models import WorkItem
+    existing_item = WorkItem(
+        id="TEST-1",
+        project_id="TEST",
+        type="story",
+        title="Page de connexion utilisateur",
+        description="En tant qu'utilisateur, je veux pouvoir me connecter à mon compte avec mon email et mot de passe afin d'accéder à mes données personnelles et fonctionnalités sécurisées",
+        parent_id=None,
+        attributes={}
+    )
+
+    # Créer le mock de la réponse LLM avec les critères d'acceptation
+    mock_llm_response = Mock()
+    mock_llm_response.choices = [Mock()]
+    mock_llm_response.choices[0].message = Mock()
+    mock_llm_response.choices[0].message.content = """- L'utilisateur peut saisir son email et son mot de passe dans les champs dédiés
+- Un bouton "Se connecter" est visible et cliquable
+- En cas de succès, l'utilisateur est redirigé vers le tableau de bord
+- Un message d'erreur s'affiche si l'email ou le mot de passe est incorrect
+- Un message d'erreur s'affiche si l'email n'est pas au format valide
+- Le champ mot de passe masque les caractères saisis
+- Un lien "Mot de passe oublié ?" est accessible
+- Après 3 tentatives échouées, le compte est temporairement verrouillé"""
+
+    # Appliquer les patches
+    with patch('agent4ba.ai.backlog_agent.completion', return_value=mock_llm_response), \
+         patch('agent4ba.ai.backlog_agent.ProjectContextService') as mock_storage_class, \
+         patch('agent4ba.ai.backlog_agent.get_event_queue', return_value=None):
+
+        # Configurer le mock du storage pour retourner l'item existant
+        mock_storage_instance = Mock()
+        mock_storage_instance.load_context.return_value = [existing_item]
+        mock_storage_class.return_value = mock_storage_instance
+
+        # Appeler la fonction
+        result = backlog_agent.generate_acceptance_criteria(state)
+
+        # Vérifications
+        assert result is not None
+        assert "impact_plan" in result
+        assert result["impact_plan"] is not None
+
+        impact_plan = result["impact_plan"]
+        assert "modified_items" in impact_plan
+        assert isinstance(impact_plan["modified_items"], list)
+        assert len(impact_plan["modified_items"]) == 1
+
+        # Vérifier la structure de l'opération de modification
+        modified_item = impact_plan["modified_items"][0]
+        assert "before" in modified_item
+        assert "after" in modified_item
+
+        # Vérifier que les critères d'acceptation ont été ajoutés
+        assert "acceptance_criteria" in modified_item["after"]
+        acceptance_criteria = modified_item["after"]["acceptance_criteria"]
+        assert isinstance(acceptance_criteria, list)
+        assert len(acceptance_criteria) == 8  # 8 critères dans le mock
+
+        # Vérifier quelques critères spécifiques
+        assert "L'utilisateur peut saisir son email et son mot de passe dans les champs dédiés" in acceptance_criteria
+        assert "Un bouton \"Se connecter\" est visible et cliquable" in acceptance_criteria
+        assert "Après 3 tentatives échouées, le compte est temporairement verrouillé" in acceptance_criteria
+
+        # Vérifier que le validation_status reste "ia_generated" (car l'item n'était pas validé)
+        assert modified_item["before"]["validation_status"] == "ia_generated"
+        assert modified_item["after"]["validation_status"] == "ia_generated"
+
+        # Vérifier que l'item "before" n'avait pas de critères d'acceptation
+        assert modified_item["before"]["acceptance_criteria"] == []
+
+        # Vérifier le statut de retour
+        assert result["status"] == "awaiting_approval"
+
+        # Vérifier que new_items et deleted_items sont vides
+        assert impact_plan["new_items"] == []
+        assert impact_plan["deleted_items"] == []
+
+
+def test_generate_acceptance_criteria_item_not_found():
+    """
+    Test de generate_acceptance_criteria lorsque le work item n'est pas trouvé.
+
+    Vérifie que la fonction gère correctement le cas où l'item_id fourni
+    ne correspond à aucun work item dans le backlog.
+    """
+    # Préparer le state initial avec un item_id inexistant
+    state = {
+        "project_id": "TEST",
+        "intent": {},
+        "intent_args": {
+            "work_item_id": "TEST-999"  # ID qui n'existe pas
+        },
+        "thread_id": "test-thread-123"
+    }
+
+    # Créer un WorkItem existant (mais pas celui recherché)
+    from agent4ba.core.models import WorkItem
+    existing_item = WorkItem(
+        id="TEST-1",
+        project_id="TEST",
+        type="story",
+        title="Autre story",
+        description="Description",
+        parent_id=None,
+        attributes={}
+    )
+
+    # Appliquer les patches
+    with patch('agent4ba.ai.backlog_agent.completion') as mock_completion, \
+         patch('agent4ba.ai.backlog_agent.ProjectContextService') as mock_storage_class, \
+         patch('agent4ba.ai.backlog_agent.get_event_queue', return_value=None):
+
+        # Configurer le mock du storage pour retourner un item différent
+        mock_storage_instance = Mock()
+        mock_storage_instance.load_context.return_value = [existing_item]
+        mock_storage_class.return_value = mock_storage_instance
+
+        # Appeler la fonction
+        result = backlog_agent.generate_acceptance_criteria(state)
+
+        # Vérifications
+        assert result is not None
+        assert "status" in result
+        assert result["status"] == "error"
+        assert "result" in result
+        assert "TEST-999" in result["result"]
+        assert "not found" in result["result"]
+
+        # Vérifier que le LLM n'a pas été appelé
+        mock_completion.assert_not_called()
+
+        # Vérifier qu'aucun impact_plan n'a été créé
+        assert "impact_plan" not in result or result.get("impact_plan") is None
+
+
+def test_generate_acceptance_criteria_human_validated_item():
+    """
+    Test de generate_acceptance_criteria pour un item déjà validé par un humain.
+
+    Vérifie que le validation_status passe à "ia_modified" lorsque
+    l'item était précédemment "human_validated".
+    """
+    # Préparer le state initial
+    state = {
+        "project_id": "TEST",
+        "intent": {},
+        "intent_args": {
+            "work_item_id": "TEST-1"
+        },
+        "thread_id": "test-thread-123"
+    }
+
+    # Créer un WorkItem déjà validé par un humain
+    from agent4ba.core.models import WorkItem
+    existing_item = WorkItem(
+        id="TEST-1",
+        project_id="TEST",
+        type="story",
+        title="Story validée",
+        description="Description validée par un humain",
+        parent_id=None,
+        attributes={},
+        validation_status="human_validated"  # Item déjà validé
+    )
+
+    # Créer le mock de la réponse LLM
+    mock_llm_response = Mock()
+    mock_llm_response.choices = [Mock()]
+    mock_llm_response.choices[0].message = Mock()
+    mock_llm_response.choices[0].message.content = """- Critère 1
+- Critère 2
+- Critère 3"""
+
+    # Appliquer les patches
+    with patch('agent4ba.ai.backlog_agent.completion', return_value=mock_llm_response), \
+         patch('agent4ba.ai.backlog_agent.ProjectContextService') as mock_storage_class, \
+         patch('agent4ba.ai.backlog_agent.get_event_queue', return_value=None):
+
+        # Configurer le mock du storage
+        mock_storage_instance = Mock()
+        mock_storage_instance.load_context.return_value = [existing_item]
+        mock_storage_class.return_value = mock_storage_instance
+
+        # Appeler la fonction
+        result = backlog_agent.generate_acceptance_criteria(state)
+
+        # Vérifications
+        assert result is not None
+        assert result["status"] == "awaiting_approval"
+
+        modified_item = result["impact_plan"]["modified_items"][0]
+
+        # Vérifier que le statut passe de "human_validated" à "ia_modified"
+        assert modified_item["before"]["validation_status"] == "human_validated"
+        assert modified_item["after"]["validation_status"] == "ia_modified"
+
+        # Vérifier que les critères ont été ajoutés
+        assert len(modified_item["after"]["acceptance_criteria"]) == 3
