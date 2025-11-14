@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from 'next-intl';
+import { CheckCircle, UserCheck, Sparkles } from "lucide-react";
 import type { WorkItem } from "@/types/events";
 
 interface EditWorkItemModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (itemId: string, updatedData: { title: string; description: string | null }) => Promise<void>;
+  onValidate?: (item: WorkItem) => Promise<void>;
   item: WorkItem | null;
 }
 
@@ -15,6 +17,7 @@ export default function EditWorkItemModal({
   isOpen,
   onClose,
   onSave,
+  onValidate,
   item,
 }: EditWorkItemModalProps) {
   const t = useTranslations();
@@ -22,6 +25,7 @@ export default function EditWorkItemModal({
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
 
   // Initialiser les champs quand l'item change
   useEffect(() => {
@@ -60,6 +64,21 @@ export default function EditWorkItemModal({
     }
   };
 
+  const handleValidate = async () => {
+    if (!item || !onValidate) return;
+
+    setIsValidating(true);
+    try {
+      await onValidate(item);
+      handleClose();
+    } catch (err) {
+      setError(t('editWorkItem.validationFailed'));
+      console.error("Failed to validate WorkItem:", err);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
   const handleClose = () => {
     setTitle("");
     setDescription("");
@@ -76,13 +95,33 @@ export default function EditWorkItemModal({
           {t('editWorkItem.title')}
         </h2>
 
-        <div className="mb-4">
+        <div className="mb-4 flex items-center gap-2">
           <span className="px-3 py-1 text-sm font-semibold rounded bg-purple-200 text-purple-800">
             {item.type}
           </span>
-          <span className="ml-3 text-sm text-gray-500 font-mono">
+          <span className="text-sm text-gray-500 font-mono">
             {item.id}
           </span>
+
+          {/* Badge de statut de validation */}
+          {item.validation_status === "human_validated" && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800 border border-green-300">
+              <UserCheck className="w-3 h-3" />
+              {t('editWorkItem.humanValidated')}
+            </span>
+          )}
+          {item.validation_status === "ia_generated" && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
+              <Sparkles className="w-3 h-3" />
+              {t('editWorkItem.iaGenerated')}
+            </span>
+          )}
+          {item.validation_status === "ia_modified" && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
+              <Sparkles className="w-3 h-3" />
+              {t('editWorkItem.iaModified')}
+            </span>
+          )}
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -126,22 +165,40 @@ export default function EditWorkItemModal({
             <p className="mb-4 text-sm text-red-600">{error}</p>
           )}
 
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
-              disabled={isSaving}
-            >
-              {t('editWorkItem.cancel')}
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-              disabled={isSaving}
-            >
-              {isSaving ? t('editWorkItem.saving') : t('editWorkItem.save')}
-            </button>
+          <div className="flex justify-between items-center gap-3">
+            {/* Bouton de validation à gauche (si applicable) */}
+            {onValidate && (item.validation_status === "ia_generated" || item.validation_status === "ia_modified") && (
+              <button
+                type="button"
+                onClick={handleValidate}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 inline-flex items-center gap-2"
+                disabled={isSaving || isValidating}
+              >
+                <CheckCircle className="w-4 h-4" />
+                {isValidating ? t('editWorkItem.validating') : t('editWorkItem.validate')}
+              </button>
+            )}
+
+            <div className="flex-1"></div>
+
+            {/* Boutons Annuler et Sauvegarder à droite */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+                disabled={isSaving || isValidating}
+              >
+                {t('editWorkItem.cancel')}
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+                disabled={isSaving || isValidating}
+              >
+                {isSaving ? t('editWorkItem.saving') : t('editWorkItem.save')}
+              </button>
+            </div>
           </div>
         </form>
       </div>

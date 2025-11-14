@@ -173,7 +173,13 @@
     "cancel": "Annuler",
     "save": "Sauvegarder",
     "saving": "Sauvegarde...",
-    "saveFailed": "Erreur lors de la sauvegarde"
+    "saveFailed": "Erreur lors de la sauvegarde",
+    "validate": "Valider",
+    "validating": "Validation...",
+    "validationFailed": "Erreur lors de la validation",
+    "humanValidated": "Validé",
+    "iaGenerated": "Généré par IA",
+    "iaModified": "Modifié par IA"
   },
   "common": {
     "empty": "(vide)",
