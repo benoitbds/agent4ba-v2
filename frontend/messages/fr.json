@@ -66,7 +66,11 @@
     "workItemDeleted": "Le Work Item \"{title}\" a été supprimé",
     "deleteError": "Erreur lors de la suppression",
     "confirmDeleteTitle": "Confirmer la suppression",
-    "confirmDeleteMessage": "Êtes-vous sûr de vouloir supprimer le Work Item \"{title}\" ? Cette action est irréversible."
+    "confirmDeleteMessage": "Êtes-vous sûr de vouloir supprimer le Work Item \"{title}\" ? Cette action est irréversible.",
+    "description": "Description",
+    "type": "Type",
+    "acceptanceCriteria": "Critères d'acceptation",
+    "attributes": "Attributs"
   },
   "timeline": {
     "title": "Timeline d'exécution",
@@ -104,7 +108,8 @@
     "completed": "✓ Terminé",
     "running": "En cours",
     "errorStatus": "⚠ Erreur",
-    "noToolsUsed": "Aucun outil utilisé dans cette session"
+    "noToolsUsed": "Aucun outil utilisé dans cette session",
+    "noChanges": "Aucune modification détectée"
   },
   "invest": {
     "I": "Independent (Indépendante)",
