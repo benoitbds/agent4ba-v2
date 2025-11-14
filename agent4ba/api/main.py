@@ -467,10 +467,28 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
         # Le workflow s'est terminé normalement
         result = final_state.get("result", "Workflow completed")
         status = final_state.get("status", "completed")
+        impact_plan = final_state.get("impact_plan", {})
 
         logger.info(f"[EXECUTE] Workflow completed with status: {status}")
 
-        # Nettoyer la session
+        # Si le workflow attend une approbation, retourner 202
+        # L'état est déjà sauvegardé par LangGraph grâce à interrupt_before=["approval"]
+        if status == "awaiting_approval":
+            logger.info("[EXECUTE] Workflow awaiting approval (interrupted before approval node)")
+            logger.info(f"[EXECUTE] Thread ID for resuming: {conversation_id}")
+
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "status": "awaiting_approval",
+                    "thread_id": conversation_id,
+                    "result": result,
+                    "impact_plan": impact_plan,
+                    "project_id": request.project_id,
+                },
+            )
+
+        # Workflow vraiment terminé, nettoyer la session
         session_manager.delete_session(conversation_id)
 
         return JSONResponse(
