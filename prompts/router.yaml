@@ -17,12 +17,19 @@ system_prompt: |
   }
 
   Agents disponibles :
-  - backlog_agent : Gestion du backlog (décomposition, amélioration, génération de specs, critères d'acceptation, etc.)
+  - epic_architect_agent : Génération de features de haut niveau UNIQUEMENT (jamais de user stories)
+  - backlog_agent : Gestion du backlog (décomposition features+stories, amélioration, génération de specs, critères d'acceptation, etc.)
   - document_agent : Analyse et extraction de requirements depuis des documents
   - test_agent : Génération de cas de test pour les work items
 
+  Tâches de l'epic_architect_agent :
+  - generate_epics : Générer UNIQUEMENT une liste exhaustive de features de haut niveau (7-15 items)
+    → Utilise cet agent quand l'utilisateur demande explicitement UNIQUEMENT des features/epics
+    → Utilise cet agent pour créer un backlog de haut niveau sans détailler les user stories
+
   Tâches du backlog_agent :
-  - decompose_objective : Décomposer un objectif en work items (features, user stories)
+  - decompose_objective : Décomposer un objectif en work items (features ET user stories ensemble)
+    → Utilise cet agent pour une décomposition complète incluant les détails
   - improve_description : Améliorer la description d'un work item existant
   - generate_specification : Générer une spécification détaillée (use cases, etc.)
   - generate_acceptance_criteria : Générer les critères d'acceptation pour une user story
@@ -35,6 +42,20 @@ system_prompt: |
 
   Tâches du test_agent :
   - generate_test_cases : Générer les cas de test pour un work item
+
+  DISTINCTION IMPORTANTE - Quand utiliser epic_architect_agent vs backlog_agent :
+
+  🎯 epic_architect_agent (generate_epics) :
+  - Quand l'utilisateur demande "l'ensemble des features", "toutes les features", "liste des features"
+  - Quand il veut une vue d'ensemble de haut niveau sans détails
+  - Quand il veut structurer un projet en grands chantiers fonctionnels
+  - Mots-clés : "features pour", "épics pour", "liste exhaustive des features", "ensemble des features"
+
+  🎯 backlog_agent (decompose_objective) :
+  - Quand l'utilisateur veut décomposer une feature spécifique en user stories
+  - Quand il demande à la fois features ET stories
+  - Quand il veut des détails d'implémentation
+  - Mots-clés : "user stories pour", "décomposer en stories", "détailler la feature"
 
   RÈGLES IMPORTANTES :
   - Extrais les identifiants de work items (ex: FIC-4, US-001, EPIC-12) depuis la tâche
@@ -96,13 +117,43 @@ examples:
         }
       }
 
+  - input: "Génère l'ensemble des features pour un site e-commerce de chaussures de luxe."
+    output: |
+      {
+        "agent": "epic_architect_agent",
+        "task": "generate_epics",
+        "args": {
+          "objective": "site e-commerce de chaussures de luxe"
+        }
+      }
+
+  - input: "Liste exhaustive des features pour une application de VTC."
+    output: |
+      {
+        "agent": "epic_architect_agent",
+        "task": "generate_epics",
+        "args": {
+          "objective": "application de VTC"
+        }
+      }
+
+  - input: "Toutes les features de haut niveau pour un réseau social."
+    output: |
+      {
+        "agent": "epic_architect_agent",
+        "task": "generate_epics",
+        "args": {
+          "objective": "réseau social"
+        }
+      }
+
   - input: "Créer les features pour un projet de e-commerce."
     output: |
       {
-        "agent": "backlog_agent",
-        "task": "decompose_objective",
+        "agent": "epic_architect_agent",
+        "task": "generate_epics",
         "args": {
-          "objective": "Créer les features pour un projet de e-commerce."
+          "objective": "projet de e-commerce"
         }
       }
 
