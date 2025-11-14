@@ -296,10 +296,24 @@ def router_node(state: GraphState) -> dict[str, Any]:
         # Extraire la réponse (JSON de routage avec Chain of Thought)
         routing_json_str = response.choices[0].message.content.strip()
 
-        logger.info(f"[ROUTER_NODE] LLM response: {routing_json_str}")
+        logger.debug(f"[ROUTER_NODE] Raw LLM response: {routing_json_str}")
+
+        # Nettoyer la chaîne pour extraire uniquement le JSON
+        # (enlever les balises markdown comme ```json si présentes)
+        try:
+            start_index = routing_json_str.index('{')
+            end_index = routing_json_str.rindex('}') + 1
+            clean_json_str = routing_json_str[start_index:end_index]
+            logger.debug(f"[ROUTER_NODE] Cleaned JSON string: {clean_json_str}")
+        except ValueError as e:
+            # Si '{' ou '}' ne sont pas trouvés, on essaie avec la chaîne brute
+            logger.warning(f"[ROUTER_NODE] Could not find JSON delimiters in response: {e}")
+            clean_json_str = routing_json_str
+
+        logger.info(f"[ROUTER_NODE] JSON to parse: {clean_json_str}")
 
         # Parser le JSON dans un objet RouterDecision
-        routing_data = json.loads(routing_json_str)
+        routing_data = json.loads(clean_json_str)
         router_decision = RouterDecision(**routing_data)
 
         # Valider la structure de la décision
