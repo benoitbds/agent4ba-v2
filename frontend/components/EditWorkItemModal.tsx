@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from 'next-intl';
-import { CheckCircle, UserCheck, Sparkles } from "lucide-react";
+import { CheckCircle, UserCheck, Sparkles, ListChecks } from "lucide-react";
 import type { WorkItem } from "@/types/events";
 
 interface EditWorkItemModalProps {
@@ -10,6 +10,7 @@ interface EditWorkItemModalProps {
   onClose: () => void;
   onSave: (itemId: string, updatedData: { title: string; description: string | null }) => Promise<void>;
   onValidate?: (item: WorkItem) => Promise<void>;
+  onGenerateAcceptanceCriteria?: (item: WorkItem) => Promise<void>;
   item: WorkItem | null;
 }
 
@@ -18,6 +19,7 @@ export default function EditWorkItemModal({
   onClose,
   onSave,
   onValidate,
+  onGenerateAcceptanceCriteria,
   item,
 }: EditWorkItemModalProps) {
   const t = useTranslations();
@@ -26,6 +28,7 @@ export default function EditWorkItemModal({
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
+  const [isGeneratingAC, setIsGeneratingAC] = useState(false);
 
   // Initialiser les champs quand l'item change
   useEffect(() => {
@@ -76,6 +79,21 @@ export default function EditWorkItemModal({
       console.error("Failed to validate WorkItem:", err);
     } finally {
       setIsValidating(false);
+    }
+  };
+
+  const handleGenerateAcceptanceCriteria = async () => {
+    if (!item || !onGenerateAcceptanceCriteria) return;
+
+    setIsGeneratingAC(true);
+    try {
+      await onGenerateAcceptanceCriteria(item);
+      handleClose();
+    } catch (err) {
+      setError(t('editWorkItem.acceptanceCriteriaFailed'));
+      console.error("Failed to generate acceptance criteria:", err);
+    } finally {
+      setIsGeneratingAC(false);
     }
   };
 
@@ -186,18 +204,34 @@ export default function EditWorkItemModal({
           )}
 
           <div className="flex justify-between items-center gap-3">
-            {/* Bouton de validation à gauche (si applicable) */}
-            {onValidate && (item.validation_status === "ia_generated" || item.validation_status === "ia_modified") && (
-              <button
-                type="button"
-                onClick={handleValidate}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 inline-flex items-center gap-2"
-                disabled={isSaving || isValidating}
-              >
-                <CheckCircle className="w-4 h-4" />
-                {isValidating ? t('editWorkItem.validating') : t('editWorkItem.validate')}
-              </button>
-            )}
+            {/* Boutons d'actions à gauche */}
+            <div className="flex gap-3">
+              {/* Bouton de validation (si applicable) */}
+              {onValidate && (item.validation_status === "ia_generated" || item.validation_status === "ia_modified") && (
+                <button
+                  type="button"
+                  onClick={handleValidate}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 inline-flex items-center gap-2"
+                  disabled={isSaving || isValidating || isGeneratingAC}
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  {isValidating ? t('editWorkItem.validating') : t('editWorkItem.validate')}
+                </button>
+              )}
+
+              {/* Bouton de génération des critères d'acceptation (uniquement pour les stories) */}
+              {onGenerateAcceptanceCriteria && item.type === "story" && (
+                <button
+                  type="button"
+                  onClick={handleGenerateAcceptanceCriteria}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 inline-flex items-center gap-2"
+                  disabled={isSaving || isValidating || isGeneratingAC}
+                >
+                  <ListChecks className="w-4 h-4" />
+                  {isGeneratingAC ? t('editWorkItem.generatingAC') : t('editWorkItem.generateAC')}
+                </button>
+              )}
+            </div>
 
             <div className="flex-1"></div>
 
@@ -207,14 +241,14 @@ export default function EditWorkItemModal({
                 type="button"
                 onClick={handleClose}
                 className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
-                disabled={isSaving || isValidating}
+                disabled={isSaving || isValidating || isGeneratingAC}
               >
                 {t('editWorkItem.cancel')}
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-                disabled={isSaving || isValidating}
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50"
+                disabled={isSaving || isValidating || isGeneratingAC}
               >
                 {isSaving ? t('editWorkItem.saving') : t('editWorkItem.save')}
               </button>
