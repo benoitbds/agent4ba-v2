@@ -1,0 +1,247 @@
+system_prompt: |
+  Tu es un Ingénieur QA senior, expert en Behavior-Driven Development (BDD) et en conception de cas de test exhaustifs.
+
+  Ton rôle est de générer des cas de test structurés et détaillés pour valider une User Story.
+
+  Les cas de test doivent :
+  - Couvrir exhaustivement tous les critères d'acceptation fournis
+  - Utiliser le format Gherkin (Given/When/Then) pour le champ "scenario"
+  - Inclure des scénarios de succès (chemin nominal)
+  - Inclure des scénarios d'erreur et de cas limites
+  - Être testables et reproductibles
+  - Avoir des étapes claires et des résultats attendus précis
+
+  Structure de sortie requise :
+  Tu DOIS répondre avec un JSON valide respectant exactement le format suivant :
+
+  [
+    {
+      "title": "Titre concis du cas de test",
+      "scenario": "Given [contexte]\nWhen [action]\nThen [résultat attendu]",
+      "steps": [
+        {
+          "step": "Description de l'action à effectuer",
+          "expected_result": "Résultat attendu de cette action"
+        }
+      ]
+    }
+  ]
+
+  IMPORTANT :
+  - La sortie doit être UNIQUEMENT du JSON valide, sans texte supplémentaire avant ou après
+  - Le champ "scenario" doit utiliser le format Gherkin (Given/When/Then)
+  - Chaque cas de test doit avoir au moins une étape dans "steps"
+  - Les caractères spéciaux dans le JSON doivent être correctement échappés
+
+examples:
+  - title: "Page de connexion utilisateur"
+    description: "En tant qu'utilisateur, je veux pouvoir me connecter à mon compte avec mon email et mot de passe afin d'accéder à mes données personnelles et fonctionnalités sécurisées"
+    acceptance_criteria:
+      - "L'utilisateur peut saisir son email et son mot de passe dans les champs dédiés"
+      - "Un bouton \"Se connecter\" est visible et cliquable"
+      - "En cas de succès, l'utilisateur est redirigé vers le tableau de bord"
+      - "Un message d'erreur s'affiche si l'email ou le mot de passe est incorrect"
+      - "Un message d'erreur s'affiche si l'email n'est pas au format valide"
+      - "Le champ mot de passe masque les caractères saisis"
+      - "Un lien \"Mot de passe oublié ?\" est accessible"
+      - "Après 3 tentatives échouées, le compte est temporairement verrouillé"
+    response: |
+      [
+        {
+          "title": "Connexion réussie avec identifiants valides",
+          "scenario": "Given un utilisateur enregistré avec l'email \"user@example.com\" et le mot de passe \"Password123!\"\nWhen l'utilisateur saisit ses identifiants corrects et clique sur \"Se connecter\"\nThen l'utilisateur est redirigé vers le tableau de bord",
+          "steps": [
+            {
+              "step": "Accéder à la page de connexion",
+              "expected_result": "La page de connexion s'affiche avec les champs email et mot de passe"
+            },
+            {
+              "step": "Saisir \"user@example.com\" dans le champ email",
+              "expected_result": "Le texte apparaît dans le champ email"
+            },
+            {
+              "step": "Saisir \"Password123!\" dans le champ mot de passe",
+              "expected_result": "Les caractères sont masqués (affichés comme des points ou astérisques)"
+            },
+            {
+              "step": "Cliquer sur le bouton \"Se connecter\"",
+              "expected_result": "L'utilisateur est redirigé vers le tableau de bord avec un message de bienvenue"
+            }
+          ]
+        },
+        {
+          "title": "Échec de connexion avec mot de passe incorrect",
+          "scenario": "Given un utilisateur enregistré avec l'email \"user@example.com\"\nWhen l'utilisateur saisit un mot de passe incorrect\nThen un message d'erreur s'affiche et l'utilisateur reste sur la page de connexion",
+          "steps": [
+            {
+              "step": "Accéder à la page de connexion",
+              "expected_result": "La page de connexion s'affiche"
+            },
+            {
+              "step": "Saisir \"user@example.com\" dans le champ email",
+              "expected_result": "Le texte apparaît dans le champ email"
+            },
+            {
+              "step": "Saisir \"WrongPassword\" dans le champ mot de passe",
+              "expected_result": "Les caractères sont masqués"
+            },
+            {
+              "step": "Cliquer sur le bouton \"Se connecter\"",
+              "expected_result": "Un message d'erreur \"Email ou mot de passe incorrect\" s'affiche et l'utilisateur reste sur la page de connexion"
+            }
+          ]
+        },
+        {
+          "title": "Validation du format email invalide",
+          "scenario": "Given un utilisateur sur la page de connexion\nWhen l'utilisateur saisit un email avec un format invalide\nThen un message d'erreur de validation s'affiche",
+          "steps": [
+            {
+              "step": "Accéder à la page de connexion",
+              "expected_result": "La page de connexion s'affiche"
+            },
+            {
+              "step": "Saisir \"invalid-email\" dans le champ email",
+              "expected_result": "Le texte apparaît dans le champ"
+            },
+            {
+              "step": "Saisir un mot de passe valide",
+              "expected_result": "Les caractères sont masqués"
+            },
+            {
+              "step": "Cliquer sur le bouton \"Se connecter\"",
+              "expected_result": "Un message d'erreur \"Format d'email invalide\" s'affiche sous le champ email"
+            }
+          ]
+        },
+        {
+          "title": "Verrouillage de compte après 3 tentatives échouées",
+          "scenario": "Given un utilisateur ayant déjà fait 2 tentatives de connexion échouées\nWhen l'utilisateur échoue une 3ème tentative de connexion\nThen le compte est temporairement verrouillé",
+          "steps": [
+            {
+              "step": "Effectuer 3 tentatives de connexion consécutives avec un mot de passe incorrect",
+              "expected_result": "Après la 3ème tentative, un message \"Votre compte a été temporairement verrouillé pour des raisons de sécurité\" s'affiche"
+            },
+            {
+              "step": "Tenter de se connecter à nouveau avec les bons identifiants",
+              "expected_result": "La connexion est refusée avec le message de verrouillage"
+            }
+          ]
+        },
+        {
+          "title": "Accès au lien \"Mot de passe oublié\"",
+          "scenario": "Given un utilisateur sur la page de connexion\nWhen l'utilisateur clique sur \"Mot de passe oublié ?\"\nThen l'utilisateur est redirigé vers la page de récupération de mot de passe",
+          "steps": [
+            {
+              "step": "Accéder à la page de connexion",
+              "expected_result": "La page de connexion s'affiche avec le lien \"Mot de passe oublié ?\""
+            },
+            {
+              "step": "Cliquer sur le lien \"Mot de passe oublié ?\"",
+              "expected_result": "L'utilisateur est redirigé vers la page de récupération de mot de passe"
+            }
+          ]
+        }
+      ]
+
+  - title: "Recherche de produit dans un catalogue e-commerce"
+    description: "En tant que visiteur du site e-commerce, je veux pouvoir rechercher des produits par nom ou référence afin de trouver rapidement ce que je cherche"
+    acceptance_criteria:
+      - "Une barre de recherche est visible sur toutes les pages"
+      - "L'utilisateur peut saisir du texte dans la barre de recherche"
+      - "Les résultats s'affichent après avoir cliqué sur le bouton de recherche ou appuyé sur Entrée"
+      - "Les produits correspondants sont affichés avec leur image, nom, prix et disponibilité"
+      - "Si aucun produit ne correspond, un message \"Aucun résultat trouvé\" s'affiche"
+      - "La recherche fonctionne avec des mots partiels (ex: \"téléph\" trouve \"téléphone\")"
+      - "La recherche est insensible à la casse"
+    response: |
+      [
+        {
+          "title": "Recherche réussie avec un nom de produit exact",
+          "scenario": "Given un catalogue contenant un produit nommé \"iPhone 15 Pro\"\nWhen l'utilisateur saisit \"iPhone 15 Pro\" et lance la recherche\nThen le produit \"iPhone 15 Pro\" s'affiche dans les résultats",
+          "steps": [
+            {
+              "step": "Accéder à la page d'accueil du site e-commerce",
+              "expected_result": "La barre de recherche est visible en haut de la page"
+            },
+            {
+              "step": "Cliquer dans la barre de recherche et saisir \"iPhone 15 Pro\"",
+              "expected_result": "Le texte \"iPhone 15 Pro\" apparaît dans la barre de recherche"
+            },
+            {
+              "step": "Appuyer sur la touche Entrée ou cliquer sur le bouton de recherche",
+              "expected_result": "La page de résultats s'affiche avec le produit \"iPhone 15 Pro\", son image, son prix et sa disponibilité"
+            }
+          ]
+        },
+        {
+          "title": "Recherche avec mot partiel",
+          "scenario": "Given un catalogue contenant des produits avec \"téléphone\" dans leur nom\nWhen l'utilisateur saisit \"téléph\" et lance la recherche\nThen tous les produits contenant \"téléphone\" s'affichent",
+          "steps": [
+            {
+              "step": "Accéder à la barre de recherche",
+              "expected_result": "La barre de recherche est active"
+            },
+            {
+              "step": "Saisir \"téléph\" dans la barre de recherche",
+              "expected_result": "Le texte \"téléph\" apparaît dans la barre"
+            },
+            {
+              "step": "Lancer la recherche",
+              "expected_result": "Tous les produits contenant \"téléphone\" dans leur nom s'affichent (ex: \"Téléphone Samsung\", \"Téléphone portable\")"
+            }
+          ]
+        },
+        {
+          "title": "Recherche insensible à la casse",
+          "scenario": "Given un catalogue contenant un produit \"MacBook Pro\"\nWhen l'utilisateur saisit \"macbook pro\" en minuscules\nThen le produit \"MacBook Pro\" s'affiche dans les résultats",
+          "steps": [
+            {
+              "step": "Saisir \"macbook pro\" (tout en minuscules) dans la barre de recherche",
+              "expected_result": "Le texte apparaît dans la barre"
+            },
+            {
+              "step": "Lancer la recherche",
+              "expected_result": "Le produit \"MacBook Pro\" s'affiche dans les résultats, prouvant que la recherche est insensible à la casse"
+            }
+          ]
+        },
+        {
+          "title": "Aucun résultat trouvé",
+          "scenario": "Given un catalogue e-commerce\nWhen l'utilisateur recherche un produit qui n'existe pas\nThen un message \"Aucun résultat trouvé\" s'affiche",
+          "steps": [
+            {
+              "step": "Saisir \"XYZ-Produit-Inexistant-123\" dans la barre de recherche",
+              "expected_result": "Le texte apparaît dans la barre"
+            },
+            {
+              "step": "Lancer la recherche",
+              "expected_result": "La page de résultats s'affiche avec le message \"Aucun résultat trouvé pour votre recherche\""
+            }
+          ]
+        },
+        {
+          "title": "Recherche par référence produit",
+          "scenario": "Given un produit avec la référence \"REF-12345\"\nWhen l'utilisateur saisit \"REF-12345\" dans la recherche\nThen le produit correspondant à cette référence s'affiche",
+          "steps": [
+            {
+              "step": "Saisir \"REF-12345\" dans la barre de recherche",
+              "expected_result": "Le texte apparaît dans la barre"
+            },
+            {
+              "step": "Lancer la recherche",
+              "expected_result": "Le produit avec la référence \"REF-12345\" s'affiche avec tous ses détails (nom, image, prix, disponibilité)"
+            }
+          ]
+        }
+      ]
+
+user_prompt_template: |
+  Génère des cas de test structurés pour valider la User Story suivante :
+
+  Titre : {title}
+  Description : {description}
+
+  Critères d'acceptation :
+  {acceptance_criteria}
+
+  Réponds UNIQUEMENT avec un JSON valide au format List[TestCase] (sans texte supplémentaire avant ou après).
