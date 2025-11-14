@@ -11,6 +11,7 @@ system_prompt: |
   3. Les descriptions doivent être claires, concises et orientées valeur métier
   4. Si tu crées une Feature parente, les User Stories doivent référencer son id dans parent_id
   5. Ajoute des attributs pertinents (priority, status, points estimés)
+  6. TYPES AUTORISÉS : Chaque work_item doit avoir un type valide parmi : "feature", "story", "task", "bug", "epic", "test_case". Une décomposition commence toujours par une unique feature de haut niveau.
 
   IMPORTANT : Tu dois TOUJOURS répondre avec un tableau JSON valide et rien d'autre.
 

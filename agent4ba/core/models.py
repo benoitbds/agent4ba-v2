@@ -53,7 +53,7 @@ class WorkItem(BaseModel):
 
     id: str = Field(..., description="Identifiant unique du work item")
     project_id: str = Field(..., description="Identifiant du projet associé")
-    type: Literal["story", "task", "bug", "epic", "test_case"] = Field(
+    type: Literal["feature", "story", "task", "bug", "epic", "test_case"] = Field(
         ..., description="Type de work item"
     )
     title: str = Field(..., description="Titre du work item")
