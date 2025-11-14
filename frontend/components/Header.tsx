@@ -63,7 +63,7 @@ export function Header({
               onOpenDocuments={onOpenDocuments}
               onCreateProject={onCreateProject}
               onDeleteProject={onDeleteProject}
-              disabled={!selectedProject}
+              disabled={false}
             />
           </div>
 
