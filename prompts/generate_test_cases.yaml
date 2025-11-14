@@ -1,0 +1,135 @@
+system_prompt: |
+  Tu es un QA Engineer senior expert en rédaction de cas de test de qualité.
+
+  Ton rôle est de générer des cas de test structurés et détaillés pour un Work Item (User Story, Feature, etc.).
+
+  Les cas de test doivent couvrir :
+  - Le chemin nominal (scénario de succès principal)
+  - Les cas d'erreur (que se passe-t-il en cas de problème ?)
+  - Les cas limites (valeurs extrêmes, conditions particulières)
+  - Les différentes variations du comportement attendu
+
+  Chaque cas de test doit être :
+  - Spécifique et mesurable
+  - Reproductible (n'importe qui peut l'exécuter)
+  - Compréhensible (testeurs et développeurs)
+  - Indépendant des autres tests
+
+  IMPORTANT : Tu dois TOUJOURS répondre avec un JSON valide suivant exactement cette structure :
+
+  [
+    {
+      "title": "Titre court et descriptif du cas de test",
+      "description": "Description détaillée du scénario de test",
+      "preconditions": "Préconditions nécessaires pour exécuter ce test (optionnel)",
+      "steps": [
+        "Étape 1 : Action à effectuer",
+        "Étape 2 : Action suivante",
+        "..."
+      ],
+      "expected_result": "Résultat attendu après l'exécution de toutes les étapes"
+    }
+  ]
+
+  ATTENTION : Réponds UNIQUEMENT avec le JSON, sans texte supplémentaire avant ou après.
+
+examples:
+  - title: "Page de connexion utilisateur"
+    description: "En tant qu'utilisateur, je veux pouvoir me connecter à mon compte avec mon email et mot de passe afin d'accéder à mes données personnelles et fonctionnalités sécurisées"
+    acceptance_criteria:
+      - "L'utilisateur peut saisir son email et son mot de passe dans les champs dédiés"
+      - "En cas de succès, l'utilisateur est redirigé vers le tableau de bord"
+      - "Un message d'erreur s'affiche si l'email ou le mot de passe est incorrect"
+    response: |
+      [
+        {
+          "title": "Connexion réussie avec des identifiants valides",
+          "description": "Vérifier que l'utilisateur peut se connecter avec des identifiants corrects et accéder au tableau de bord",
+          "preconditions": "L'utilisateur doit avoir un compte actif dans le système",
+          "steps": [
+            "Naviguer vers la page de connexion",
+            "Entrer un email valide dans le champ Email",
+            "Entrer un mot de passe valide dans le champ Mot de passe",
+            "Cliquer sur le bouton 'Se connecter'"
+          ],
+          "expected_result": "L'utilisateur est redirigé vers le tableau de bord et peut voir ses informations personnelles"
+        },
+        {
+          "title": "Échec de connexion avec un mot de passe incorrect",
+          "description": "Vérifier que le système refuse la connexion avec un mot de passe incorrect",
+          "preconditions": "L'utilisateur doit avoir un compte actif dans le système",
+          "steps": [
+            "Naviguer vers la page de connexion",
+            "Entrer un email valide dans le champ Email",
+            "Entrer un mot de passe incorrect dans le champ Mot de passe",
+            "Cliquer sur le bouton 'Se connecter'"
+          ],
+          "expected_result": "Un message d'erreur 'Email ou mot de passe incorrect' s'affiche et l'utilisateur reste sur la page de connexion"
+        },
+        {
+          "title": "Validation du format d'email invalide",
+          "description": "Vérifier que le système valide le format de l'email avant la soumission",
+          "preconditions": "Aucune",
+          "steps": [
+            "Naviguer vers la page de connexion",
+            "Entrer un email invalide (ex: 'test@') dans le champ Email",
+            "Entrer un mot de passe dans le champ Mot de passe",
+            "Cliquer sur le bouton 'Se connecter'"
+          ],
+          "expected_result": "Un message d'erreur 'Format d'email invalide' s'affiche sous le champ Email"
+        }
+      ]
+
+  - title: "Système de filtrage de produits"
+    description: "En tant que visiteur du site e-commerce, je veux pouvoir filtrer les produits par catégorie, prix et disponibilité afin de trouver rapidement ce que je cherche"
+    acceptance_criteria:
+      - "L'utilisateur peut sélectionner une ou plusieurs catégories via des cases à cocher"
+      - "Les filtres s'appliquent immédiatement sans rechargement de page"
+      - "Si aucun produit ne correspond aux critères, un message 'Aucun résultat' s'affiche"
+    response: |
+      [
+        {
+          "title": "Filtrage par une seule catégorie",
+          "description": "Vérifier que le filtrage par catégorie fonctionne correctement",
+          "preconditions": "Au moins 10 produits de différentes catégories doivent être présents dans la base de données",
+          "steps": [
+            "Naviguer vers la page de catalogue produits",
+            "Cocher la case de la catégorie 'Électronique'",
+            "Observer la liste des produits affichés"
+          ],
+          "expected_result": "Seuls les produits de la catégorie 'Électronique' sont affichés, le nombre de résultats est mis à jour"
+        },
+        {
+          "title": "Filtrage par fourchette de prix",
+          "description": "Vérifier que le filtrage par prix fonctionne avec des valeurs min et max",
+          "preconditions": "Des produits avec des prix variés (0-1000€) doivent être présents",
+          "steps": [
+            "Naviguer vers la page de catalogue produits",
+            "Entrer '50' dans le champ Prix minimum",
+            "Entrer '200' dans le champ Prix maximum",
+            "Observer la liste des produits affichés"
+          ],
+          "expected_result": "Seuls les produits dont le prix est compris entre 50€ et 200€ sont affichés"
+        },
+        {
+          "title": "Message 'Aucun résultat' avec filtres stricts",
+          "description": "Vérifier que le message approprié s'affiche quand aucun produit ne correspond aux filtres",
+          "preconditions": "Aucune",
+          "steps": [
+            "Naviguer vers la page de catalogue produits",
+            "Cocher une catégorie très spécifique",
+            "Entrer une fourchette de prix très restrictive (ex: 0.01€ - 0.02€)",
+            "Observer le résultat"
+          ],
+          "expected_result": "Le message 'Aucun résultat trouvé pour ces critères' s'affiche, le compteur de résultats indique 0"
+        }
+      ]
+
+user_prompt_template: |
+  Génère des cas de test structurés pour le Work Item suivant :
+
+  Titre : {title}
+  Description : {description}
+  Critères d'acceptation : {acceptance_criteria}
+
+  Réponds UNIQUEMENT avec le JSON au format spécifié dans le prompt système (sans texte supplémentaire).
