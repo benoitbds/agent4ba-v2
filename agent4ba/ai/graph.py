@@ -11,7 +11,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from litellm import completion
 
-from agent4ba.ai import backlog_agent, document_agent, test_agent
+from agent4ba.ai import backlog_agent, document_agent, epic_architect_agent, test_agent
 from agent4ba.ai.nodes import ask_for_clarification, handle_unknown_intent
 from agent4ba.core.logger import setup_logger
 from agent4ba.core.registry_service import load_agent_registry
@@ -499,6 +499,16 @@ def agent_node(state: GraphState) -> dict[str, Any]:
             return {
                 "status": "error",
                 "result": f"Unknown task '{agent_task}' for backlog_agent",
+            }
+
+    elif agent_id == "epic_architect_agent":
+        # Router vers la méthode appropriée de l'epic_architect_agent
+        if agent_task == "generate_epics":
+            return epic_architect_agent.generate_epics(state)
+        else:
+            return {
+                "status": "error",
+                "result": f"Unknown task '{agent_task}' for epic_architect_agent",
             }
 
     elif agent_id == "document_agent":
