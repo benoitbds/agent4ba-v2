@@ -12,7 +12,7 @@ from litellm import completion
 
 from agent4ba.api.event_queue import get_event_queue
 from agent4ba.core.logger import setup_logger
-from agent4ba.core.models import TestCase, TestCaseStep, WorkItem
+from agent4ba.core.models import TestCase, WorkItem
 from agent4ba.core.storage import ProjectContextService
 
 # Charger les variables d'environnement
@@ -260,7 +260,7 @@ def generate_test_cases(state: Any) -> dict[str, Any]:
                     description=test_case.scenario,
                     parent_id=item_id,
                     scenario=test_case.scenario,
-                    steps=[TestCaseStep(**step) for step in test_case.steps],
+                    steps=test_case_data.get("steps", []),  # Passer les données brutes, Pydantic les convertira
                     validation_status="ia_generated",
                     attributes={},
                 )
