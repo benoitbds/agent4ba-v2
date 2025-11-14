@@ -387,6 +387,12 @@ async def continue_workflow(thread_id: str, request: ApprovalRequest) -> ChatRes
     status = accumulated_state.get("status", "completed")
     project_id = accumulated_state.get("project_id", "")
 
+    # Extraire les événements détaillés de l'agent depuis l'état accumulé
+    agent_events = accumulated_state.get("agent_events", [])
+    if agent_events:
+        timeline_events.extend(agent_events)
+        logger.info(f"[CONTINUE] Extracted {len(agent_events)} agent events from state")
+
     # Ajouter l'événement WorkflowCompleteEvent
     complete_event = WorkflowCompleteEvent(
         result=result if result else "Workflow completed",
@@ -481,6 +487,12 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
         # Exécuter le workflow de manière synchrone
         logger.info("[EXECUTE] Starting workflow execution...")
         final_state = workflow_app.invoke(initial_state, config)  # type: ignore[arg-type]
+
+        # Extraire les événements détaillés de l'agent depuis l'état final
+        agent_events = final_state.get("agent_events", [])
+        if agent_events:
+            timeline_events.extend(agent_events)
+            logger.info(f"[EXECUTE] Extracted {len(agent_events)} agent events from state")
 
         # Vérifier si une clarification est nécessaire
         if final_state.get("clarification_needed", False):
@@ -671,6 +683,12 @@ async def respond_to_clarification(request: ClarificationResponse) -> ChatRespon
         project_id = final_state.get("project_id", "")
 
         logger.info(f"[RESPOND] Workflow completed with status: {status}")
+
+        # Extraire les événements détaillés de l'agent depuis l'état final
+        agent_events = final_state.get("agent_events", [])
+        if agent_events:
+            timeline_events.extend(agent_events)
+            logger.info(f"[RESPOND] Extracted {len(agent_events)} agent events from state")
 
         # Ajouter l'événement WorkflowCompleteEvent
         complete_event = WorkflowCompleteEvent(
