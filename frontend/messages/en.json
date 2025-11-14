@@ -57,7 +57,16 @@
     "validationError": "Error validating the item",
     "generateAcceptanceCriteria": "Generate acceptance criteria",
     "acceptanceCriteriaGenerated": "Acceptance criteria for \"{title}\" have been successfully generated",
-    "acceptanceCriteriaError": "Error generating acceptance criteria"
+    "acceptanceCriteriaError": "Error generating acceptance criteria",
+    "addWorkItem": "Add Work Item",
+    "editWorkItem": "Edit",
+    "deleteWorkItem": "Delete",
+    "workItemCreated": "Work Item created successfully",
+    "workItemUpdated": "Work Item updated successfully",
+    "workItemDeleted": "Work Item \"{title}\" has been deleted",
+    "deleteError": "Error deleting work item",
+    "confirmDeleteTitle": "Confirm Deletion",
+    "confirmDeleteMessage": "Are you sure you want to delete the Work Item \"{title}\"? This action is irreversible."
   },
   "timeline": {
     "title": "Execution Timeline",
@@ -187,6 +196,27 @@
     "humanValidated": "Validated",
     "iaGenerated": "AI Generated",
     "iaModified": "AI Modified"
+  },
+  "workItemForm": {
+    "createTitle": "Create Work Item",
+    "editTitle": "Edit Work Item",
+    "typeLabel": "Type",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Work item title",
+    "titleRequired": "Title is required",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Work item description...",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create",
+    "saving": "Saving...",
+    "createFailed": "Failed to create",
+    "updateFailed": "Failed to update"
+  },
+  "confirmDelete": {
+    "cancel": "Cancel",
+    "confirm": "Delete",
+    "deleting": "Deleting..."
   },
   "common": {
     "empty": "(empty)",

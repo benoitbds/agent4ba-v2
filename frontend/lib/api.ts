@@ -432,3 +432,64 @@ export async function generateAcceptanceCriteria(
 
   return response.json();
 }
+
+/**
+ * Create a new WorkItem
+ */
+export async function createWorkItem(
+  projectId: string,
+  workItemData: {
+    type: string;
+    title: string;
+    description: string | null;
+    parent_id?: string | null;
+    acceptance_criteria?: string[];
+  }
+): Promise<WorkItem> {
+  const response = await fetch(
+    `${API_URL}/projects/${projectId}/work_items`,
+    {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(workItemData),
+    }
+  );
+
+  // Check for 401 errors
+  await handleResponse(response);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Delete a WorkItem from the backlog
+ */
+export async function deleteWorkItem(
+  projectId: string,
+  itemId: string
+): Promise<void> {
+  const response = await fetch(
+    `${API_URL}/projects/${projectId}/work_items/${itemId}`,
+    {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    }
+  );
+
+  // Check for 401 errors
+  await handleResponse(response);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
+  }
+}
