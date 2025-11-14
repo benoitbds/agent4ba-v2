@@ -5,38 +5,6 @@ from typing import Any, List, Literal
 from pydantic import BaseModel, Field
 
 
-class TestCase(BaseModel):
-    """Représente un cas de test pour un work item."""
-
-    title: str = Field(..., description="Titre du cas de test")
-    description: str = Field(..., description="Description détaillée du scénario de test")
-    preconditions: str | None = Field(None, description="Préconditions pour exécuter le test")
-    steps: list[str] = Field(
-        default_factory=list,
-        description="Liste des étapes à exécuter dans le test",
-    )
-    expected_result: str = Field(..., description="Résultat attendu du test")
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "title": "Test de connexion avec des identifiants valides",
-                    "description": "Vérifier que l'utilisateur peut se connecter avec des identifiants corrects",
-                    "preconditions": "L'utilisateur doit avoir un compte actif",
-                    "steps": [
-                        "Naviguer vers la page de connexion",
-                        "Entrer un email valide",
-                        "Entrer un mot de passe valide",
-                        "Cliquer sur le bouton 'Se connecter'",
-                    ],
-                    "expected_result": "L'utilisateur est redirigé vers le tableau de bord",
-                }
-            ]
-        }
-    }
-
-
 class User(BaseModel):
     """Représente un utilisateur du système."""
 
@@ -81,11 +49,13 @@ class TestCase(BaseModel):
 
 
 class WorkItem(BaseModel):
-    """Représente un élément de travail (user story, task, bug, etc.)."""
+    """Représente un élément de travail (user story, task, bug, test_case, etc.)."""
 
     id: str = Field(..., description="Identifiant unique du work item")
     project_id: str = Field(..., description="Identifiant du projet associé")
-    type: str = Field(..., description="Type de work item (story, task, bug, etc.)")
+    type: Literal["story", "task", "bug", "epic", "test_case"] = Field(
+        ..., description="Type de work item"
+    )
     title: str = Field(..., description="Titre du work item")
     description: str | None = Field(None, description="Description détaillée")
     parent_id: str | None = Field(
@@ -96,9 +66,13 @@ class WorkItem(BaseModel):
         default_factory=list,
         description="Liste des critères d'acceptation pour ce work item",
     )
-    test_cases: list[TestCase] = Field(
+    scenario: str | None = Field(
+        None,
+        description="Scénario de test au format Gherkin (pour les test_case uniquement)",
+    )
+    steps: list[TestCaseStep] = Field(
         default_factory=list,
-        description="Liste des cas de test pour ce work item",
+        description="Liste des étapes détaillées du cas de test (pour les test_case uniquement)",
     )
     validation_status: Literal["ia_generated", "human_validated", "ia_modified"] = Field(
         default="ia_generated",
