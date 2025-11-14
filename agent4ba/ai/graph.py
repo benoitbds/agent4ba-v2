@@ -71,6 +71,21 @@ def load_task_rewriter_prompt() -> dict[str, Any]:
         return result
 
 
+def load_router_prompt() -> dict[str, Any]:
+    """
+    Charge le prompt de routage depuis le fichier YAML.
+
+    Returns:
+        Dictionnaire contenant le prompt et les exemples
+    """
+    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "router.yaml"
+    with prompt_path.open("r", encoding="utf-8") as f:
+        result = yaml.safe_load(f)
+        if not isinstance(result, dict):
+            raise ValueError("Invalid prompt configuration")
+        return result
+
+
 def entry_node(state: GraphState) -> dict[str, Any]:
     """
     Point d'entrée du graphe.
@@ -182,14 +197,14 @@ def router_node(state: GraphState) -> dict[str, Any]:
     """
     Route la requête vers le bon agent selon la tâche reformulée.
 
-    Analyse la tâche reformulée avec des règles simples pour déterminer
-    quel agent et quelle tâche exécuter.
+    Utilise un LLM avec des exemples few-shot pour déterminer
+    quel agent et quelle tâche exécuter, ainsi que les arguments nécessaires.
 
     Args:
         state: État actuel du graphe
 
     Returns:
-        Mise à jour partielle de l'état avec next_node, agent_id et agent_task
+        Mise à jour partielle de l'état avec next_node, agent_id, agent_task et intent_args
     """
     rewritten_task = state.get("rewritten_task", "")
 
@@ -204,51 +219,76 @@ def router_node(state: GraphState) -> dict[str, Any]:
             "result": "No task to process.",
         }
 
-    # Normaliser la tâche pour la comparaison
-    task_lower = rewritten_task.lower()
+    # Charger le prompt
+    prompt_config = load_router_prompt()
 
-    # Règles de routage basées sur des mots-clés
-    agent_id = "backlog_agent"
-    agent_task = "unknown_task"
+    # Préparer le prompt utilisateur
+    user_prompt = prompt_config["user_prompt_template"].replace(
+        "{{ rewritten_task }}", rewritten_task
+    )
 
-    # Détection de la tâche à exécuter
-    if any(keyword in task_lower for keyword in ["générer les user stories", "créer les user stories", "décomposer", "générer les features", "créer les features"]):
-        agent_task = "decompose_objective"
-    elif any(keyword in task_lower for keyword in ["améliorer la description", "améliorer le work item", "clarifier"]):
-        agent_task = "improve_description"
-    elif any(keyword in task_lower for keyword in ["générer une spécification", "générer les use cases", "générer les uc", "spec complète"]):
-        agent_task = "generate_specification"
-    elif any(keyword in task_lower for keyword in ["revue qualité", "review", "analyser le backlog"]):
-        agent_task = "review_quality"
-    elif any(keyword in task_lower for keyword in ["estimer", "story points", "estimation"]):
-        agent_task = "estimate_stories"
-    elif any(keyword in task_lower for keyword in ["chercher", "trouver", "rechercher"]):
-        agent_task = "search_requirements"
-    elif any(keyword in task_lower for keyword in ["extraire", "résumer le document", "analyser le document"]):
-        agent_id = "document_agent"
-        agent_task = "extract_features"
-    else:
-        # Par défaut, on suppose que c'est une décomposition d'objectif
-        agent_task = "decompose_objective"
+    # Récupérer le modèle depuis l'environnement
+    model = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
+    temperature = float(os.getenv("LLM_TEMPERATURE", "0.0"))
 
-    logger.info(f"[ROUTER_NODE] Selected agent: {agent_id}")
-    logger.info(f"[ROUTER_NODE] Selected task: {agent_task}")
-    logger.info("[ROUTER_NODE] Routing to agent node")
+    logger.info(f"[ROUTER_NODE] Using model: {model}")
 
-    # Préparer les arguments pour l'agent
-    # La tâche reformulée devient l'objectif pour la décomposition
-    args = {"objective": state.get("rewritten_task", "")}
+    try:
+        # Appeler le LLM
+        response = completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": prompt_config["system_prompt"]},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=temperature,
+        )
 
-    logger.info(f"[ROUTER_NODE] Prepared args with objective: {args.get('objective', '')}")
+        # Extraire la réponse (JSON de routage)
+        routing_json_str = response.choices[0].message.content.strip()
 
-    return {
-        "next_node": "agent",
-        "agent_id": agent_id,
-        "agent_task": agent_task,
-        "intent": {
-            "args": args
-        },
-    }
+        logger.info(f"[ROUTER_NODE] LLM response: {routing_json_str}")
+
+        # Parser le JSON
+        routing_data = json.loads(routing_json_str)
+
+        agent_id = routing_data.get("agent", "backlog_agent")
+        agent_task = routing_data.get("task", "decompose_objective")
+        args = routing_data.get("args", {})
+
+        logger.info(f"[ROUTER_NODE] Selected agent: {agent_id}")
+        logger.info(f"[ROUTER_NODE] Selected task: {agent_task}")
+        logger.info(f"[ROUTER_NODE] Extracted args: {args}")
+        logger.info("[ROUTER_NODE] Routing to agent node")
+
+        return {
+            "next_node": "agent",
+            "agent_id": agent_id,
+            "agent_task": agent_task,
+            "intent": {
+                "args": args
+            },
+            "intent_args": args,  # Ajouter intent_args pour compatibilité avec les agents
+        }
+
+    except (json.JSONDecodeError, KeyError, Exception) as e:
+        logger.error(f"[ROUTER_NODE] Error parsing LLM response: {e}", exc_info=True)
+        if 'routing_json_str' in locals():
+            logger.error(f"[ROUTER_NODE] LLM response was: {routing_json_str}")
+
+        # Fallback: utiliser la tâche reformulée comme objectif pour décomposition
+        logger.warning("[ROUTER_NODE] Falling back to decompose_objective")
+        args = {"objective": rewritten_task}
+
+        return {
+            "next_node": "agent",
+            "agent_id": "backlog_agent",
+            "agent_task": "decompose_objective",
+            "intent": {
+                "args": args
+            },
+            "intent_args": args,
+        }
 
 
 def should_continue_to_agent(
@@ -317,6 +357,8 @@ def agent_node(state: GraphState) -> dict[str, Any]:
             return backlog_agent.review_quality(state)
         elif agent_task == "improve_description":
             return backlog_agent.improve_description(state)
+        elif agent_task == "generate_acceptance_criteria":
+            return backlog_agent.generate_acceptance_criteria(state)
         elif agent_task == "generate_specification":
             return {
                 "status": "completed",
