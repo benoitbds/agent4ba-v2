@@ -61,9 +61,9 @@ def generate_test_cases(state: Any) -> dict[str, Any]:
 
     # Si pas de contexte, récupérer l'item_id depuis intent_args
     if not item_id:
-        # Accepter à la fois "work_item_id" et "work_item" pour compatibilité
+        # Accepter "item_id", "work_item_id" et "work_item" pour compatibilité
         intent_args = state.get("intent_args", {})
-        item_id = intent_args.get("work_item_id") or intent_args.get("work_item")
+        item_id = intent_args.get("item_id") or intent_args.get("work_item_id") or intent_args.get("work_item")
 
     if not item_id:
         logger.warning("No item_id found in context or intent args")

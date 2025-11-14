@@ -11,7 +11,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from litellm import completion
 
-from agent4ba.ai import backlog_agent, document_agent
+from agent4ba.ai import backlog_agent, document_agent, test_agent
 from agent4ba.core.logger import setup_logger
 from agent4ba.core.registry_service import load_agent_registry
 from agent4ba.core.storage import ProjectContextService
@@ -388,6 +388,16 @@ def agent_node(state: GraphState) -> dict[str, Any]:
             return {
                 "status": "error",
                 "result": f"Unknown task '{agent_task}' for document_agent",
+            }
+
+    elif agent_id == "test_agent":
+        # Router vers la méthode appropriée du test_agent
+        if agent_task == "generate_test_cases":
+            return test_agent.generate_test_cases(state)
+        else:
+            return {
+                "status": "error",
+                "result": f"Unknown task '{agent_task}' for test_agent",
             }
 
     else:
