@@ -1,11 +1,13 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ClipboardPlus, ChevronRight, ChevronDown, Sparkles, UserCheck } from "lucide-react";
+import { ClipboardPlus, ChevronRight, ChevronDown, Sparkles, UserCheck, Plus, Edit2, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { WorkItem } from "@/types/events";
 import EditWorkItemModal from "./EditWorkItemModal";
-import { updateWorkItem, validateWorkItem, generateAcceptanceCriteria } from "@/lib/api";
+import WorkItemFormModal from "./WorkItemFormModal";
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
+import { updateWorkItem, validateWorkItem, generateAcceptanceCriteria, createWorkItem, deleteWorkItem } from "@/lib/api";
 import { toast } from "sonner";
 
 interface BacklogViewProps {
@@ -76,9 +78,19 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
     return new Set(allFeatureIds);
   });
 
-  // État pour gérer la modale d'édition
+  // État pour gérer la modale d'édition avancée (avec validation et AC)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedItemForEdit, setSelectedItemForEdit] = useState<WorkItem | null>(null);
+
+  // État pour gérer la modale de création/édition simple
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [formModalMode, setFormModalMode] = useState<"create" | "edit">("create");
+  const [selectedItemForForm, setSelectedItemForForm] = useState<WorkItem | null>(null);
+
+  // État pour gérer la modale de confirmation de suppression
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<WorkItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fonction pour toggler l'état d'une feature
   const toggleFeature = (featureId: string) => {
@@ -143,6 +155,77 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
       toast.error(t("backlog.acceptanceCriteriaError"));
       console.error("Error generating acceptance criteria:", error);
       throw error; // Re-throw pour que la modal puisse gérer l'erreur
+    }
+  };
+
+  // Fonction pour ouvrir la modale de création
+  const handleCreateClick = () => {
+    setFormModalMode("create");
+    setSelectedItemForForm(null);
+    setIsFormModalOpen(true);
+  };
+
+  // Fonction pour ouvrir la modale d'édition simple
+  const handleQuickEditClick = (item: WorkItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFormModalMode("edit");
+    setSelectedItemForForm(item);
+    setIsFormModalOpen(true);
+  };
+
+  // Fonction pour sauvegarder depuis le formulaire (création ou édition)
+  const handleFormSave = async (data: {
+    type: string;
+    title: string;
+    description: string | null;
+  }) => {
+    try {
+      if (formModalMode === "create") {
+        await createWorkItem(projectId, data);
+        toast.success(t("backlog.workItemCreated"));
+      } else if (selectedItemForForm) {
+        await updateWorkItem(projectId, selectedItemForForm.id, {
+          title: data.title,
+          description: data.description,
+        });
+        toast.success(t("backlog.workItemUpdated"));
+      }
+      // Rafraîchir le backlog
+      if (onItemUpdated) {
+        onItemUpdated();
+      }
+    } catch (error) {
+      console.error("Error saving work item:", error);
+      throw error; // Re-throw pour que la modale puisse afficher l'erreur
+    }
+  };
+
+  // Fonction pour ouvrir la modale de confirmation de suppression
+  const handleDeleteClick = (item: WorkItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setItemToDelete(item);
+    setIsDeleteModalOpen(true);
+  };
+
+  // Fonction pour confirmer la suppression
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteWorkItem(projectId, itemToDelete.id);
+      toast.success(t("backlog.workItemDeleted", { title: itemToDelete.title }));
+      setIsDeleteModalOpen(false);
+      setItemToDelete(null);
+      // Rafraîchir le backlog
+      if (onItemUpdated) {
+        onItemUpdated();
+      }
+    } catch (error) {
+      toast.error(t("backlog.deleteError"));
+      console.error("Error deleting work item:", error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -279,6 +362,22 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
 
           {/* Boutons d'action */}
           <div className="flex-shrink-0 flex gap-2">
+            {/* Edit button */}
+            <button
+              onClick={(e) => handleQuickEditClick(item, e)}
+              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              title={t("backlog.editWorkItem")}
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+            {/* Delete button */}
+            <button
+              onClick={(e) => handleDeleteClick(item, e)}
+              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+              title={t("backlog.deleteWorkItem")}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
             {/* Select button for context */}
             {onSelectItem && (
               <button
@@ -300,7 +399,16 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
 
   return (
     <div className="flex flex-col h-full">
-      <h2 className="text-xl font-semibold mb-4 flex-shrink-0">{t("backlog.title")}</h2>
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
+        <h2 className="text-xl font-semibold">{t("backlog.title")}</h2>
+        <button
+          onClick={handleCreateClick}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        >
+          <Plus className="w-5 h-5" />
+          {t("backlog.addWorkItem")}
+        </button>
+      </div>
       <div className="flex-1 overflow-y-auto pr-2 space-y-3">
         {hierarchicalItems.map((hierarchicalItem) => {
           const isExpanded = expandedItems.has(hierarchicalItem.item.id);
@@ -450,6 +558,22 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
 
                     {/* Boutons d'action */}
                     <div className="flex-shrink-0 flex gap-2">
+                      {/* Edit button */}
+                      <button
+                        onClick={(e) => handleQuickEditClick(hierarchicalItem.item, e)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        title={t("backlog.editWorkItem")}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      {/* Delete button */}
+                      <button
+                        onClick={(e) => handleDeleteClick(hierarchicalItem.item, e)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                        title={t("backlog.deleteWorkItem")}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                       {/* Select button for context */}
                       {onSelectItem && (
                         <button
@@ -481,7 +605,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
         })}
       </div>
 
-      {/* Modal d'édition */}
+      {/* Modal d'édition avancée (avec validation et AC) */}
       <EditWorkItemModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
@@ -489,6 +613,25 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
         onValidate={handleValidateWorkItem}
         onGenerateAcceptanceCriteria={handleGenerateAcceptanceCriteria}
         item={selectedItemForEdit}
+      />
+
+      {/* Modal de création/édition simple */}
+      <WorkItemFormModal
+        isOpen={isFormModalOpen}
+        onClose={() => setIsFormModalOpen(false)}
+        onSave={handleFormSave}
+        item={selectedItemForForm}
+        mode={formModalMode}
+      />
+
+      {/* Modal de confirmation de suppression */}
+      <ConfirmDeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title={t("backlog.confirmDeleteTitle")}
+        message={t("backlog.confirmDeleteMessage", { title: itemToDelete?.title || "" })}
+        isDeleting={isDeleting}
       />
     </div>
   );

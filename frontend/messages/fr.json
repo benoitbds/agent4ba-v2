@@ -57,7 +57,16 @@
     "validationError": "Erreur lors de la validation de l'item",
     "generateAcceptanceCriteria": "Générer les critères d'acceptation",
     "acceptanceCriteriaGenerated": "Les critères d'acceptation pour \"{title}\" ont été générés avec succès",
-    "acceptanceCriteriaError": "Erreur lors de la génération des critères d'acceptation"
+    "acceptanceCriteriaError": "Erreur lors de la génération des critères d'acceptation",
+    "addWorkItem": "Ajouter un Work Item",
+    "editWorkItem": "Modifier",
+    "deleteWorkItem": "Supprimer",
+    "workItemCreated": "Work Item créé avec succès",
+    "workItemUpdated": "Work Item mis à jour avec succès",
+    "workItemDeleted": "Le Work Item \"{title}\" a été supprimé",
+    "deleteError": "Erreur lors de la suppression",
+    "confirmDeleteTitle": "Confirmer la suppression",
+    "confirmDeleteMessage": "Êtes-vous sûr de vouloir supprimer le Work Item \"{title}\" ? Cette action est irréversible."
   },
   "timeline": {
     "title": "Timeline d'exécution",
@@ -187,6 +196,27 @@
     "humanValidated": "Validé",
     "iaGenerated": "Généré par IA",
     "iaModified": "Modifié par IA"
+  },
+  "workItemForm": {
+    "createTitle": "Créer un Work Item",
+    "editTitle": "Modifier le Work Item",
+    "typeLabel": "Type",
+    "titleLabel": "Titre",
+    "titlePlaceholder": "Titre du work item",
+    "titleRequired": "Le titre est requis",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Description du work item...",
+    "cancel": "Annuler",
+    "save": "Sauvegarder",
+    "create": "Créer",
+    "saving": "Sauvegarde...",
+    "createFailed": "Erreur lors de la création",
+    "updateFailed": "Erreur lors de la mise à jour"
+  },
+  "confirmDelete": {
+    "cancel": "Annuler",
+    "confirm": "Supprimer",
+    "deleting": "Suppression..."
   },
   "common": {
     "empty": "(vide)",
