@@ -244,6 +244,9 @@ def router_node(state: GraphState) -> dict[str, Any]:
     # DÉTECTION D'AMBIGUÏTÉ (Simulation pour le MVP)
     # Vérifier si la requête contient "Tc" ou "test" et s'il y a plusieurs work items
     ambiguous = False
+    context = state.get("context", [])
+    user_query = state.get("user_query", "")
+
     if context and len(context) > 0:
         # Vérifier si la requête mentionne des cas de test
         query_lower = user_query.lower()
