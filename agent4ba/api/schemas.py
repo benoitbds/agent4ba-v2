@@ -72,3 +72,76 @@ class CreateProjectRequest(BaseModel):
     """Requête de création d'un nouveau projet."""
 
     project_id: str = Field(..., description="Identifiant unique du projet")
+
+
+class CreateWorkItemRequest(BaseModel):
+    """Requête de création d'un nouveau WorkItem."""
+
+    type: str = Field(..., description="Type de work item (story, task, bug, etc.)")
+    title: str = Field(..., description="Titre du work item")
+    description: str | None = Field(None, description="Description détaillée")
+    parent_id: str | None = Field(
+        None,
+        description="Identifiant du parent (pour les hiérarchies)",
+    )
+    acceptance_criteria: list[str] = Field(
+        default_factory=list,
+        description="Liste des critères d'acceptation pour ce work item",
+    )
+    attributes: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Attributs additionnels (priority, status, etc.)",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "type": "story",
+                    "title": "Implémenter l'authentification utilisateur",
+                    "description": "En tant qu'utilisateur, je veux me connecter...",
+                    "parent_id": None,
+                    "acceptance_criteria": ["L'utilisateur peut se connecter avec email et mot de passe"],
+                    "attributes": {
+                        "priority": "high",
+                        "status": "todo",
+                        "points": 8,
+                    },
+                }
+            ]
+        }
+    }
+
+
+class UpdateWorkItemRequest(BaseModel):
+    """Requête de mise à jour d'un WorkItem existant."""
+
+    type: str | None = Field(None, description="Type de work item (story, task, bug, etc.)")
+    title: str | None = Field(None, description="Titre du work item")
+    description: str | None = Field(None, description="Description détaillée")
+    parent_id: str | None = Field(
+        None,
+        description="Identifiant du parent (pour les hiérarchies)",
+    )
+    acceptance_criteria: list[str] | None = Field(
+        None,
+        description="Liste des critères d'acceptation pour ce work item",
+    )
+    attributes: dict[str, Any] | None = Field(
+        None,
+        description="Attributs additionnels (priority, status, etc.)",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "title": "Implémenter l'authentification utilisateur (mise à jour)",
+                    "attributes": {
+                        "priority": "critical",
+                        "status": "in_progress",
+                    },
+                }
+            ]
+        }
+    }
