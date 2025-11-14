@@ -12,6 +12,7 @@ from langgraph.graph import END, StateGraph
 from litellm import completion
 
 from agent4ba.ai import backlog_agent, document_agent, test_agent
+from agent4ba.ai.nodes import ask_for_clarification
 from agent4ba.core.logger import setup_logger
 from agent4ba.core.registry_service import load_agent_registry
 from agent4ba.core.storage import ProjectContextService
@@ -54,6 +55,11 @@ class GraphState(TypedDict):
     result: str
     agent_events: list[dict[str, Any]]
     thread_id: str  # Ajout du thread_id pour accéder à la queue
+    # Champs pour la boucle de clarification
+    ambiguous_intent: bool  # Indique si une ambiguïté a été détectée
+    clarification_needed: bool  # Indique si une clarification est nécessaire
+    clarification_question: str | None  # Question à poser à l'utilisateur
+    user_response: str | None  # Réponse de l'utilisateur à la question
 
 
 def load_task_rewriter_prompt() -> dict[str, Any]:
@@ -200,6 +206,8 @@ def router_node(state: GraphState) -> dict[str, Any]:
     Utilise un LLM avec des exemples few-shot pour déterminer
     quel agent et quelle tâche exécuter, ainsi que les arguments nécessaires.
 
+    Détecte également les ambiguïtés potentielles dans la requête utilisateur.
+
     Args:
         state: État actuel du graphe
 
@@ -207,6 +215,8 @@ def router_node(state: GraphState) -> dict[str, Any]:
         Mise à jour partielle de l'état avec next_node, agent_id, agent_task et intent_args
     """
     rewritten_task = state.get("rewritten_task", "")
+    user_query = state.get("user_query", "")
+    context = state.get("context", [])
 
     logger.info(f"[ROUTER_NODE] Routing based on rewritten task: {rewritten_task}")
 
@@ -217,6 +227,29 @@ def router_node(state: GraphState) -> dict[str, Any]:
             "agent_id": "none",
             "agent_task": "none",
             "result": "No task to process.",
+        }
+
+    # DÉTECTION D'AMBIGUÏTÉ (Simulation pour le MVP)
+    # Vérifier si la requête contient "Tc" ou "test" et s'il y a plusieurs work items
+    ambiguous = False
+    if context and len(context) > 0:
+        # Vérifier si la requête mentionne des cas de test
+        query_lower = user_query.lower()
+        if "tc" in query_lower or "test" in query_lower or "cas de test" in query_lower:
+            # Compter les work items dans le contexte
+            work_items = [item for item in context if item.get("type") == "work_item"]
+            if len(work_items) > 1:
+                logger.info(f"[ROUTER_NODE] Ambiguity detected: {len(work_items)} work items found")
+                ambiguous = True
+
+    # Si ambiguïté détectée, marquer l'état et continuer le routage normal
+    # La fonction de routage conditionnel décidera ensuite
+    if ambiguous:
+        logger.info("[ROUTER_NODE] Setting ambiguous_intent flag")
+        # Retourner immédiatement pour router vers le nœud de clarification
+        return {
+            "ambiguous_intent": True,
+            "next_node": "clarification",
         }
 
     # Charger le prompt
@@ -291,11 +324,46 @@ def router_node(state: GraphState) -> dict[str, Any]:
         }
 
 
+def route_after_router(
+    state: GraphState,
+) -> Literal["ask_for_clarification", "agent", "end"]:
+    """
+    Fonction de routage conditionnel après le router_node.
+
+    Vérifie si une ambiguïté a été détectée dans la requête utilisateur.
+    Si oui, route vers le nœud de clarification.
+    Sinon, continue vers l'agent ou la fin selon next_node.
+
+    Args:
+        state: État actuel du graphe
+
+    Returns:
+        Nom du prochain nœud ("ask_for_clarification", "agent", ou "end")
+    """
+    # Vérifier si une ambiguïté a été détectée
+    ambiguous_intent = state.get("ambiguous_intent", False)
+    next_node = state.get("next_node", "end")
+
+    if ambiguous_intent:
+        logger.info("[ROUTE_AFTER_ROUTER] Ambiguity detected, routing to clarification")
+        return "ask_for_clarification"
+
+    # Sinon, router normalement
+    if next_node == "agent":
+        logger.info("[ROUTE_AFTER_ROUTER] Routing to agent")
+        return "agent"
+
+    logger.info("[ROUTE_AFTER_ROUTER] Routing to end")
+    return "end"
+
+
 def should_continue_to_agent(
     state: GraphState,
 ) -> Literal["agent", "end"]:
     """
-    Fonction de routage conditionnel depuis le router.
+    Fonction de routage conditionnel depuis le router (version legacy).
+
+    DEPRECATED: Utilisez route_after_router à la place.
 
     Args:
         state: État actuel du graphe
@@ -556,6 +624,7 @@ workflow = StateGraph(GraphState)
 workflow.add_node("entry", entry_node)
 workflow.add_node("task_rewriter", task_rewriter_node)
 workflow.add_node("router", router_node)
+workflow.add_node("ask_for_clarification", ask_for_clarification)
 workflow.add_node("agent", agent_node)
 workflow.add_node("approval", approval_node)
 workflow.add_node("end", end_node)
@@ -566,10 +635,12 @@ workflow.add_edge("entry", "task_rewriter")
 workflow.add_edge("task_rewriter", "router")
 
 # Routage conditionnel depuis le router
+# Utilise route_after_router pour gérer la clarification
 workflow.add_conditional_edges(
     "router",
-    should_continue_to_agent,
+    route_after_router,
     {
+        "ask_for_clarification": "ask_for_clarification",
         "agent": "agent",
         "end": "end",
     },
@@ -586,6 +657,10 @@ workflow.add_conditional_edges(
         "end": "end",
     },
 )
+
+# Arête depuis le nœud de clarification vers la fin
+# Pour ce MVP, le workflow s'arrête après avoir posé la question de clarification
+workflow.add_edge("ask_for_clarification", "end")
 
 workflow.add_edge("approval", "end")
 workflow.add_edge("end", END)
