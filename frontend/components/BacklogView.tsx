@@ -336,11 +336,11 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
                         <span className="text-xs text-gray-500 font-mono">
                           {hierarchicalItem.item.id}
                         </span>
-                        {/* Badge IA pour les items en attente de validation */}
-                        {hierarchicalItem.item.attributes?.validation_status === "pending_validation" && (
+                        {/* Badge IA pour les items générés ou modifiés par l'IA */}
+                        {(hierarchicalItem.item.validation_status === "ia_generated" || hierarchicalItem.item.validation_status === "ia_modified") && (
                           <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
                             <Sparkles className="w-3 h-3" />
-                            IA
+                            {hierarchicalItem.item.validation_status === "ia_modified" ? "IA (Modifié)" : "IA"}
                           </span>
                         )}
                       </div>
@@ -420,8 +420,8 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
 
                     {/* Boutons d'action */}
                     <div className="flex-shrink-0 flex gap-2">
-                      {/* Bouton de validation (uniquement pour les items en attente) */}
-                      {hierarchicalItem.item.attributes?.validation_status === "pending_validation" && (
+                      {/* Bouton de validation (pour les items générés ou modifiés par l'IA) */}
+                      {(hierarchicalItem.item.validation_status === "ia_generated" || hierarchicalItem.item.validation_status === "ia_modified") && (
                         <button
                           onClick={(e) => handleValidateWorkItem(hierarchicalItem.item, e)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
