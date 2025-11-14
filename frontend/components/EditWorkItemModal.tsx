@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from 'next-intl';
-import { CheckCircle, UserCheck, Sparkles, ListChecks, Trash2, TestTube } from "lucide-react";
+import { CheckCircle, UserCheck, Sparkles, ListChecks, Trash2, TestTube, Loader2 } from "lucide-react";
 import type { WorkItem } from "@/types/events";
 import TestCasesViewer from "./TestCasesViewer";
 
@@ -109,7 +109,8 @@ export default function EditWorkItemModal({
     setIsGeneratingTC(true);
     try {
       await onGenerateTestCases(item);
-      handleClose();
+      // Ne pas fermer la modale immédiatement, laisser l'utilisateur voir le succès
+      // handleClose(); sera appelé par le parent via onItemUpdated
     } catch (err) {
       setError(t('editWorkItem.testCasesFailed'));
       console.error("Failed to generate test cases:", err);
@@ -240,7 +241,11 @@ export default function EditWorkItemModal({
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 inline-flex items-center gap-2"
                   disabled={isSaving || isValidating || isGeneratingAC || isGeneratingTC}
                 >
-                  <CheckCircle className="w-4 h-4" />
+                  {isValidating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4" />
+                  )}
                   {isValidating ? t('editWorkItem.validating') : t('editWorkItem.validate')}
                 </button>
               )}
@@ -253,7 +258,11 @@ export default function EditWorkItemModal({
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 inline-flex items-center gap-2"
                   disabled={isSaving || isValidating || isGeneratingAC || isGeneratingTC}
                 >
-                  <ListChecks className="w-4 h-4" />
+                  {isGeneratingAC ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ListChecks className="w-4 h-4" />
+                  )}
                   {isGeneratingAC ? t('editWorkItem.generatingAC') : t('editWorkItem.generateAC')}
                 </button>
               )}
@@ -266,7 +275,11 @@ export default function EditWorkItemModal({
                   className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 inline-flex items-center gap-2"
                   disabled={isSaving || isValidating || isGeneratingAC || isGeneratingTC}
                 >
-                  <TestTube className="w-4 h-4" />
+                  {isGeneratingTC ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <TestTube className="w-4 h-4" />
+                  )}
                   {isGeneratingTC ? t('editWorkItem.generatingTC') : t('editWorkItem.generateTC')}
                 </button>
               )}

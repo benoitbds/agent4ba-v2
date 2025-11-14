@@ -7,6 +7,7 @@ import type { WorkItem } from "@/types/events";
 import EditWorkItemModal from "./EditWorkItemModal";
 import WorkItemFormModal from "./WorkItemFormModal";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
+import TestCaseCard from "./TestCaseCard";
 import { updateWorkItem, validateWorkItem, generateAcceptanceCriteria, generateTestCases, createWorkItem, deleteWorkItem } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -19,7 +20,7 @@ interface BacklogViewProps {
 
 interface HierarchicalItem {
   item: WorkItem;
-  children: WorkItem[];
+  children: HierarchicalItem[];
 }
 
 interface InvestCriterion {
@@ -36,27 +37,35 @@ interface InvestAnalysis {
   T: InvestCriterion;
 }
 
-// Fonction pour transformer la liste plate en structure hiérarchique
+// Fonction pour transformer la liste plate en structure hiérarchique récursive
 function buildHierarchy(items: WorkItem[]): HierarchicalItem[] {
-  // Séparer les features (items sans parent) et les stories/tasks (avec parent)
-  const rootItems = items.filter((item) => !item.parent_id);
-  const childItems = items.filter((item) => item.parent_id);
+  // Créer une map de tous les items par ID pour un accès rapide
+  const itemsById = new Map<string, WorkItem>();
+  items.forEach((item) => itemsById.set(item.id, item));
 
-  // Créer un map pour un accès rapide aux enfants par parent_id
+  // Créer un map pour grouper les enfants par parent_id
   const childrenByParentId = new Map<string, WorkItem[]>();
-  childItems.forEach((child) => {
-    const parentId = child.parent_id!;
-    if (!childrenByParentId.has(parentId)) {
-      childrenByParentId.set(parentId, []);
+  items.forEach((item) => {
+    if (item.parent_id) {
+      if (!childrenByParentId.has(item.parent_id)) {
+        childrenByParentId.set(item.parent_id, []);
+      }
+      childrenByParentId.get(item.parent_id)!.push(item);
     }
-    childrenByParentId.get(parentId)!.push(child);
   });
 
-  // Construire la structure hiérarchique
-  return rootItems.map((rootItem) => ({
-    item: rootItem,
-    children: childrenByParentId.get(rootItem.id) || [],
-  }));
+  // Fonction récursive pour construire la hiérarchie
+  function buildNode(item: WorkItem): HierarchicalItem {
+    const children = childrenByParentId.get(item.id) || [];
+    return {
+      item,
+      children: children.map((child) => buildNode(child)),
+    };
+  }
+
+  // Trouver les items racines (sans parent) et construire leur arbre
+  const rootItems = items.filter((item) => !item.parent_id);
+  return rootItems.map((rootItem) => buildNode(rootItem));
 }
 
 // Fonction pour déterminer la couleur du badge selon le score
@@ -69,13 +78,10 @@ function getBadgeColor(score: number): string {
 export default function BacklogView({ items, projectId, onSelectItem, onItemUpdated }: BacklogViewProps) {
   const t = useTranslations();
 
-  // État pour gérer les features dépliées (toutes dépliées par défaut)
+  // État pour gérer les items dépliés (tous dépliés par défaut)
   const [expandedItems, setExpandedItems] = useState<Set<string>>(() => {
-    // Initialiser avec tous les IDs des features
-    const allFeatureIds = items
-      .filter((item) => !item.parent_id)
-      .map((item) => item.id);
-    return new Set(allFeatureIds);
+    // Initialiser avec tous les IDs des items qui ont des enfants
+    return new Set(items.map((item) => item.id));
   });
 
   // État pour gérer la modale d'édition avancée (avec validation et AC)
@@ -92,14 +98,14 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
   const [itemToDelete, setItemToDelete] = useState<WorkItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Fonction pour toggler l'état d'une feature
-  const toggleFeature = (featureId: string) => {
+  // Fonction pour toggler l'état d'un item (feature, story, etc.)
+  const toggleItem = (itemId: string) => {
     setExpandedItems((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(featureId)) {
-        newSet.delete(featureId);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
       } else {
-        newSet.add(featureId);
+        newSet.add(itemId);
       }
       return newSet;
     });
@@ -161,6 +167,9 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
   // Fonction pour générer les cas de test
   const handleGenerateTestCases = async (item: WorkItem) => {
     try {
+      // Toast de démarrage
+      toast.info(t("backlog.testCasesGenerating", { title: item.title }));
+
       await generateTestCases(projectId, item.id);
       toast.success(t("backlog.testCasesGenerated", { title: item.title }));
       // Rafraîchir le backlog pour afficher les nouveaux cas de test
@@ -253,140 +262,187 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
   // Construire la structure hiérarchique
   const hierarchicalItems = buildHierarchy(items);
 
-  // Fonction pour rendre un WorkItem (réutilisable pour parent et enfants)
-  const renderWorkItem = (item: WorkItem, isChild: boolean = false) => {
+  // Fonction récursive pour rendre un item hiérarchique et ses enfants
+  const renderHierarchicalItem = (hierarchicalItem: HierarchicalItem) => {
+    const { item, children } = hierarchicalItem;
+    const isExpanded = expandedItems.has(item.id);
+    const hasChildren = children.length > 0;
+
+    // Si c'est un cas de test, utiliser TestCaseCard
+    if (item.type === "test_case") {
+      return (
+        <div key={item.id}>
+          <TestCaseCard
+            testCase={item}
+            onEdit={handleEditClick}
+            onSelect={onSelectItem}
+          />
+        </div>
+      );
+    }
+
+    // Pour les autres types (feature, story, task), utiliser le rendu standard
     const investAnalysis = item.attributes?.invest_analysis as
       | InvestAnalysis
       | undefined;
 
     return (
-      <div
-        key={item.id}
-        onClick={() => handleEditClick(item)}
-        className={`p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors cursor-pointer ${
-          isChild ? "ml-8" : ""
-        }`}
-      >
-        <div className="flex items-start gap-3">
-          <span
-            className={`px-2 py-1 text-xs font-semibold rounded flex-shrink-0 ${
-              item.type === "feature"
-                ? "bg-purple-200 text-purple-800"
-                : item.type === "story"
-                ? "bg-blue-200 text-blue-800"
-                : "bg-green-200 text-green-800"
-            }`}
-          >
-            {item.type}
-          </span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-gray-900">
-                {item.title}
-              </h3>
-              <span className="text-xs text-gray-500 font-mono">
-                {item.id}
-              </span>
-              {/* Badge de statut de validation */}
-              {item.validation_status === "human_validated" && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800 border border-green-300">
-                  <UserCheck className="w-3 h-3" />
-                  Validé
-                </span>
-              )}
-              {item.validation_status === "ia_generated" && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
-                  <Sparkles className="w-3 h-3" />
-                  IA
-                </span>
-              )}
-              {item.validation_status === "ia_modified" && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
-                  <Sparkles className="w-3 h-3" />
-                  IA (Modifié)
-                </span>
-              )}
-            </div>
-            {item.description && (
-              <p className="text-sm text-gray-600 mt-1">
-                {item.description}
-              </p>
+      <div key={item.id}>
+        {/* Carte principale de l'item */}
+        <div
+          onClick={() => handleEditClick(item)}
+          className="p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors cursor-pointer"
+        >
+          <div className="flex items-start gap-3">
+            {/* Chevron pour indiquer l'état (seulement si des enfants) */}
+            {hasChildren && (
+              <div
+                className="flex-shrink-0 mt-1 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleItem(item.id);
+                }}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="w-5 h-5 text-gray-600" />
+                ) : (
+                  <ChevronRight className="w-5 h-5 text-gray-600" />
+                )}
+              </div>
             )}
 
-            {/* INVEST Analysis Badges */}
-            {investAnalysis && (
-              <div className="flex gap-1 mt-2">
-                {Object.entries(investAnalysis).map(
-                  ([criterion, data]) => (
-                    <div
-                      key={criterion}
-                      className="group relative"
-                      title={`${t(`invest.${criterion}`)}: ${data.reason}`}
-                    >
-                      <span
-                        className={`px-2 py-1 text-xs font-bold rounded cursor-help ${getBadgeColor(data.score)}`}
+            <span
+              className={`px-2 py-1 text-xs font-semibold rounded flex-shrink-0 ${
+                item.type === "feature"
+                  ? "bg-purple-200 text-purple-800"
+                  : item.type === "story"
+                  ? "bg-blue-200 text-blue-800"
+                  : "bg-green-200 text-green-800"
+              }`}
+            >
+              {item.type}
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-semibold text-gray-900">
+                  {item.title}
+                  {hasChildren && (
+                    <span className="text-gray-500 ml-2">
+                      ({children.length})
+                    </span>
+                  )}
+                </h3>
+                <span className="text-xs text-gray-500 font-mono">
+                  {item.id}
+                </span>
+                {/* Badge de statut de validation */}
+                {item.validation_status === "human_validated" && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800 border border-green-300">
+                    <UserCheck className="w-3 h-3" />
+                    Validé
+                  </span>
+                )}
+                {item.validation_status === "ia_generated" && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
+                    <Sparkles className="w-3 h-3" />
+                    IA
+                  </span>
+                )}
+                {item.validation_status === "ia_modified" && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
+                    <Sparkles className="w-3 h-3" />
+                    IA (Modifié)
+                  </span>
+                )}
+              </div>
+              {item.description && (
+                <p className="text-sm text-gray-600 mt-1">
+                  {item.description}
+                </p>
+              )}
+
+              {/* INVEST Analysis Badges */}
+              {investAnalysis && (
+                <div className="flex gap-1 mt-2">
+                  {Object.entries(investAnalysis).map(
+                    ([criterion, data]) => (
+                      <div
+                        key={criterion}
+                        className="group relative"
+                        title={`${t(`invest.${criterion}`)}: ${data.reason}`}
                       >
-                        {criterion}
-                      </span>
-                      {/* Tooltip au survol */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10 w-64">
-                        <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg">
-                          <div className="font-bold mb-1">
-                            {t(`invest.${criterion}`)}
-                          </div>
-                          <div className="mb-1">
-                            {t("timeline.score")} {(data.score * 100).toFixed(0)}%
-                          </div>
-                          <div className="text-gray-300">
-                            {data.reason}
+                        <span
+                          className={`px-2 py-1 text-xs font-bold rounded cursor-help ${getBadgeColor(data.score)}`}
+                        >
+                          {criterion}
+                        </span>
+                        {/* Tooltip au survol */}
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10 w-64">
+                          <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg">
+                            <div className="font-bold mb-1">
+                              {t(`invest.${criterion}`)}
+                            </div>
+                            <div className="mb-1">
+                              {t("timeline.score")} {(data.score * 100).toFixed(0)}%
+                            </div>
+                            <div className="text-gray-300">
+                              {data.reason}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )
-                )}
-              </div>
-            )}
+                    )
+                  )}
+                </div>
+              )}
 
-            {/* Autres attributs */}
-            {item.attributes && (
-              <div className="flex gap-2 mt-2 text-xs">
-                {item.attributes.priority && (
-                  <span className="px-2 py-1 bg-gray-100 rounded">
-                    {t("backlog.priority")} {item.attributes.priority}
-                  </span>
-                )}
-                {item.attributes.points !== undefined && (
-                  <span className="px-2 py-1 bg-gray-100 rounded">
-                    {t("backlog.points")} {item.attributes.points}
-                  </span>
-                )}
-                {item.attributes.status && (
-                  <span className="px-2 py-1 bg-gray-100 rounded">
-                    {t("backlog.status")} {item.attributes.status}
-                  </span>
-                )}
+              {/* Autres attributs */}
+              {item.attributes && (
+                <div className="flex gap-2 mt-2 text-xs">
+                  {item.attributes.priority && (
+                    <span className="px-2 py-1 bg-gray-100 rounded">
+                      {t("backlog.priority")} {item.attributes.priority}
+                    </span>
+                  )}
+                  {item.attributes.points !== undefined && (
+                    <span className="px-2 py-1 bg-gray-100 rounded">
+                      {t("backlog.points")} {item.attributes.points}
+                    </span>
+                  )}
+                  {item.attributes.status && (
+                    <span className="px-2 py-1 bg-gray-100 rounded">
+                      {t("backlog.status")} {item.attributes.status}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Boutons d'action */}
+            {onSelectItem && (
+              <div className="flex-shrink-0 flex gap-2">
+                {/* Select button for context */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectItem(item);
+                  }}
+                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
+                  title={t("backlog.addToContext")}
+                >
+                  <ClipboardPlus className="w-5 h-5" />
+                </button>
               </div>
             )}
           </div>
-
-          {/* Boutons d'action */}
-          {onSelectItem && (
-            <div className="flex-shrink-0 flex gap-2">
-              {/* Select button for context */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectItem(item);
-                }}
-                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
-                title={t("backlog.addToContext")}
-              >
-                <ClipboardPlus className="w-5 h-5" />
-              </button>
-            </div>
-          )}
         </div>
+
+        {/* Afficher les enfants récursivement si l'item est déplié */}
+        {isExpanded && hasChildren && (
+          <div className="space-y-3 mt-3">
+            {children.map((child) => renderHierarchicalItem(child))}
+          </div>
+        )}
       </div>
     );
   };
@@ -404,183 +460,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
         </button>
       </div>
       <div className="flex-1 overflow-y-auto pr-2 space-y-3">
-        {hierarchicalItems.map((hierarchicalItem) => {
-          const isExpanded = expandedItems.has(hierarchicalItem.item.id);
-          const childrenCount = hierarchicalItem.children.length;
-
-          return (
-            <div key={hierarchicalItem.item.id}>
-              {/* Afficher la feature parente avec chevron */}
-              <div className="relative">
-                <div
-                  onClick={() => handleEditClick(hierarchicalItem.item)}
-                  className={`p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors cursor-pointer`}
-                >
-                  <div className="flex items-start gap-3">
-                    {/* Chevron pour indiquer l'état */}
-                    <div
-                      className="flex-shrink-0 mt-1 cursor-pointer"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFeature(hierarchicalItem.item.id);
-                      }}
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className="w-5 h-5 text-gray-600" />
-                      ) : (
-                        <ChevronRight className="w-5 h-5 text-gray-600" />
-                      )}
-                    </div>
-
-                    <span
-                      className={`px-2 py-1 text-xs font-semibold rounded flex-shrink-0 ${
-                        hierarchicalItem.item.type === "feature"
-                          ? "bg-purple-200 text-purple-800"
-                          : hierarchicalItem.item.type === "story"
-                          ? "bg-blue-200 text-blue-800"
-                          : "bg-green-200 text-green-800"
-                      }`}
-                    >
-                      {hierarchicalItem.item.type}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-gray-900">
-                          {hierarchicalItem.item.title}
-                          {childrenCount > 0 && (
-                            <span className="text-gray-500 ml-2">
-                              ({childrenCount})
-                            </span>
-                          )}
-                        </h3>
-                        <span className="text-xs text-gray-500 font-mono">
-                          {hierarchicalItem.item.id}
-                        </span>
-                        {/* Badge de statut de validation */}
-                        {hierarchicalItem.item.validation_status === "human_validated" && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800 border border-green-300">
-                            <UserCheck className="w-3 h-3" />
-                            Validé
-                          </span>
-                        )}
-                        {hierarchicalItem.item.validation_status === "ia_generated" && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
-                            <Sparkles className="w-3 h-3" />
-                            IA
-                          </span>
-                        )}
-                        {hierarchicalItem.item.validation_status === "ia_modified" && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
-                            <Sparkles className="w-3 h-3" />
-                            IA (Modifié)
-                          </span>
-                        )}
-                      </div>
-                      {hierarchicalItem.item.description && (
-                        <p className="text-sm text-gray-600 mt-1">
-                          {hierarchicalItem.item.description}
-                        </p>
-                      )}
-
-                      {/* INVEST Analysis Badges */}
-                      {(() => {
-                        const investAnalysis = hierarchicalItem.item.attributes
-                          ?.invest_analysis as InvestAnalysis | undefined;
-                        return (
-                          investAnalysis && (
-                            <div className="flex gap-1 mt-2">
-                              {Object.entries(investAnalysis).map(
-                                ([criterion, data]) => (
-                                  <div
-                                    key={criterion}
-                                    className="group relative"
-                                    title={`${t(`invest.${criterion}`)}: ${data.reason}`}
-                                  >
-                                    <span
-                                      className={`px-2 py-1 text-xs font-bold rounded cursor-help ${getBadgeColor(data.score)}`}
-                                    >
-                                      {criterion}
-                                    </span>
-                                    {/* Tooltip au survol */}
-                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10 w-64">
-                                      <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg">
-                                        <div className="font-bold mb-1">
-                                          {t(`invest.${criterion}`)}
-                                        </div>
-                                        <div className="mb-1">
-                                          {t("timeline.score")}{" "}
-                                          {(data.score * 100).toFixed(0)}%
-                                        </div>
-                                        <div className="text-gray-300">
-                                          {data.reason}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )
-                              )}
-                            </div>
-                          )
-                        );
-                      })()}
-
-                      {/* Autres attributs */}
-                      {hierarchicalItem.item.attributes && (
-                        <div className="flex gap-2 mt-2 text-xs">
-                          {hierarchicalItem.item.attributes.priority && (
-                            <span className="px-2 py-1 bg-gray-100 rounded">
-                              {t("backlog.priority")}{" "}
-                              {hierarchicalItem.item.attributes.priority}
-                            </span>
-                          )}
-                          {hierarchicalItem.item.attributes.points !==
-                            undefined && (
-                            <span className="px-2 py-1 bg-gray-100 rounded">
-                              {t("backlog.points")}{" "}
-                              {hierarchicalItem.item.attributes.points}
-                            </span>
-                          )}
-                          {hierarchicalItem.item.attributes.status && (
-                            <span className="px-2 py-1 bg-gray-100 rounded">
-                              {t("backlog.status")}{" "}
-                              {hierarchicalItem.item.attributes.status}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Boutons d'action */}
-                    {onSelectItem && (
-                      <div className="flex-shrink-0 flex gap-2">
-                        {/* Select button for context */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectItem(hierarchicalItem.item);
-                          }}
-                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
-                          title={t("backlog.addToContext")}
-                        >
-                          <ClipboardPlus className="w-5 h-5" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Afficher les stories enfants avec indentation si la feature est dépliée */}
-              {isExpanded && hierarchicalItem.children.length > 0 && (
-                <div className="space-y-3 mt-3">
-                  {hierarchicalItem.children.map((child) =>
-                    renderWorkItem(child, true)
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {hierarchicalItems.map((hierarchicalItem) => renderHierarchicalItem(hierarchicalItem))}
       </div>
 
       {/* Modal d'édition avancée (avec validation et AC) */}
