@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import type { ImpactPlan, WorkItem, ModifiedItem } from "@/types/events";
 import { useState, type ReactElement } from "react";
+import DiffViewer from "./DiffViewer";
 
 interface ImpactPlanModalProps {
   impactPlan: ImpactPlan;
@@ -33,7 +34,7 @@ function getBadgeColor(score: number): string {
   return "bg-red-500 text-white";
 }
 
-// Composant pour afficher un item modifié avec diff visuel simple
+// Composant pour afficher un item modifié avec diff visuel
 function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): ReactElement {
   const t = useTranslations();
   const { before, after } = modifiedItem;
@@ -41,46 +42,6 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
   // Détecter si l'analyse INVEST a été ajoutée
   const hasInvestAnalysis = after.attributes?.invest_analysis && !before.attributes?.invest_analysis;
   const investAnalysis = after.attributes?.invest_analysis as InvestAnalysis | undefined;
-
-  // Détecter si la description a changé
-  const descriptionChanged: boolean = before.description !== after.description;
-
-  const renderDescriptionDiff = (): ReactElement | null => {
-    if (!descriptionChanged) return null;
-
-    return (
-      <div className="mt-3 border border-gray-300 rounded overflow-hidden">
-        <div className="bg-gray-100 px-3 py-2 border-b border-gray-300">
-          <span className="text-sm font-semibold text-gray-700">
-            {t("timeline.descriptionChanges")}
-          </span>
-        </div>
-
-        {/* Split view with before/after */}
-        <div className="grid grid-cols-2 divide-x divide-gray-300">
-          {/* Before (left side) */}
-          <div className="bg-red-50">
-            <div className="bg-red-100 px-3 py-1 border-b border-red-200">
-              <span className="text-xs font-semibold text-red-800">{t("timeline.before")}</span>
-            </div>
-            <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
-              {before.description || t("common.empty")}
-            </div>
-          </div>
-
-          {/* After (right side) */}
-          <div className="bg-green-50">
-            <div className="bg-green-100 px-3 py-1 border-b border-green-200">
-              <span className="text-xs font-semibold text-green-800">{t("timeline.after")}</span>
-            </div>
-            <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
-              {after.description || t("common.empty")}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -102,41 +63,10 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
         </div>
       </div>
 
-      {/* Diff de description (uniquement si modifiée) */}
-      {descriptionChanged ? (
-        <div className="mt-3 border border-gray-300 rounded overflow-hidden">
-          <div className="bg-gray-100 px-3 py-2 border-b border-gray-300">
-            <span className="text-sm font-semibold text-gray-700">
-              {t("timeline.descriptionChanges")}
-            </span>
-          </div>
+      {/* Utilisation du nouveau composant DiffViewer */}
+      <DiffViewer before={before} after={after} />
 
-          {/* Split view with before/after */}
-          <div className="grid grid-cols-2 divide-x divide-gray-300">
-            {/* Before (left side) */}
-            <div className="bg-red-50">
-              <div className="bg-red-100 px-3 py-1 border-b border-red-200">
-                <span className="text-xs font-semibold text-red-800">{t("timeline.before")}</span>
-              </div>
-              <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
-                {before.description || t("common.empty")}
-              </div>
-            </div>
-
-            {/* After (right side) */}
-            <div className="bg-green-50">
-              <div className="bg-green-100 px-3 py-1 border-b border-green-200">
-                <span className="text-xs font-semibold text-green-800">{t("timeline.after")}</span>
-              </div>
-              <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap">
-                {after.description || t("common.empty")}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Analyse INVEST ajoutée */}
+      {/* Analyse INVEST ajoutée (conservée en plus du diff) */}
       {hasInvestAnalysis && investAnalysis ? (
         <div className="mt-3 border border-green-300 rounded overflow-hidden bg-green-50">
           <div className="bg-green-100 px-3 py-2 border-b border-green-200">
@@ -168,27 +98,6 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
               ))}
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {/* Autres attributs */}
-      {after.attributes ? (
-        <div className="flex gap-2 mt-3 text-xs">
-          {after.attributes.priority && (
-            <span className="px-2 py-1 bg-gray-200 rounded">
-              {t("backlog.priority")} {after.attributes.priority}
-            </span>
-          )}
-          {after.attributes.points !== undefined && (
-            <span className="px-2 py-1 bg-gray-200 rounded">
-              {t("backlog.points")} {after.attributes.points}
-            </span>
-          )}
-          {after.attributes.status && (
-            <span className="px-2 py-1 bg-gray-200 rounded">
-              {t("backlog.status")} {after.attributes.status}
-            </span>
-          )}
         </div>
       ) : null}
     </div>
