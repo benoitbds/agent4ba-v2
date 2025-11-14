@@ -75,6 +75,15 @@ intent_mapping:
     description: "Améliore et enrichit la description d'un work item existant pour la rendre plus claire et actionnable."
 
   # ----------------------------------------------------------------
+  # Intention : Générer les critères d'acceptation
+  # ----------------------------------------------------------------
+  - intent_id: generate_acceptance_criteria
+    agent_id: backlog_agent
+    agent_task: generate_acceptance_criteria
+    prompt_file: prompts/generate_acceptance_criteria.yaml
+    description: "Génère les critères d'acceptation pour une User Story ou une Feature."
+
+  # ----------------------------------------------------------------
   # Intentions non implémentées (stubs)
   # ----------------------------------------------------------------
 
