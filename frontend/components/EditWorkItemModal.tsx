@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from 'next-intl';
-import { CheckCircle, UserCheck, Sparkles, ListChecks, Trash2 } from "lucide-react";
+import { CheckCircle, UserCheck, Sparkles, ListChecks, Trash2, TestTube } from "lucide-react";
 import type { WorkItem } from "@/types/events";
+import TestCasesViewer from "./TestCasesViewer";
 
 interface EditWorkItemModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface EditWorkItemModalProps {
   onSave: (itemId: string, updatedData: { title: string; description: string | null }) => Promise<void>;
   onValidate?: (item: WorkItem) => Promise<void>;
   onGenerateAcceptanceCriteria?: (item: WorkItem) => Promise<void>;
+  onGenerateTestCases?: (item: WorkItem) => Promise<void>;
   onDelete?: (item: WorkItem) => void;
   item: WorkItem | null;
 }
@@ -21,6 +23,7 @@ export default function EditWorkItemModal({
   onSave,
   onValidate,
   onGenerateAcceptanceCriteria,
+  onGenerateTestCases,
   onDelete,
   item,
 }: EditWorkItemModalProps) {
@@ -31,6 +34,7 @@ export default function EditWorkItemModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [isGeneratingAC, setIsGeneratingAC] = useState(false);
+  const [isGeneratingTC, setIsGeneratingTC] = useState(false);
 
   // Initialiser les champs quand l'item change
   useEffect(() => {
@@ -96,6 +100,21 @@ export default function EditWorkItemModal({
       console.error("Failed to generate acceptance criteria:", err);
     } finally {
       setIsGeneratingAC(false);
+    }
+  };
+
+  const handleGenerateTestCases = async () => {
+    if (!item || !onGenerateTestCases) return;
+
+    setIsGeneratingTC(true);
+    try {
+      await onGenerateTestCases(item);
+      handleClose();
+    } catch (err) {
+      setError(t('editWorkItem.testCasesFailed'));
+      console.error("Failed to generate test cases:", err);
+    } finally {
+      setIsGeneratingTC(false);
     }
   };
 
@@ -201,6 +220,11 @@ export default function EditWorkItemModal({
             </div>
           )}
 
+          {/* Affichage des cas de test */}
+          {item.test_cases && item.test_cases.length > 0 && (
+            <TestCasesViewer testCases={item.test_cases} />
+          )}
+
           {error && (
             <p className="mb-4 text-sm text-red-600">{error}</p>
           )}
@@ -214,7 +238,7 @@ export default function EditWorkItemModal({
                   type="button"
                   onClick={handleValidate}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 inline-flex items-center gap-2"
-                  disabled={isSaving || isValidating || isGeneratingAC}
+                  disabled={isSaving || isValidating || isGeneratingAC || isGeneratingTC}
                 >
                   <CheckCircle className="w-4 h-4" />
                   {isValidating ? t('editWorkItem.validating') : t('editWorkItem.validate')}
@@ -227,10 +251,23 @@ export default function EditWorkItemModal({
                   type="button"
                   onClick={handleGenerateAcceptanceCriteria}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 inline-flex items-center gap-2"
-                  disabled={isSaving || isValidating || isGeneratingAC}
+                  disabled={isSaving || isValidating || isGeneratingAC || isGeneratingTC}
                 >
                   <ListChecks className="w-4 h-4" />
                   {isGeneratingAC ? t('editWorkItem.generatingAC') : t('editWorkItem.generateAC')}
+                </button>
+              )}
+
+              {/* Bouton de génération des cas de test (uniquement pour les stories) */}
+              {onGenerateTestCases && item.type === "story" && (
+                <button
+                  type="button"
+                  onClick={handleGenerateTestCases}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 inline-flex items-center gap-2"
+                  disabled={isSaving || isValidating || isGeneratingAC || isGeneratingTC}
+                >
+                  <TestTube className="w-4 h-4" />
+                  {isGeneratingTC ? t('editWorkItem.generatingTC') : t('editWorkItem.generateTC')}
                 </button>
               )}
 
@@ -243,7 +280,7 @@ export default function EditWorkItemModal({
                     handleClose();
                   }}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 inline-flex items-center gap-2"
-                  disabled={isSaving || isValidating || isGeneratingAC}
+                  disabled={isSaving || isValidating || isGeneratingAC || isGeneratingTC}
                 >
                   <Trash2 className="w-4 h-4" />
                   {t('editWorkItem.delete')}
@@ -259,14 +296,14 @@ export default function EditWorkItemModal({
                 type="button"
                 onClick={handleClose}
                 className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
-                disabled={isSaving || isValidating || isGeneratingAC}
+                disabled={isSaving || isValidating || isGeneratingAC || isGeneratingTC}
               >
                 {t('editWorkItem.cancel')}
               </button>
               <button
                 type="submit"
                 className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50"
-                disabled={isSaving || isValidating || isGeneratingAC}
+                disabled={isSaving || isValidating || isGeneratingAC || isGeneratingTC}
               >
                 {isSaving ? t('editWorkItem.saving') : t('editWorkItem.save')}
               </button>
