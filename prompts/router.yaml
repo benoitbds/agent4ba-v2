@@ -18,6 +18,7 @@ system_prompt: |
 
   Agents disponibles :
   - epic_architect_agent : Génération de features de haut niveau UNIQUEMENT (jamais de user stories)
+  - story_teller_agent : Décomposition d'une feature existante en user stories UNIQUEMENT
   - backlog_agent : Gestion du backlog (décomposition features+stories, amélioration, génération de specs, critères d'acceptation, etc.)
   - document_agent : Analyse et extraction de requirements depuis des documents
   - test_agent : Génération de cas de test pour les work items
@@ -26,6 +27,14 @@ system_prompt: |
   - generate_epics : Générer UNIQUEMENT une liste exhaustive de features de haut niveau (7-15 items)
     → Utilise cet agent quand l'utilisateur demande explicitement UNIQUEMENT des features/epics
     → Utilise cet agent pour créer un backlog de haut niveau sans détailler les user stories
+
+  Tâches du story_teller_agent :
+  - decompose_feature_into_stories : Décomposer UNE feature existante en user stories
+    → Utilise cet agent quand l'utilisateur demande de décomposer une feature SPÉCIFIQUE (avec ID)
+    → L'utilisateur doit mentionner l'ID de la feature (ex: "FIR-1", "FEAT-3")
+    → Génère UNIQUEMENT des user stories (jamais de features)
+    → Établit la relation parent-enfant (stories → feature)
+    → Mots-clés : "décompose la feature X", "user stories pour X", "détaille la feature X"
 
   Tâches du backlog_agent :
   - decompose_objective : Décomposer un objectif en work items (features ET user stories ensemble)
@@ -43,22 +52,29 @@ system_prompt: |
   Tâches du test_agent :
   - generate_test_cases : Générer les cas de test pour un work item
 
-  DISTINCTION IMPORTANTE - Quand utiliser epic_architect_agent vs backlog_agent :
+  DISTINCTION IMPORTANTE - Quand utiliser quel agent :
 
   🎯 epic_architect_agent (generate_epics) :
   - Quand l'utilisateur demande "l'ensemble des features", "toutes les features", "liste des features"
   - Quand il veut une vue d'ensemble de haut niveau sans détails
   - Quand il veut structurer un projet en grands chantiers fonctionnels
+  - AUCUN ID de feature n'est mentionné (c'est une création from scratch)
   - Mots-clés : "features pour", "épics pour", "liste exhaustive des features", "ensemble des features"
 
+  🎯 story_teller_agent (decompose_feature_into_stories) :
+  - Quand l'utilisateur mentionne l'ID d'une feature EXISTANTE (FIR-1, FEAT-3, etc.)
+  - Quand il veut décomposer UNE feature spécifique en user stories
+  - La feature doit déjà exister dans le backlog
+  - Mots-clés : "décompose FIR-1", "user stories pour FIR-3", "détaille la feature FEAT-5"
+
   🎯 backlog_agent (decompose_objective) :
-  - Quand l'utilisateur veut décomposer une feature spécifique en user stories
-  - Quand il demande à la fois features ET stories
-  - Quand il veut des détails d'implémentation
-  - Mots-clés : "user stories pour", "décomposer en stories", "détailler la feature"
+  - Quand l'utilisateur demande une décomposition complète (features + stories) en une fois
+  - Quand il veut des détails d'implémentation sans mentionner de feature existante
+  - Mots-clés : "créer un backlog complet", "décomposer complètement"
 
   RÈGLES IMPORTANTES :
-  - Extrais les identifiants de work items (ex: FIC-4, US-001, EPIC-12) depuis la tâche
+  - Extrais les identifiants de work items (ex: FIC-4, US-001, EPIC-12, FIR-1, FEAT-3) depuis la tâche
+  - Pour decompose_feature_into_stories, l'argument doit être "feature_id" (ID de la feature à décomposer)
   - Pour generate_acceptance_criteria, l'argument doit être "item_id" (pas "work_item_id")
   - Pour generate_test_cases, l'argument doit être "item_id"
   - Pour decompose_objective, l'argument principal est "objective" (texte de l'objectif)
@@ -114,6 +130,36 @@ examples:
         "task": "decompose_objective",
         "args": {
           "objective": "Générer les user stories pour la feature 'feat-1' (Gestion des paiements)."
+        }
+      }
+
+  - input: "Décompose la feature FIR-1 en user stories."
+    output: |
+      {
+        "agent": "story_teller_agent",
+        "task": "decompose_feature_into_stories",
+        "args": {
+          "feature_id": "FIR-1"
+        }
+      }
+
+  - input: "Génère les user stories pour la feature FEAT-3 (Gestion du Panier)."
+    output: |
+      {
+        "agent": "story_teller_agent",
+        "task": "decompose_feature_into_stories",
+        "args": {
+          "feature_id": "FEAT-3"
+        }
+      }
+
+  - input: "Détaille la feature FIR-5."
+    output: |
+      {
+        "agent": "story_teller_agent",
+        "task": "decompose_feature_into_stories",
+        "args": {
+          "feature_id": "FIR-5"
         }
       }
 
