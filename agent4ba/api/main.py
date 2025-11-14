@@ -12,6 +12,7 @@ from agent4ba.ai.graph import app as workflow_app
 from agent4ba.api.app_factory import create_app
 from agent4ba.api.auth import get_current_user, router as auth_router
 from agent4ba.api.event_queue import cleanup_event_queue, get_event_queue
+from agent4ba.api.session_manager import get_session_manager
 from agent4ba.api.events import (
     AgentPlanEvent,
     AgentStartEvent,
@@ -26,6 +27,8 @@ from agent4ba.api.schemas import (
     ApprovalRequest,
     ChatRequest,
     ChatResponse,
+    ClarificationNeededResponse,
+    ClarificationResponse,
     CreateProjectRequest,
     CreateWorkItemRequest,
     UpdateWorkItemRequest,
@@ -379,6 +382,193 @@ async def continue_workflow(thread_id: str, request: ApprovalRequest) -> ChatRes
         thread_id=None,  # Le workflow est terminé, plus besoin du thread_id
         impact_plan=None,
     )
+
+
+@app.post("/execute")
+async def execute_workflow(request: ChatRequest) -> JSONResponse:
+    """
+    Exécute un workflow de manière synchrone (sans streaming).
+
+    Cet endpoint lance l'exécution du workflow. Si le workflow nécessite une
+    clarification de l'utilisateur, il retourne HTTP 202 avec un conversation_id
+    pour permettre la reprise via l'endpoint /respond.
+
+    Args:
+        request: Requête contenant project_id et query
+
+    Returns:
+        - HTTP 200 avec le résultat final si le workflow se termine normalement
+        - HTTP 202 avec conversation_id et question si une clarification est nécessaire
+
+    Raises:
+        HTTPException: En cas d'erreur d'exécution du workflow
+    """
+    logger.info(f"[EXECUTE] Starting workflow for project: {request.project_id}")
+    logger.info(f"[EXECUTE] User query: {request.query}")
+
+    # Générer un conversation_id unique
+    session_manager = get_session_manager()
+    conversation_id = session_manager.create_session()
+
+    # Convertir le context en liste de dictionnaires si présent
+    context_list = None
+    if request.context:
+        context_list = [item.model_dump() for item in request.context]
+
+    # Préparer l'état initial pour le graphe
+    initial_state: dict[str, Any] = {
+        "project_id": request.project_id,
+        "user_query": request.query,
+        "document_content": request.document_content or "",
+        "context": context_list,
+        "intent": {},
+        "next_node": "",
+        "agent_task": "",
+        "impact_plan": {},
+        "status": "",
+        "approval_decision": None,
+        "result": "",
+        "agent_events": [],
+        "thread_id": conversation_id,
+        "clarification_needed": False,
+        "clarification_question": "",
+        "user_response": "",
+    }
+
+    # Configuration pour LangGraph avec le conversation_id
+    config: dict[str, Any] = {"configurable": {"thread_id": conversation_id}}
+
+    try:
+        # Exécuter le workflow de manière synchrone
+        logger.info("[EXECUTE] Starting workflow execution...")
+        final_state = workflow_app.invoke(initial_state, config)  # type: ignore[arg-type]
+
+        # Vérifier si une clarification est nécessaire
+        if final_state.get("clarification_needed", False):
+            clarification_question = final_state.get(
+                "clarification_question", "Veuillez préciser votre demande."
+            )
+
+            logger.info(f"[EXECUTE] Clarification needed: {clarification_question}")
+
+            # Sauvegarder le checkpoint
+            session_manager.save_checkpoint(conversation_id, final_state)
+
+            # Retourner HTTP 202 avec la question
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "status": "clarification_needed",
+                    "conversation_id": conversation_id,
+                    "question": clarification_question,
+                },
+            )
+
+        # Le workflow s'est terminé normalement
+        result = final_state.get("result", "Workflow completed")
+        status = final_state.get("status", "completed")
+
+        logger.info(f"[EXECUTE] Workflow completed with status: {status}")
+
+        # Nettoyer la session
+        session_manager.delete_session(conversation_id)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "result": result,
+                "project_id": request.project_id,
+                "status": status,
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"[EXECUTE] Error during workflow execution: {e}", exc_info=True)
+
+        # Nettoyer la session en cas d'erreur
+        if session_manager.session_exists(conversation_id):
+            session_manager.delete_session(conversation_id)
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error executing workflow: {e}",
+        ) from e
+
+
+@app.post("/respond", response_model=ChatResponse)
+async def respond_to_clarification(request: ClarificationResponse) -> ChatResponse:
+    """
+    Reprend un workflow interrompu après avoir reçu une réponse de l'utilisateur.
+
+    Cet endpoint est appelé après qu'un workflow ait demandé une clarification
+    via l'endpoint /execute. Il reprend l'exécution du workflow avec la réponse
+    de l'utilisateur.
+
+    Args:
+        request: Requête contenant conversation_id et user_response
+
+    Returns:
+        Réponse contenant le résultat final du workflow
+
+    Raises:
+        HTTPException: Si le conversation_id n'existe pas ou en cas d'erreur
+    """
+    logger.info(f"[RESPOND] Resuming workflow for conversation: {request.conversation_id}")
+    logger.info(f"[RESPOND] User response: {request.user_response}")
+
+    session_manager = get_session_manager()
+
+    # Vérifier que la session existe
+    if not session_manager.session_exists(request.conversation_id):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Conversation {request.conversation_id} not found or expired",
+        )
+
+    try:
+        # Récupérer le checkpoint
+        checkpoint = session_manager.get_checkpoint(request.conversation_id)
+
+        # Mettre à jour l'état avec la réponse de l'utilisateur
+        checkpoint["user_response"] = request.user_response
+        checkpoint["clarification_needed"] = False
+
+        # Configuration pour reprendre le workflow
+        config: dict[str, Any] = {"configurable": {"thread_id": request.conversation_id}}
+
+        # Reprendre l'exécution du workflow
+        logger.info("[RESPOND] Resuming workflow execution...")
+        final_state = workflow_app.invoke(checkpoint, config)  # type: ignore[arg-type]
+
+        # Extraire les informations finales
+        result = final_state.get("result", "Workflow completed")
+        status = final_state.get("status", "completed")
+        project_id = final_state.get("project_id", "")
+
+        logger.info(f"[RESPOND] Workflow completed with status: {status}")
+
+        # Nettoyer la session
+        session_manager.delete_session(request.conversation_id)
+
+        return ChatResponse(
+            result=result,
+            project_id=project_id,
+            status=status,
+            thread_id=None,
+            impact_plan=None,
+        )
+
+    except Exception as e:
+        logger.error(f"[RESPOND] Error resuming workflow: {e}", exc_info=True)
+
+        # Nettoyer la session en cas d'erreur
+        if session_manager.session_exists(request.conversation_id):
+            session_manager.delete_session(request.conversation_id)
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error resuming workflow: {e}",
+        ) from e
 
 
 @app.get("/projects")
