@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, forwardRef, useRef, useImperativeHandle } from "react";
 import { useTranslations } from 'next-intl';
 
 interface ChatInputProps {
@@ -9,9 +9,20 @@ interface ChatInputProps {
   placeholder?: string;
 }
 
-export default function ChatInput({ onSubmit, disabled = false, placeholder }: ChatInputProps) {
+export interface ChatInputRef {
+  focus: () => void;
+}
+
+const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSubmit, disabled = false, placeholder }, ref) => {
   const t = useTranslations();
   const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      inputRef.current?.focus();
+    }
+  }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,6 +36,7 @@ export default function ChatInput({ onSubmit, disabled = false, placeholder }: C
     <form onSubmit={handleSubmit} className="w-full">
       <div className="flex gap-2">
         <input
+          ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -46,4 +58,8 @@ export default function ChatInput({ onSubmit, disabled = false, placeholder }: C
       </p>
     </form>
   );
-}
+});
+
+ChatInput.displayName = 'ChatInput';
+
+export default ChatInput;
