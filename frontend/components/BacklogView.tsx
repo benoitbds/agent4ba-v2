@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ClipboardPlus, ChevronRight, ChevronDown, Sparkles, UserCheck, Plus, Edit2, Trash2 } from "lucide-react";
+import { ClipboardPlus, ChevronRight, ChevronDown, Sparkles, UserCheck, Plus } from "lucide-react";
 import { useState } from "react";
 import type { WorkItem } from "@/types/events";
 import EditWorkItemModal from "./EditWorkItemModal";
@@ -165,15 +165,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
     setIsFormModalOpen(true);
   };
 
-  // Fonction pour ouvrir la modale d'édition simple
-  const handleQuickEditClick = (item: WorkItem, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setFormModalMode("edit");
-    setSelectedItemForForm(item);
-    setIsFormModalOpen(true);
-  };
-
-  // Fonction pour sauvegarder depuis le formulaire (création ou édition)
+  // Fonction pour sauvegarder depuis le formulaire (création uniquement)
   const handleFormSave = async (data: {
     type: string;
     title: string;
@@ -201,8 +193,10 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
   };
 
   // Fonction pour ouvrir la modale de confirmation de suppression
-  const handleDeleteClick = (item: WorkItem, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeleteClick = (item: WorkItem, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
     setItemToDelete(item);
     setIsDeleteModalOpen(true);
   };
@@ -361,25 +355,9 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
           </div>
 
           {/* Boutons d'action */}
-          <div className="flex-shrink-0 flex gap-2">
-            {/* Edit button */}
-            <button
-              onClick={(e) => handleQuickEditClick(item, e)}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-              title={t("backlog.editWorkItem")}
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
-            {/* Delete button */}
-            <button
-              onClick={(e) => handleDeleteClick(item, e)}
-              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-              title={t("backlog.deleteWorkItem")}
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-            {/* Select button for context */}
-            {onSelectItem && (
+          {onSelectItem && (
+            <div className="flex-shrink-0 flex gap-2">
+              {/* Select button for context */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -390,8 +368,8 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
               >
                 <ClipboardPlus className="w-5 h-5" />
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -557,25 +535,9 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
                     </div>
 
                     {/* Boutons d'action */}
-                    <div className="flex-shrink-0 flex gap-2">
-                      {/* Edit button */}
-                      <button
-                        onClick={(e) => handleQuickEditClick(hierarchicalItem.item, e)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        title={t("backlog.editWorkItem")}
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      {/* Delete button */}
-                      <button
-                        onClick={(e) => handleDeleteClick(hierarchicalItem.item, e)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                        title={t("backlog.deleteWorkItem")}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                      {/* Select button for context */}
-                      {onSelectItem && (
+                    {onSelectItem && (
+                      <div className="flex-shrink-0 flex gap-2">
+                        {/* Select button for context */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -586,8 +548,8 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
                         >
                           <ClipboardPlus className="w-5 h-5" />
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -612,6 +574,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
         onSave={handleSaveWorkItem}
         onValidate={handleValidateWorkItem}
         onGenerateAcceptanceCriteria={handleGenerateAcceptanceCriteria}
+        onDelete={handleDeleteClick}
         item={selectedItemForEdit}
       />
 
@@ -622,6 +585,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
         onSave={handleFormSave}
         item={selectedItemForForm}
         mode={formModalMode}
+        availableItems={items}
       />
 
       {/* Modal de confirmation de suppression */}

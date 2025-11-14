@@ -193,6 +193,7 @@
     "generateAC": "Générer les AC",
     "generatingAC": "Génération...",
     "acceptanceCriteriaFailed": "Erreur lors de la génération",
+    "delete": "Supprimer",
     "humanValidated": "Validé",
     "iaGenerated": "Généré par IA",
     "iaModified": "Modifié par IA"
@@ -201,6 +202,8 @@
     "createTitle": "Créer un Work Item",
     "editTitle": "Modifier le Work Item",
     "typeLabel": "Type",
+    "parentLabel": "Parent",
+    "noParent": "Aucun parent",
     "titleLabel": "Titre",
     "titlePlaceholder": "Titre du work item",
     "titleRequired": "Le titre est requis",
