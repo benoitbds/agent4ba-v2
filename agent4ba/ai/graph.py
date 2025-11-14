@@ -219,7 +219,8 @@ def router_node(state: GraphState) -> dict[str, Any]:
         Mise à jour partielle de l'état avec next_node, agent_id, agent_task et intent_args
     """
     rewritten_task = state.get("rewritten_task", "")
-
+    user_query = state.get("user_query", "")
+    context = state.get("context", [])
     user_response = state.get("user_response", "")
 
     # Si on a une réponse utilisateur, combiner avec la tâche originale
@@ -241,27 +242,70 @@ def router_node(state: GraphState) -> dict[str, Any]:
             "result": "No task to process.",
         }
 
-    # DÉTECTION D'AMBIGUÏTÉ (Simulation pour le MVP)
-    # Vérifier si la requête contient "Tc" ou "test" et s'il y a plusieurs work items
+    # DÉTECTION D'AMBIGUÏTÉ - Améliorée pour détecter plus de cas
     ambiguous = False
-    if context and len(context) > 0:
-        # Vérifier si la requête mentionne des cas de test
-        query_lower = user_query.lower()
-        if "tc" in query_lower or "test" in query_lower or "cas de test" in query_lower:
+    clarification_question = ""
+
+    # 1. Détecter si le task_rewriter indique un manque de contexte
+    rewritten_lower = rewritten_task.lower()
+    context_missing_indicators = [
+        "sans contexte",
+        "je ne peux pas",
+        "veuillez fournir",
+        "veuillez préciser",
+        "informations supplémentaires",
+        "manque de contexte",
+    ]
+
+    for indicator in context_missing_indicators:
+        if indicator in rewritten_lower:
+            logger.info(f"[ROUTER_NODE] Task rewriter indicates missing context: {indicator}")
+            ambiguous = True
+            break
+
+    # 2. Détecter les abréviations ambiguës dans la requête utilisateur
+    query_lower = user_query.lower()
+    ambiguous_keywords = {
+        "tc": "les cas de test",
+        "uc": "les user cases",
+        "us": "les user stories",
+        "ac": "les critères d'acceptation",
+    }
+
+    for keyword, expansion in ambiguous_keywords.items():
+        # Chercher le mot entier (pas une partie d'un mot)
+        if f" {keyword} " in f" {query_lower} " or query_lower.startswith(keyword + " ") or query_lower.endswith(" " + keyword):
+            logger.info(f"[ROUTER_NODE] Ambiguous keyword detected: {keyword}")
+            # Vérifier s'il y a un identifiant dans la requête (ex: FIR-3, US-001)
+            import re
+            has_item_id = re.search(r'\b[A-Z]+-\d+\b', user_query) or re.search(r'\b[A-Z]{2,}\d+\b', user_query)
+
+            if not has_item_id:
+                ambiguous = True
+                clarification_question = f"Pour quel work item souhaitez-vous générer {expansion} ? Veuillez préciser l'identifiant (ex: FIR-3, US-001)."
+                break
+
+    # 3. Si contexte fourni avec plusieurs work items et mot-clé détecté
+    if not ambiguous and context and len(context) > 0:
+        if any(kw in query_lower for kw in ["tc", "test", "cas de test", "uc", "us", "ac"]):
             # Compter les work items dans le contexte
             work_items = [item for item in context if item.get("type") == "work_item"]
             if len(work_items) > 1:
                 logger.info(f"[ROUTER_NODE] Ambiguity detected: {len(work_items)} work items found")
                 ambiguous = True
+                clarification_question = f"Vous avez sélectionné {len(work_items)} work items. Pour lequel souhaitez-vous effectuer cette opération ?"
 
-    # Si ambiguïté détectée, marquer l'état et continuer le routage normal
-    # La fonction de routage conditionnel décidera ensuite
+    # Si ambiguïté détectée, retourner pour router vers le nœud de clarification
     if ambiguous:
         logger.info("[ROUTER_NODE] Setting ambiguous_intent flag")
-        # Retourner immédiatement pour router vers le nœud de clarification
+        if not clarification_question:
+            clarification_question = "Veuillez préciser votre demande avec plus de détails (ex: identifiant du work item)."
+
+        # Le routing conditionnel utilisera ambiguous_intent pour router vers ask_for_clarification
         return {
             "ambiguous_intent": True,
-            "next_node": "clarification",
+            "clarification_needed": True,
+            "clarification_question": clarification_question,
         }
 
     # Charger le prompt
