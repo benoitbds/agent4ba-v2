@@ -7,6 +7,7 @@ import type {
   WorkItem,
   ContextItem,
   ClarificationNeededResponse,
+  ApprovalNeededResponse,
   ExecuteSuccessResponse,
   RespondSuccessResponse,
 } from "@/types/events";
@@ -531,11 +532,11 @@ export async function deleteWorkItem(
 
 /**
  * Execute a workflow with multi-turn conversation support
- * Returns either a final result (200) or a clarification request (202)
+ * Returns either a final result (200), a clarification request (202), or an approval request (202)
  */
 export async function executeWorkflow(
   request: ChatRequest
-): Promise<ExecuteSuccessResponse | ClarificationNeededResponse> {
+): Promise<ExecuteSuccessResponse | ClarificationNeededResponse | ApprovalNeededResponse> {
   const response = await fetch(`${API_URL}/execute`, {
     method: "POST",
     headers: getAuthHeaders(),

@@ -182,6 +182,12 @@ export interface ClarificationNeededResponse {
   question: string;
 }
 
+export interface ApprovalNeededResponse {
+  status: "awaiting_approval";
+  thread_id: string;
+  impact_plan: ImpactPlan;
+}
+
 export interface ExecuteSuccessResponse {
   result: string;
   project_id: string;

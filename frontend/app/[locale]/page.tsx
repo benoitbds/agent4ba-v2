@@ -15,7 +15,7 @@ import { PrivateRoute } from "@/components/PrivateRoute";
 import { Header } from "@/components/Header";
 import { useAuth } from "@/context/AuthContext";
 import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject, UnauthorizedError, executeWorkflow, respondToClarification } from "@/lib/api";
-import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent, ContextItem, ClarificationNeededResponse } from "@/types/events";
+import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent, ContextItem, ClarificationNeededResponse, ApprovalNeededResponse } from "@/types/events";
 
 export default function Home() {
   const t = useTranslations();
@@ -364,6 +364,15 @@ export default function Home() {
 
           setStatusMessage(response.question);
           setStatusType('warning');
+        } else if ("thread_id" in response && response.status === "awaiting_approval") {
+          // Réponse 202: Approbation nécessaire
+          console.log("[APPROVAL] Approval needed for thread:", response.thread_id);
+
+          setThreadId(response.thread_id);
+          setImpactPlan(response.impact_plan);
+
+          setStatusMessage(t('status.approvalRequired') || "Approval required for the ImpactPlan");
+          setStatusType('info');
         } else {
           // Réponse 200: Workflow terminé
           console.log("[MULTI-TURN] Workflow completed");
