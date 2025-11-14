@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from 'next-intl';
-import ChatInput from "@/components/ChatInput";
+import ChatInput, { ChatInputRef } from "@/components/ChatInput";
 import TimelineView from "@/components/TimelineView";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
 import CreateProjectModal from "@/components/CreateProjectModal";
@@ -37,6 +37,7 @@ export default function Home() {
   const [isDeleteProjectModalOpen, setIsDeleteProjectModalOpen] = useState(false);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [chatContext, setChatContext] = useState<ContextItem[]>([]);
+  const chatInputRef = useRef<ChatInputRef>(null);
 
   // Multi-turn conversation state
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -611,6 +612,11 @@ export default function Home() {
       setStatusMessage(t('createProject.success', { name: projectId }));
       setStatusType('success');
       setIsCreateProjectModalOpen(false);
+
+      // Focus on chat input after modal closes
+      setTimeout(() => {
+        chatInputRef.current?.focus();
+      }, 100);
     } catch (error) {
       if (handleUnauthorizedError(error)) return;
       console.error("Error creating project:", error);
@@ -688,6 +694,7 @@ export default function Home() {
                 {t('newRequest.title')}
               </h2>
               <ChatInput
+                ref={chatInputRef}
                 onSubmit={handleChatSubmit}
                 disabled={isStreaming}
                 placeholder={inputPlaceholder}
