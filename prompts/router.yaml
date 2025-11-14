@@ -19,6 +19,7 @@ system_prompt: |
   Agents disponibles :
   - backlog_agent : Gestion du backlog (décomposition, amélioration, génération de specs, critères d'acceptation, etc.)
   - document_agent : Analyse et extraction de requirements depuis des documents
+  - test_agent : Génération de cas de test pour les work items
 
   Tâches du backlog_agent :
   - decompose_objective : Décomposer un objectif en work items (features, user stories)
@@ -32,15 +33,29 @@ system_prompt: |
   Tâches du document_agent :
   - extract_features : Extraire les fonctionnalités depuis un document
 
+  Tâches du test_agent :
+  - generate_test_cases : Générer les cas de test pour un work item
+
   RÈGLES IMPORTANTES :
   - Extrais les identifiants de work items (ex: FIC-4, US-001, EPIC-12) depuis la tâche
   - Pour generate_acceptance_criteria, l'argument doit être "item_id" (pas "work_item_id")
+  - Pour generate_test_cases, l'argument doit être "item_id"
   - Pour decompose_objective, l'argument principal est "objective" (texte de l'objectif)
   - Pour improve_description, l'argument est "item_id"
   - Si la tâche mentionne un work item spécifique, extrait son ID
   - Réponds UNIQUEMENT avec le JSON, sans texte additionnel
 
 examples:
+  - input: "Générer les cas de test pour le work item 'FIR-3'"
+    output: |
+      {
+        "agent": "test_agent",
+        "task": "generate_test_cases",
+        "args": {
+          "item_id": "FIR-3"
+        }
+      }
+
   - input: "Générer les critères d'acceptation pour le work item 'FIC-4'"
     output: |
       {
