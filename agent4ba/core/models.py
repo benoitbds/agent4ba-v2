@@ -39,9 +39,9 @@ class WorkItem(BaseModel):
         None,
         description="Identifiant du parent (pour les hiérarchies)",
     )
-    validation_status: Literal["pending_validation", "human_validated"] = Field(
-        default="human_validated",
-        description="Statut de validation (pending_validation pour les items générés par l'IA, human_validated pour les items validés)",
+    validation_status: Literal["ia_generated", "human_validated", "ia_modified"] = Field(
+        default="ia_generated",
+        description="Statut de validation (ia_generated pour les items créés par l'IA, human_validated pour les items validés, ia_modified pour les items validés puis modifiés par l'IA)",
     )
     attributes: dict[str, Any] = Field(
         default_factory=dict,
@@ -58,7 +58,7 @@ class WorkItem(BaseModel):
                     "title": "Implémenter l'authentification utilisateur",
                     "description": "En tant qu'utilisateur, je veux me connecter...",
                     "parent_id": None,
-                    "validation_status": "human_validated",
+                    "validation_status": "ia_generated",
                     "attributes": {
                         "priority": "high",
                         "status": "todo",

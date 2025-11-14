@@ -103,7 +103,7 @@ def test_decompose_objective_success():
             assert item["project_id"] == "TEST"
 
             # Vérifier que le validation_status a été ajouté
-            assert item["validation_status"] == "pending_validation"
+            assert item["validation_status"] == "ia_generated"
 
         # 5. Vérifier le status de retour
         assert result["status"] == "awaiting_approval"
@@ -323,8 +323,9 @@ def test_improve_description_success():
         assert modified_item["after"]["description"] != "Description basique"
         assert "En tant qu'utilisateur" in modified_item["after"]["description"]
 
-        # Vérifier que le validation_status a été ajouté
-        assert modified_item["after"]["validation_status"] == "pending_validation"
+        # Vérifier que le validation_status reste "ia_generated" (car l'item n'était pas validé)
+        assert modified_item["before"]["validation_status"] == "ia_generated"
+        assert modified_item["after"]["validation_status"] == "ia_generated"
 
         # Vérifier le statut de retour
         assert result["status"] == "awaiting_approval"
@@ -501,8 +502,9 @@ def test_review_quality_success():
                 assert isinstance(data["score"], (int, float))
                 assert isinstance(data["reason"], str)
 
-            # Vérifier que le validation_status a été ajouté
-            assert modified_item["after"]["validation_status"] == "pending_validation"
+            # Vérifier que le validation_status reste "ia_generated" (car l'item n'était pas validé)
+            assert modified_item["before"]["validation_status"] == "ia_generated"
+            assert modified_item["after"]["validation_status"] == "ia_generated"
 
         # Vérifier le statut de retour
         assert result["status"] == "awaiting_approval"

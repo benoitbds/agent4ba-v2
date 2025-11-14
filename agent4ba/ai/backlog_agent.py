@@ -259,8 +259,8 @@ def decompose_objective(state: Any) -> dict[str, Any]:
         for item_data in work_items_data:
             # Ajouter le project_id
             item_data["project_id"] = project_id
-            # Marquer comme généré par l'IA
-            item_data["validation_status"] = "pending_validation"
+            # Marquer comme généré par l'IA (utilise la valeur par défaut "ia_generated")
+            # Pas besoin de définir explicitement validation_status
 
             # Créer le WorkItem (validation Pydantic)
             work_item = WorkItem(**item_data)
@@ -560,8 +560,10 @@ def improve_description(state: Any) -> dict[str, Any]:
         # Créer l'état "after" avec la nouvelle description
         item_after = target_item.model_copy(deep=True)
         item_after.description = improved_description
-        # Marquer comme modifié par l'IA
-        item_after.validation_status = "pending_validation"
+        # Si l'item était validé par un humain, le marquer comme modifié par l'IA
+        if item_before.validation_status == "human_validated":
+            item_after.validation_status = "ia_modified"
+        # Sinon, il garde son statut actuel (ia_generated ou ia_modified)
 
         # Construire l'ImpactPlan avec modified_items au format {before, after}
         impact_plan = {
@@ -848,8 +850,10 @@ def review_quality(state: Any) -> dict[str, Any]:
             # Créer l'état "after" avec l'analyse INVEST dans les attributes
             item_after = story.model_copy(deep=True)
             item_after.attributes["invest_analysis"] = invest_analysis
-            # Marquer comme modifié par l'IA
-            item_after.validation_status = "pending_validation"
+            # Si l'item était validé par un humain, le marquer comme modifié par l'IA
+            if item_before.validation_status == "human_validated":
+                item_after.validation_status = "ia_modified"
+            # Sinon, il garde son statut actuel (ia_generated ou ia_modified)
 
             # Ajouter à la liste des items modifiés
             modified_items.append({
