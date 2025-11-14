@@ -54,7 +54,10 @@
     "addToContext": "Ajouter au contexte du chat",
     "validateItem": "Valider cet item",
     "validationSuccess": "L'item \"{title}\" a été validé avec succès",
-    "validationError": "Erreur lors de la validation de l'item"
+    "validationError": "Erreur lors de la validation de l'item",
+    "generateAcceptanceCriteria": "Générer les critères d'acceptation",
+    "acceptanceCriteriaGenerated": "Les critères d'acceptation pour \"{title}\" ont été générés avec succès",
+    "acceptanceCriteriaError": "Erreur lors de la génération des critères d'acceptation"
   },
   "timeline": {
     "title": "Timeline d'exécution",
@@ -170,6 +173,7 @@
     "titleRequired": "Le titre est requis",
     "descriptionLabel": "Description",
     "descriptionPlaceholder": "Description du work item...",
+    "acceptanceCriteria": "Critères d'acceptation",
     "cancel": "Annuler",
     "save": "Sauvegarder",
     "saving": "Sauvegarde...",

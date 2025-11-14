@@ -161,6 +161,26 @@ export default function EditWorkItemModal({
             />
           </div>
 
+          {/* Affichage des critères d'acceptation */}
+          {item.acceptance_criteria && item.acceptance_criteria.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">
+                {t('editWorkItem.acceptanceCriteria')}
+              </h3>
+              <ul className="space-y-2">
+                {item.acceptance_criteria.map((criterion, index) => (
+                  <li
+                    key={index}
+                    className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200"
+                  >
+                    <span className="text-blue-600 font-semibold mt-0.5">✓</span>
+                    <span className="text-sm text-gray-800 flex-1">{criterion}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {error && (
             <p className="mb-4 text-sm text-red-600">{error}</p>
           )}
