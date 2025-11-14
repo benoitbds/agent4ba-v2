@@ -27,6 +27,8 @@ from agent4ba.api.schemas import (
     ChatRequest,
     ChatResponse,
     CreateProjectRequest,
+    CreateWorkItemRequest,
+    UpdateWorkItemRequest,
 )
 from agent4ba.core.document_ingestion import DocumentIngestionService
 from agent4ba.core.logger import setup_logger
@@ -687,10 +689,134 @@ async def delete_project_document(project_id: str, document_name: str) -> None:
         ) from e
 
 
-@app.put("/projects/{project_id}/backlog/{item_id}")
-async def update_work_item(project_id: str, item_id: str, item_data: dict) -> JSONResponse:
+@app.post("/projects/{project_id}/work_items", status_code=201)
+async def create_work_item(
+    project_id: str,
+    request: CreateWorkItemRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> JSONResponse:
+    """
+    Crée un nouveau WorkItem dans le backlog d'un projet.
+
+    Args:
+        project_id: Identifiant unique du projet
+        request: Requête contenant les données du WorkItem à créer
+        current_user: Utilisateur authentifié (injecté par la dépendance)
+
+    Returns:
+        JSONResponse avec le WorkItem créé et un statut 201 Created
+
+    Raises:
+        HTTPException: Si le projet n'existe pas
+    """
+    storage = ProjectContextService()
+
+    try:
+        # Créer le WorkItem avec les données de la requête
+        item_data = request.model_dump(exclude_unset=True)
+        new_item = storage.create_work_item_in_backlog(project_id, item_data)
+        return JSONResponse(content=new_item.model_dump(), status_code=201)
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project not found: {e}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error creating WorkItem: {e}",
+        ) from e
+
+
+@app.put("/projects/{project_id}/work_items/{item_id}")
+async def update_work_item(
+    project_id: str,
+    item_id: str,
+    request: UpdateWorkItemRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> JSONResponse:
     """
     Met à jour un WorkItem dans le backlog d'un projet.
+
+    Args:
+        project_id: Identifiant unique du projet
+        item_id: Identifiant du WorkItem à mettre à jour
+        request: Requête contenant les données du WorkItem à mettre à jour
+        current_user: Utilisateur authentifié (injecté par la dépendance)
+
+    Returns:
+        JSONResponse avec le WorkItem mis à jour
+
+    Raises:
+        HTTPException: Si le projet ou le WorkItem n'existe pas
+    """
+    storage = ProjectContextService()
+
+    try:
+        # Convertir la requête en dictionnaire en excluant les champs non définis
+        item_data = request.model_dump(exclude_unset=True)
+
+        # Le validation_status doit être human_validated car c'est un humain qui modifie
+        item_data["validation_status"] = "human_validated"
+
+        updated_item = storage.update_work_item_in_backlog(project_id, item_id, item_data)
+        return JSONResponse(content=updated_item.model_dump())
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project or WorkItem not found: {e}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error updating WorkItem '{item_id}': {e}",
+        ) from e
+
+
+@app.delete("/projects/{project_id}/work_items/{item_id}", status_code=204)
+async def delete_work_item(
+    project_id: str,
+    item_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> None:
+    """
+    Supprime un WorkItem du backlog d'un projet.
+
+    Args:
+        project_id: Identifiant unique du projet
+        item_id: Identifiant du WorkItem à supprimer
+        current_user: Utilisateur authentifié (injecté par la dépendance)
+
+    Returns:
+        Aucun contenu (code 204)
+
+    Raises:
+        HTTPException: Si le projet ou le WorkItem n'existe pas
+    """
+    storage = ProjectContextService()
+
+    try:
+        storage.delete_work_item_from_backlog(project_id, item_id)
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project or WorkItem not found: {e}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error deleting WorkItem '{item_id}': {e}",
+        ) from e
+
+
+@app.put("/projects/{project_id}/backlog/{item_id}")
+async def update_work_item_legacy(
+    project_id: str, item_id: str, item_data: dict
+) -> JSONResponse:
+    """
+    Met à jour un WorkItem dans le backlog d'un projet (endpoint legacy).
+
+    DEPRECATED: Utiliser /projects/{project_id}/work_items/{item_id} à la place.
 
     Args:
         project_id: Identifiant unique du projet

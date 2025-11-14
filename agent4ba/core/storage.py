@@ -317,3 +317,93 @@ class ProjectContextService:
         self.save_backlog(project_id, work_items)
 
         return validated_item
+
+    def create_work_item_in_backlog(
+        self, project_id: str, item_data: dict
+    ) -> WorkItem:
+        """
+        Crée un nouveau WorkItem dans le backlog d'un projet.
+
+        Args:
+            project_id: Identifiant unique du projet
+            item_data: Données du WorkItem à créer (sans ID)
+
+        Returns:
+            Le WorkItem créé
+
+        Raises:
+            FileNotFoundError: Si le projet n'existe pas
+        """
+        # Charger le backlog existant (ou créer un backlog vide si le projet existe)
+        try:
+            work_items = self.load_context(project_id)
+        except FileNotFoundError:
+            # Vérifier si le projet existe
+            project_dir = self._get_project_dir(project_id)
+            if not project_dir.exists():
+                raise FileNotFoundError(
+                    f"Le projet '{project_id}' n'existe pas"
+                )
+            work_items = []
+
+        # Générer un nouvel ID séquentiel
+        max_id = 0
+        for item in work_items:
+            # Extraire le numéro de l'ID (format WI-001)
+            if item.id.startswith("WI-"):
+                try:
+                    item_num = int(item.id.split("-")[1])
+                    if item_num > max_id:
+                        max_id = item_num
+                except (IndexError, ValueError):
+                    continue
+
+        new_id = f"WI-{max_id + 1:03d}"
+
+        # Créer le nouveau WorkItem avec validation_status = "human_validated"
+        new_item_data = {
+            "id": new_id,
+            "project_id": project_id,
+            "validation_status": "human_validated",
+            **item_data,
+        }
+
+        new_item = WorkItem(**new_item_data)
+        work_items.append(new_item)
+
+        # Sauvegarder le backlog mis à jour
+        self.save_backlog(project_id, work_items)
+
+        return new_item
+
+    def delete_work_item_from_backlog(self, project_id: str, item_id: str) -> None:
+        """
+        Supprime un WorkItem du backlog d'un projet.
+
+        Args:
+            project_id: Identifiant unique du projet
+            item_id: Identifiant du WorkItem à supprimer
+
+        Raises:
+            FileNotFoundError: Si le projet ou le WorkItem n'existe pas
+        """
+        # Charger le backlog existant
+        work_items = self.load_context(project_id)
+
+        # Trouver l'item correspondant
+        item_index = None
+        for idx, item in enumerate(work_items):
+            if item.id == item_id:
+                item_index = idx
+                break
+
+        if item_index is None:
+            raise FileNotFoundError(
+                f"WorkItem '{item_id}' not found in project '{project_id}'"
+            )
+
+        # Supprimer l'item
+        work_items.pop(item_index)
+
+        # Sauvegarder le backlog mis à jour
+        self.save_backlog(project_id, work_items)
