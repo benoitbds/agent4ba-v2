@@ -13,6 +13,7 @@ from litellm import completion
 
 from agent4ba.ai import backlog_agent, document_agent, epic_architect_agent, story_teller_agent, test_agent
 from agent4ba.ai.nodes import ask_for_clarification, handle_unknown_intent
+from agent4ba.ai.schemas import RouterDecision
 from agent4ba.core.logger import setup_logger
 from agent4ba.core.registry_service import load_agent_registry
 from agent4ba.core.storage import ProjectContextService
@@ -292,17 +293,25 @@ def router_node(state: GraphState) -> dict[str, Any]:
             temperature=temperature,
         )
 
-        # Extraire la réponse (JSON de routage)
+        # Extraire la réponse (JSON de routage avec Chain of Thought)
         routing_json_str = response.choices[0].message.content.strip()
 
         logger.info(f"[ROUTER_NODE] LLM response: {routing_json_str}")
 
-        # Parser le JSON
+        # Parser le JSON dans un objet RouterDecision
         routing_data = json.loads(routing_json_str)
+        router_decision = RouterDecision(**routing_data)
 
-        agent_id = routing_data.get("agent", "backlog_agent")
-        agent_task = routing_data.get("task", "decompose_objective")
-        args = routing_data.get("args", {})
+        # Valider la structure de la décision
+        router_decision.validate_decision()
+
+        # LOG CRUCIAL: Afficher la chaîne de pensée du routeur
+        logger.info(f"[ROUTER_THOUGHT] {router_decision.thought}")
+
+        # Extraire les éléments de la décision
+        agent_id = router_decision.decision.get("agent", "backlog_agent")
+        agent_task = router_decision.decision.get("task", "decompose_objective")
+        args = router_decision.decision.get("args", {})
 
         logger.info(f"[ROUTER_NODE] Selected agent: {agent_id}")
         logger.info(f"[ROUTER_NODE] Selected task: {agent_task}")
@@ -349,23 +358,49 @@ def router_node(state: GraphState) -> dict[str, Any]:
             "intent_args": args,  # Ajouter intent_args pour compatibilité avec les agents
         }
 
-    except (json.JSONDecodeError, KeyError, Exception) as e:
-        logger.error(f"[ROUTER_NODE] Error parsing LLM response: {e}", exc_info=True)
+    except json.JSONDecodeError as e:
+        logger.error(f"[ROUTER_NODE] JSON parsing error: {e}", exc_info=True)
+        if 'routing_json_str' in locals():
+            logger.error(f"[ROUTER_NODE] Invalid JSON received: {routing_json_str}")
+
+        # Fallback: utiliser le fallback_agent pour gérer l'erreur
+        logger.warning("[ROUTER_NODE] Falling back to fallback_agent due to JSON parsing error")
+        return {
+            "next_node": "fallback",
+            "agent_id": "fallback_agent",
+            "agent_task": "handle_unknown_intent",
+            "intent": {"args": {}},
+            "intent_args": {},
+        }
+
+    except (KeyError, ValueError) as e:
+        logger.error(f"[ROUTER_NODE] RouterDecision validation error: {e}", exc_info=True)
+        if 'routing_json_str' in locals():
+            logger.error(f"[ROUTER_NODE] Invalid RouterDecision structure: {routing_json_str}")
+
+        # Fallback: utiliser le fallback_agent pour gérer l'erreur de validation
+        logger.warning("[ROUTER_NODE] Falling back to fallback_agent due to validation error")
+        return {
+            "next_node": "fallback",
+            "agent_id": "fallback_agent",
+            "agent_task": "handle_unknown_intent",
+            "intent": {"args": {}},
+            "intent_args": {},
+        }
+
+    except Exception as e:
+        logger.error(f"[ROUTER_NODE] Unexpected error: {e}", exc_info=True)
         if 'routing_json_str' in locals():
             logger.error(f"[ROUTER_NODE] LLM response was: {routing_json_str}")
 
-        # Fallback: utiliser la tâche reformulée comme objectif pour décomposition
-        logger.warning("[ROUTER_NODE] Falling back to decompose_objective")
-        args = {"objective": rewritten_task}
-
+        # Fallback: utiliser le fallback_agent pour gérer toute autre erreur
+        logger.warning("[ROUTER_NODE] Falling back to fallback_agent due to unexpected error")
         return {
-            "next_node": "agent",
-            "agent_id": "backlog_agent",
-            "agent_task": "decompose_objective",
-            "intent": {
-                "args": args
-            },
-            "intent_args": args,
+            "next_node": "fallback",
+            "agent_id": "fallback_agent",
+            "agent_task": "handle_unknown_intent",
+            "intent": {"args": {}},
+            "intent_args": {},
         }
 
 
