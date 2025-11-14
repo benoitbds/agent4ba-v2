@@ -201,6 +201,8 @@
     "createTitle": "Créer un Work Item",
     "editTitle": "Modifier le Work Item",
     "typeLabel": "Type",
+    "parentLabel": "Parent",
+    "noParent": "Aucun parent",
     "titleLabel": "Titre",
     "titlePlaceholder": "Titre du work item",
     "titleRequired": "Le titre est requis",

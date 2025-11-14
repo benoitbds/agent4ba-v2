@@ -622,6 +622,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
         onSave={handleFormSave}
         item={selectedItemForForm}
         mode={formModalMode}
+        availableItems={items}
       />
 
       {/* Modal de confirmation de suppression */}

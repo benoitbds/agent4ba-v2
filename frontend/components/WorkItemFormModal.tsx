@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslations } from 'next-intl';
 import type { WorkItem } from "@/types/events";
 
@@ -15,6 +15,7 @@ interface WorkItemFormModalProps {
   }) => Promise<void>;
   item?: WorkItem | null; // Si fourni, mode édition ; sinon, mode création
   mode: "create" | "edit";
+  availableItems?: WorkItem[]; // Liste des items disponibles pour la sélection du parent
 }
 
 export default function WorkItemFormModal({
@@ -23,13 +24,40 @@ export default function WorkItemFormModal({
   onSave,
   item,
   mode,
+  availableItems = [],
 }: WorkItemFormModalProps) {
   const t = useTranslations();
   const [type, setType] = useState("feature");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [parentId, setParentId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  // Filtrer les parents disponibles selon le type sélectionné
+  const availableParents = useMemo(() => {
+    if (mode === "edit") {
+      // En mode édition, on ne change pas le parent
+      return [];
+    }
+
+    // Logique de filtrage selon le type
+    switch (type) {
+      case "story":
+        // Les stories peuvent avoir des features comme parent
+        return availableItems.filter(i => i.type === "feature");
+      case "task":
+        // Les tasks peuvent avoir des stories comme parent
+        return availableItems.filter(i => i.type === "story");
+      case "bug":
+        // Les bugs peuvent avoir des stories comme parent (optionnel)
+        return availableItems.filter(i => i.type === "story");
+      case "feature":
+      default:
+        // Les features n'ont pas de parent (ou optionnellement d'autres features)
+        return [];
+    }
+  }, [type, availableItems, mode]);
 
   // Initialiser les champs quand l'item change (mode édition)
   useEffect(() => {
@@ -37,15 +65,24 @@ export default function WorkItemFormModal({
       setType(item.type);
       setTitle(item.title);
       setDescription(item.description || "");
+      setParentId(item.parent_id || null);
       setError("");
     } else if (mode === "create") {
       // Réinitialiser pour la création
       setType("feature");
       setTitle("");
       setDescription("");
+      setParentId(null);
       setError("");
     }
   }, [item, mode, isOpen]);
+
+  // Réinitialiser le parent quand le type change
+  useEffect(() => {
+    if (mode === "create") {
+      setParentId(null);
+    }
+  }, [type, mode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +99,7 @@ export default function WorkItemFormModal({
         type,
         title: title.trim(),
         description: description.trim() || null,
+        parent_id: parentId,
       });
       handleClose();
     } catch (err) {
@@ -79,6 +117,7 @@ export default function WorkItemFormModal({
     setType("feature");
     setTitle("");
     setDescription("");
+    setParentId(null);
     setError("");
     onClose();
   };
@@ -120,27 +159,65 @@ export default function WorkItemFormModal({
             </div>
           )}
 
-          {/* Affichage du type en mode édition */}
-          {mode === "edit" && item && (
-            <div className="mb-4 flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700">
-                {t('workItemForm.typeLabel')}:
-              </span>
-              <span className={`px-3 py-1 text-sm font-semibold rounded ${
-                item.type === "feature"
-                  ? "bg-purple-200 text-purple-800"
-                  : item.type === "story"
-                  ? "bg-blue-200 text-blue-800"
-                  : item.type === "task"
-                  ? "bg-green-200 text-green-800"
-                  : "bg-red-200 text-red-800"
-              }`}>
-                {item.type}
-              </span>
-              <span className="text-sm text-gray-500 font-mono">
-                {item.id}
-              </span>
+          {/* Champ Parent - visible en mode création si des parents sont disponibles */}
+          {mode === "create" && availableParents.length > 0 && (
+            <div className="mb-4">
+              <label htmlFor="work-item-parent" className="block text-sm font-medium text-gray-700 mb-2">
+                {t('workItemForm.parentLabel')}
+              </label>
+              <select
+                id="work-item-parent"
+                value={parentId || ""}
+                onChange={(e) => {
+                  setParentId(e.target.value || null);
+                  setError("");
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={isSaving}
+              >
+                <option value="">{t('workItemForm.noParent')}</option>
+                {availableParents.map((parent) => (
+                  <option key={parent.id} value={parent.id}>
+                    [{parent.type}] {parent.title}
+                  </option>
+                ))}
+              </select>
             </div>
+          )}
+
+          {/* Affichage du type et parent en mode édition */}
+          {mode === "edit" && item && (
+            <>
+              <div className="mb-4 flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">
+                  {t('workItemForm.typeLabel')}:
+                </span>
+                <span className={`px-3 py-1 text-sm font-semibold rounded ${
+                  item.type === "feature"
+                    ? "bg-purple-200 text-purple-800"
+                    : item.type === "story"
+                    ? "bg-blue-200 text-blue-800"
+                    : item.type === "task"
+                    ? "bg-green-200 text-green-800"
+                    : "bg-red-200 text-red-800"
+                }`}>
+                  {item.type}
+                </span>
+                <span className="text-sm text-gray-500 font-mono">
+                  {item.id}
+                </span>
+              </div>
+              {item.parent_id && (
+                <div className="mb-4">
+                  <span className="text-sm font-medium text-gray-700">
+                    {t('workItemForm.parentLabel')}:
+                  </span>
+                  <span className="ml-2 text-sm text-gray-600">
+                    {availableItems.find(i => i.id === item.parent_id)?.title || item.parent_id}
+                  </span>
+                </div>
+              )}
+            </>
           )}
 
           {/* Champ Titre */}
