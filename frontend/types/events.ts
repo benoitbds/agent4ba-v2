@@ -174,3 +174,24 @@ export interface TimelineEvent {
   timestamp: Date;
   event: SSEEvent;
 }
+
+// Multi-turn conversation types
+export interface ClarificationNeededResponse {
+  status: "clarification_needed";
+  conversation_id: string;
+  question: string;
+}
+
+export interface ExecuteSuccessResponse {
+  result: string;
+  project_id: string;
+  status: string;
+}
+
+export interface RespondSuccessResponse {
+  result: string;
+  project_id: string;
+  status: string;
+  thread_id: string | null;
+  impact_plan: ImpactPlan | null;
+}

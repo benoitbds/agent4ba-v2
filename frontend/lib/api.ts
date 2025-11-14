@@ -2,7 +2,14 @@
  * API utilities for communicating with Agent4BA backend
  */
 
-import type { SSEEvent, WorkItem, ContextItem } from "@/types/events";
+import type {
+  SSEEvent,
+  WorkItem,
+  ContextItem,
+  ClarificationNeededResponse,
+  ExecuteSuccessResponse,
+  RespondSuccessResponse,
+} from "@/types/events";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
 
@@ -520,4 +527,53 @@ export async function deleteWorkItem(
       errorData.detail || `HTTP error! status: ${response.status}`
     );
   }
+}
+
+/**
+ * Execute a workflow with multi-turn conversation support
+ * Returns either a final result (200) or a clarification request (202)
+ */
+export async function executeWorkflow(
+  request: ChatRequest
+): Promise<ExecuteSuccessResponse | ClarificationNeededResponse> {
+  const response = await fetch(`${API_URL}/execute`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(request),
+  });
+
+  // Check for 401 errors
+  await handleResponse(response);
+
+  if (!response.ok && response.status !== 202) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Respond to a clarification request and resume the workflow
+ */
+export async function respondToClarification(
+  conversationId: string,
+  userResponse: string
+): Promise<RespondSuccessResponse> {
+  const response = await fetch(`${API_URL}/respond`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      conversation_id: conversationId,
+      user_response: userResponse,
+    }),
+  });
+
+  // Check for 401 errors
+  await handleResponse(response);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
 }

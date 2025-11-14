@@ -14,8 +14,8 @@ import ContextPills from "@/components/ContextPills";
 import { PrivateRoute } from "@/components/PrivateRoute";
 import { Header } from "@/components/Header";
 import { useAuth } from "@/context/AuthContext";
-import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject, UnauthorizedError } from "@/lib/api";
-import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent, ContextItem } from "@/types/events";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject, UnauthorizedError, executeWorkflow, respondToClarification } from "@/lib/api";
+import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent, ContextItem, ClarificationNeededResponse } from "@/types/events";
 
 export default function Home() {
   const t = useTranslations();
@@ -37,6 +37,11 @@ export default function Home() {
   const [isDeleteProjectModalOpen, setIsDeleteProjectModalOpen] = useState(false);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [chatContext, setChatContext] = useState<ContextItem[]>([]);
+
+  // Multi-turn conversation state
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [clarificationQuestion, setClarificationQuestion] = useState<string | null>(null);
+  const [inputPlaceholder, setInputPlaceholder] = useState<string>(t('newRequest.placeholder'));
 
   // Helper function to handle 401 errors - use useCallback to memoize
   const handleUnauthorizedError = useCallback((error: unknown) => {
@@ -107,10 +112,13 @@ export default function Home() {
     loadDocuments();
   }, [selectedProject, handleUnauthorizedError]);
 
-  // Reset context when project changes
+  // Reset context and conversation state when project changes
   useEffect(() => {
     setChatContext([]);
-  }, [selectedProject]);
+    setConversationId(null);
+    setClarificationQuestion(null);
+    setInputPlaceholder(t('newRequest.placeholder'));
+  }, [selectedProject, t]);
 
   // Load timeline history when selected project changes
   useEffect(() => {
@@ -304,71 +312,93 @@ export default function Home() {
   };
 
   const handleChatSubmit = async (query: string) => {
-    // Create new session ID
-    const newSessionId = `session-${Date.now()}`;
-    const newSession: TimelineSession = {
-      id: newSessionId,
-      user_query: query,
-      timestamp: new Date(),
-      tool_runs: new Map(),
-      agent_events: [],
-      is_expanded: true, // New session starts expanded
-    };
+    // Déterminer si c'est une nouvelle requête ou une réponse à une clarification
+    const isRespondingToClarification = conversationId !== null && clarificationQuestion !== null;
 
-    // CORRECTION: Combiner collapse + ajout de session en un seul setState
-    setSessions((prevSessions) => [
-      ...prevSessions.map((session) => ({ ...session, is_expanded: false })),
-      newSession,
-    ]);
-    setCurrentSessionId(newSessionId);
-
-    // Reset other state
-    setImpactPlan(null);
-    setThreadId(null);
+    setIsStreaming(true);
     setStatusMessage(null);
     setStatusType(null);
-    setIsStreaming(true);
 
     try {
-      // Stream events from backend
-      for await (const event of streamChatEvents({
-        project_id: selectedProject,
-        query,
-        context: chatContext.length > 0 ? chatContext : undefined,
-      })) {
-        // Log pour debug : tracer tous les événements SSE reçus
-        console.log("[SSE Event Received]", event.type, event);
+      if (isRespondingToClarification) {
+        // Cas 1: Réponse à une clarification
+        console.log("[MULTI-TURN] Responding to clarification:", conversationId);
 
-        addEventToCurrentSession(event, newSessionId);
+        const response = await respondToClarification(conversationId, query);
 
-        // Handle special events
-        if (event.type === "thread_id") {
-          setThreadId(event.thread_id);
-        } else if (event.type === "impact_plan_ready") {
-          setImpactPlan(event.impact_plan);
-          setThreadId(event.thread_id);
-          setStatusMessage(t('status.impactPlanReady'));
+        // Réinitialiser l'état de conversation
+        setConversationId(null);
+        setClarificationQuestion(null);
+        setInputPlaceholder(t('newRequest.placeholder'));
+
+        // Afficher le résultat final
+        setStatusMessage(`${t('agentTimeline.workflowComplete')}: ${response.result}`);
+        setStatusType('success');
+
+        // Rafraîchir le backlog après la complétion
+        try {
+          const items = await getProjectBacklog(selectedProject);
+          setBacklogItems(items);
+        } catch (error) {
+          if (handleUnauthorizedError(error)) return;
+          console.error("Failed to refresh backlog:", error);
+        }
+      } else {
+        // Cas 2: Nouvelle requête
+        console.log("[MULTI-TURN] Starting new request");
+
+        const response = await executeWorkflow({
+          project_id: selectedProject,
+          query,
+          context: chatContext.length > 0 ? chatContext : undefined,
+        });
+
+        // Vérifier le type de réponse
+        if ("conversation_id" in response && response.status === "clarification_needed") {
+          // Réponse 202: Clarification nécessaire
+          console.log("[MULTI-TURN] Clarification needed:", response.question);
+
+          setConversationId(response.conversation_id);
+          setClarificationQuestion(response.question);
+          setInputPlaceholder(t('newRequest.clarificationPlaceholder') || "Entrez votre réponse...");
+
+          setStatusMessage(response.question);
           setStatusType('warning');
-          break; // Stop streaming when ImpactPlan is ready
-        } else if (event.type === "workflow_complete") {
-          setStatusMessage(`${t('agentTimeline.workflowComplete')}: ${event.result}`);
+        } else {
+          // Réponse 200: Workflow terminé
+          console.log("[MULTI-TURN] Workflow completed");
+
+          setStatusMessage(`${t('agentTimeline.workflowComplete')}: ${response.result}`);
           setStatusType('success');
-        } else if (event.type === "error") {
-          setStatusMessage(`${t('status.error')} ${event.error}`);
-          setStatusType('error');
+
+          // Rafraîchir le backlog après la complétion
+          try {
+            const items = await getProjectBacklog(selectedProject);
+            setBacklogItems(items);
+          } catch (error) {
+            if (handleUnauthorizedError(error)) return;
+            console.error("Failed to refresh backlog:", error);
+          }
         }
       }
     } catch (error) {
       if (handleUnauthorizedError(error)) return;
-      console.error("Error streaming events:", error);
+      console.error("Error executing workflow:", error);
       setStatusMessage(
         `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
       );
       setStatusType('error');
+
+      // En cas d'erreur, réinitialiser l'état de conversation
+      setConversationId(null);
+      setClarificationQuestion(null);
+      setInputPlaceholder(t('newRequest.placeholder'));
     } finally {
       setIsStreaming(false);
-      // Clear context after sending the request
-      setChatContext([]);
+      // Clear context after sending the request (only for new requests)
+      if (!isRespondingToClarification) {
+        setChatContext([]);
+      }
     }
   };
 
@@ -532,7 +562,11 @@ export default function Home() {
               <h2 className="text-xl font-semibold mb-4">
                 {t('newRequest.title')}
               </h2>
-              <ChatInput onSubmit={handleChatSubmit} disabled={isStreaming} />
+              <ChatInput
+                onSubmit={handleChatSubmit}
+                disabled={isStreaming}
+                placeholder={inputPlaceholder}
+              />
               <ContextPills context={chatContext} onRemove={handleRemoveFromContext} />
             </div>
 
@@ -549,7 +583,13 @@ export default function Home() {
                     : "bg-green-100 border border-green-300 text-green-800"
                 }`}
               >
-                <p className="font-semibold">{statusMessage}</p>
+                {clarificationQuestion && (
+                  <div className="flex items-start gap-2 mb-2">
+                    <span className="text-2xl">❓</span>
+                    <p className="font-semibold flex-1">{t('newRequest.clarificationNeeded')}</p>
+                  </div>
+                )}
+                <p className={clarificationQuestion ? "" : "font-semibold"}>{statusMessage}</p>
               </div>
             )}
 
