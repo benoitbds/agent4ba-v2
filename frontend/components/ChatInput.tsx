@@ -6,9 +6,10 @@ import { useTranslations } from 'next-intl';
 interface ChatInputProps {
   onSubmit: (query: string) => void;
   disabled?: boolean;
+  placeholder?: string;
 }
 
-export default function ChatInput({ onSubmit, disabled = false }: ChatInputProps) {
+export default function ChatInput({ onSubmit, disabled = false, placeholder }: ChatInputProps) {
   const t = useTranslations();
   const [query, setQuery] = useState("");
 
@@ -27,7 +28,7 @@ export default function ChatInput({ onSubmit, disabled = false }: ChatInputProps
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={t('newRequest.placeholder')}
+          placeholder={placeholder || t('newRequest.placeholder')}
           disabled={disabled}
           className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
         />

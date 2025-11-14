@@ -15,6 +15,8 @@
   "newRequest": {
     "title": "New Request",
     "placeholder": "Ask your question about the project documents (e.g.: What are the security requirements?)",
+    "clarificationPlaceholder": "Enter your response to clarify your request...",
+    "clarificationNeeded": "The agent needs clarification",
     "send": "Send",
     "hint": "The agent will use the uploaded documents to answer your question and suggest work items"
   },
