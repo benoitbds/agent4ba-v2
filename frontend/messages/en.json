@@ -173,7 +173,13 @@
     "cancel": "Cancel",
     "save": "Save",
     "saving": "Saving...",
-    "saveFailed": "Failed to save"
+    "saveFailed": "Failed to save",
+    "validate": "Validate",
+    "validating": "Validating...",
+    "validationFailed": "Validation failed",
+    "humanValidated": "Validated",
+    "iaGenerated": "AI Generated",
+    "iaModified": "AI Modified"
   },
   "common": {
     "empty": "(empty)",

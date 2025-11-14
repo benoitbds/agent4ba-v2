@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ClipboardPlus, ChevronRight, ChevronDown, Sparkles, CheckCircle } from "lucide-react";
+import { ClipboardPlus, ChevronRight, ChevronDown, Sparkles, UserCheck } from "lucide-react";
 import { useState } from "react";
 import type { WorkItem } from "@/types/events";
 import EditWorkItemModal from "./EditWorkItemModal";
@@ -115,8 +115,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
   };
 
   // Fonction pour valider un WorkItem
-  const handleValidateWorkItem = async (item: WorkItem, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleValidateWorkItem = async (item: WorkItem) => {
     try {
       await validateWorkItem(projectId, item.id);
       toast.success(t("backlog.validationSuccess", { title: item.title }));
@@ -127,6 +126,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
     } catch (error) {
       toast.error(t("backlog.validationError"));
       console.error("Error validating work item:", error);
+      throw error; // Re-throw pour que la modal puisse gérer l'erreur
     }
   };
 
@@ -178,11 +178,23 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
               <span className="text-xs text-gray-500 font-mono">
                 {item.id}
               </span>
-              {/* Badge IA pour les items générés ou modifiés par l'IA */}
-              {(item.validation_status === "ia_generated" || item.validation_status === "ia_modified") && (
+              {/* Badge de statut de validation */}
+              {item.validation_status === "human_validated" && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800 border border-green-300">
+                  <UserCheck className="w-3 h-3" />
+                  Validé
+                </span>
+              )}
+              {item.validation_status === "ia_generated" && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
                   <Sparkles className="w-3 h-3" />
-                  {item.validation_status === "ia_modified" ? "IA (Modifié)" : "IA"}
+                  IA
+                </span>
+              )}
+              {item.validation_status === "ia_modified" && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
+                  <Sparkles className="w-3 h-3" />
+                  IA (Modifié)
                 </span>
               )}
             </div>
@@ -251,16 +263,6 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
 
           {/* Boutons d'action */}
           <div className="flex-shrink-0 flex gap-2">
-            {/* Bouton de validation (pour les items générés ou modifiés par l'IA) */}
-            {(item.validation_status === "ia_generated" || item.validation_status === "ia_modified") && (
-              <button
-                onClick={(e) => handleValidateWorkItem(item, e)}
-                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                title={t("backlog.validateItem")}
-              >
-                <CheckCircle className="w-5 h-5" />
-              </button>
-            )}
             {/* Select button for context */}
             {onSelectItem && (
               <button
@@ -336,11 +338,23 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
                         <span className="text-xs text-gray-500 font-mono">
                           {hierarchicalItem.item.id}
                         </span>
-                        {/* Badge IA pour les items générés ou modifiés par l'IA */}
-                        {(hierarchicalItem.item.validation_status === "ia_generated" || hierarchicalItem.item.validation_status === "ia_modified") && (
+                        {/* Badge de statut de validation */}
+                        {hierarchicalItem.item.validation_status === "human_validated" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800 border border-green-300">
+                            <UserCheck className="w-3 h-3" />
+                            Validé
+                          </span>
+                        )}
+                        {hierarchicalItem.item.validation_status === "ia_generated" && (
                           <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
                             <Sparkles className="w-3 h-3" />
-                            {hierarchicalItem.item.validation_status === "ia_modified" ? "IA (Modifié)" : "IA"}
+                            IA
+                          </span>
+                        )}
+                        {hierarchicalItem.item.validation_status === "ia_modified" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300">
+                            <Sparkles className="w-3 h-3" />
+                            IA (Modifié)
                           </span>
                         )}
                       </div>
@@ -420,16 +434,6 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
 
                     {/* Boutons d'action */}
                     <div className="flex-shrink-0 flex gap-2">
-                      {/* Bouton de validation (pour les items générés ou modifiés par l'IA) */}
-                      {(hierarchicalItem.item.validation_status === "ia_generated" || hierarchicalItem.item.validation_status === "ia_modified") && (
-                        <button
-                          onClick={(e) => handleValidateWorkItem(hierarchicalItem.item, e)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          title={t("backlog.validateItem")}
-                        >
-                          <CheckCircle className="w-5 h-5" />
-                        </button>
-                      )}
                       {/* Select button for context */}
                       {onSelectItem && (
                         <button
@@ -466,6 +470,7 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         onSave={handleSaveWorkItem}
+        onValidate={handleValidateWorkItem}
         item={selectedItemForEdit}
       />
     </div>
