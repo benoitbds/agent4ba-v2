@@ -88,7 +88,7 @@ export default function TimelineDisplay({ events }: TimelineDisplayProps) {
       <div className="flex items-center justify-center h-64 text-gray-400">
         <div className="text-center">
           <div className="text-4xl mb-2">⏳</div>
-          <p>En attente d'événements...</p>
+          <p>En attente d&apos;événements...</p>
         </div>
       </div>
     );
