@@ -8,7 +8,23 @@ import { useState, useEffect } from 'react';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import type { TimelineEvent } from '@/types/timeline';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
+/**
+ * Fonction utilitaire pour construire l'URL de l'API en évitant les doubles slashs
+ *
+ * @param path - Le chemin relatif de l'endpoint (ex: '/api/v1/timeline/stream')
+ * @returns L'URL complète sans doubles slashs
+ */
+function getApiUrl(path: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
+
+  // Supprimer le slash final de la base si présent
+  const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+
+  // S'assurer que le chemin commence par un slash
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+
+  return `${cleanBase}${cleanPath}`;
+}
 
 /**
  * Hook personnalisé pour consommer le flux SSE de timeline
@@ -31,12 +47,17 @@ export function useTimelineStream(sessionId: string | null, token: string | null
     }
 
     const ctrl = new AbortController();
+
+    // Construire l'URL avec la fonction utilitaire pour éviter les doubles slashs
+    const eventSourceUrl = getApiUrl(`/api/v1/timeline/stream/${sessionId}`);
     console.log(`[TIMELINE_STREAM] Initializing for session: ${sessionId}`);
+    console.log(`[TIMELINE_STREAM] EventSource URL: ${eventSourceUrl}`);
+
     setEvents([]); // Vider les événements précédents pour la nouvelle session
     setIsConnected(false);
 
     const connect = async () => {
-      await fetchEventSource(`${API_URL}/api/v1/timeline/stream/${sessionId}`, {
+      await fetchEventSource(eventSourceUrl, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -45,13 +66,31 @@ export function useTimelineStream(sessionId: string | null, token: string | null
         signal: ctrl.signal,
 
         onopen: async (response) => {
-          if (response.ok && response.headers.get('content-type') === 'text/event-stream') {
-            console.log('[TIMELINE_STREAM] Connection established successfully.');
+          // Récupérer le content-type de la réponse
+          const contentType = response.headers.get('content-type');
+
+          // Logger systématiquement le statut et le content-type
+          console.log(`[TIMELINE_STREAM] onopen: status=${response.status}, content-type='${contentType}'`);
+
+          // Valider la connexion : statut OK ET content-type correct
+          if (response.ok && contentType === 'text/event-stream') {
+            console.log('[TIMELINE_STREAM] ✓ Connection established successfully. EventStream is valid.');
             setIsConnected(true);
           } else {
-            console.error(`[TIMELINE_STREAM] Failed to open connection: status=${response.status}`, response);
+            // Message d'erreur explicite en cas d'échec
+            const errorMsg = `[TIMELINE_STREAM] ✗ Échec de la validation de la connexion EventStream. ` +
+              `Attendu 'text/event-stream' mais reçu '${contentType}'. ` +
+              `Vérifiez la configuration du proxy serveur et l'URL de l'API.`;
+            console.error(errorMsg);
+            console.error(`[TIMELINE_STREAM] Response details:`, {
+              status: response.status,
+              statusText: response.statusText,
+              contentType: contentType,
+              url: eventSourceUrl
+            });
+
             setIsConnected(false);
-            ctrl.abort(); // Arrêter si l'ouverture échoue
+            ctrl.abort(); // Annuler la connexion si la validation échoue
           }
         },
 
