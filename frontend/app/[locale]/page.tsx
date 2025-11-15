@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from 'next-intl';
 import ChatInput, { ChatInputRef } from "@/components/ChatInput";
 import TimelineView from "@/components/TimelineView";
+import TimelineDisplay from "@/components/TimelineDisplay";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
 import CreateProjectModal from "@/components/CreateProjectModal";
 import DeleteProjectModal from "@/components/DeleteProjectModal";
@@ -14,6 +15,7 @@ import ContextPills from "@/components/ContextPills";
 import { PrivateRoute } from "@/components/PrivateRoute";
 import { Header } from "@/components/Header";
 import { useAuth } from "@/context/AuthContext";
+import { useTimelineStream } from "@/hooks/useTimelineStream";
 import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject, UnauthorizedError, executeWorkflow, respondToClarification } from "@/lib/api";
 import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent, ContextItem, ClarificationNeededResponse, ApprovalNeededResponse } from "@/types/events";
 
@@ -43,6 +45,10 @@ export default function Home() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [clarificationQuestion, setClarificationQuestion] = useState<string | null>(null);
   const [inputPlaceholder, setInputPlaceholder] = useState<string>(t('newRequest.placeholder'));
+
+  // Real-time timeline SSE state
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const timelineEvents = useTimelineStream(sessionId);
 
   // Helper function to handle 401 errors - use useCallback to memoize
   const handleUnauthorizedError = useCallback((error: unknown) => {
@@ -320,6 +326,11 @@ export default function Home() {
     setStatusMessage(null);
     setStatusType(null);
 
+    // Réinitialiser la timeline SSE pour une nouvelle requête
+    if (!isRespondingToClarification) {
+      setSessionId(null);
+    }
+
     try {
       if (isRespondingToClarification) {
         // Cas 1: Réponse à une clarification
@@ -360,6 +371,7 @@ export default function Home() {
           console.log("[MULTI-TURN] Clarification needed:", response.question);
 
           setConversationId(response.conversation_id);
+          setSessionId(response.conversation_id); // Utiliser conversation_id comme session_id pour le SSE
           setClarificationQuestion(response.question);
           setInputPlaceholder(t('newRequest.clarificationPlaceholder') || "Entrez votre réponse...");
 
@@ -370,6 +382,7 @@ export default function Home() {
           console.log("[APPROVAL] Approval needed for thread:", response.thread_id);
 
           setThreadId(response.thread_id);
+          setSessionId(response.thread_id); // Utiliser thread_id comme session_id pour le SSE
           setImpactPlan(response.impact_plan);
 
           setStatusMessage(t('status.approvalRequired') || "Approval required for the ImpactPlan");
@@ -734,6 +747,13 @@ export default function Home() {
                     {t('status.processing')}
                   </p>
                 </div>
+              </div>
+            )}
+
+            {/* Real-time SSE Timeline - only show if session is active or events exist */}
+            {(sessionId || timelineEvents.length > 0) && (
+              <div className="bg-white rounded-lg shadow-sm p-6 flex-1 overflow-hidden flex flex-col">
+                <TimelineDisplay events={timelineEvents} />
               </div>
             )}
 
