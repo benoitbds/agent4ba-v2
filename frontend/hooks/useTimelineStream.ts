@@ -46,6 +46,21 @@ export function useTimelineStream(sessionId: string | null, token: string | null
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [isConnected, setIsConnected] = useState<boolean>(false);
 
+  /**
+   * Met à jour un événement existant dans la timeline
+   * @param eventId - L'ID de l'événement à mettre à jour
+   * @param updates - Les propriétés à mettre à jour (ex: { status: 'SUCCESS' })
+   */
+  const updateEvent = (eventId: string, updates: Partial<TimelineEvent>) => {
+    setEvents((prevEvents) =>
+      prevEvents.map((event) =>
+        event.event_id === eventId
+          ? { ...event, ...updates }
+          : event
+      )
+    );
+  };
+
   useEffect(() => {
     if (!sessionId || !token) {
       setEvents([]); // Réinitialiser si pas de session
@@ -154,5 +169,5 @@ export function useTimelineStream(sessionId: string | null, token: string | null
 
   }, [sessionId, token]); // Dépendances explicites
 
-  return { events, isConnected };
+  return { events, isConnected, updateEvent };
 }

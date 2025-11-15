@@ -48,7 +48,7 @@ export default function Home() {
 
   // Real-time timeline SSE state
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const { events: timelineEvents, isConnected } = useTimelineStream(sessionId, token);
+  const { events: timelineEvents, isConnected, updateEvent } = useTimelineStream(sessionId, token);
 
   // Helper function to handle 401 errors - use useCallback to memoize
   const handleUnauthorizedError = useCallback((error: unknown) => {
@@ -522,6 +522,13 @@ export default function Home() {
       setStatusType('success');
       setImpactPlan(null);
       setThreadId(null);
+
+      // Mettre à jour le statut de l'événement IMPACT_PLAN_READY dans la timeline
+      const impactPlanEvent = timelineEvents.find(event => event.type === 'IMPACT_PLAN_READY' && event.status === 'WAITING');
+      if (impactPlanEvent) {
+        console.log('[IMPACT_PLAN] Updating event status to SUCCESS:', impactPlanEvent.event_id);
+        updateEvent(impactPlanEvent.event_id, { status: 'SUCCESS' });
+      }
 
       // Refresh backlog after approval
       try {
