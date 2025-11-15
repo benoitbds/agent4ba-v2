@@ -327,6 +327,31 @@ def router_node(state: GraphState) -> dict[str, Any]:
         agent_task = router_decision.decision.get("task", "decompose_objective")
         args = router_decision.decision.get("args", {})
 
+        # Normaliser le nom de l'agent (robustesse contre les variations de casse)
+        # Map des variations possibles vers le nom canonique en snake_case
+        agent_id_map = {
+            "epicarchitectagent": "epic_architect_agent",
+            "epic_architect_agent": "epic_architect_agent",
+            "storytelleragent": "story_teller_agent",
+            "story_teller_agent": "story_teller_agent",
+            "backlogagent": "backlog_agent",
+            "backlog_agent": "backlog_agent",
+            "testagent": "test_agent",
+            "test_agent": "test_agent",
+            "documentagent": "document_agent",
+            "document_agent": "document_agent",
+            "fallbackagent": "fallback_agent",
+            "fallback_agent": "fallback_agent",
+        }
+
+        # Normaliser en minuscule et sans underscores pour la clé de lookup
+        normalized_key = agent_id.lower().replace("_", "")
+        if normalized_key in agent_id_map:
+            original_agent_id = agent_id
+            agent_id = agent_id_map[normalized_key]
+            if original_agent_id != agent_id:
+                logger.info(f"[ROUTER_NODE] Normalized agent name from '{original_agent_id}' to '{agent_id}'")
+
         logger.info(f"[ROUTER_NODE] Selected agent: {agent_id}")
         logger.info(f"[ROUTER_NODE] Selected task: {agent_task}")
         logger.info(f"[ROUTER_NODE] Extracted args: {args}")
