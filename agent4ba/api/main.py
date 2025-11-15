@@ -103,47 +103,41 @@ async def stream_timeline_events(session_id: str) -> StreamingResponse:
     logger.info(f"[TIMELINE_STREAM] Client connected for session: {session_id}")
 
     async def event_generator() -> AsyncIterator[str]:
-        """Générateur d'événements SSE avec keep-alive pings."""
+        """Générateur d'événements SSE qui attend les événements de manière bloquante."""
         try:
+            # Récupérer la queue pour cette session
+            loop = asyncio.get_running_loop()
+            queue = timeline_service.register_session_loop(session_id, loop)
+            logger.info(f"[TIMELINE_STREAM] Queue registered for session: {session_id}")
+
             event_count = 0
-            ping_count = 0
 
-            # Créer un itérateur asynchrone pour les événements
-            event_iterator = timeline_service.stream_events(session_id).__aiter__()
-
+            # Boucle qui attend indéfiniment les événements
             while True:
-                try:
-                    # Attendre le prochain événement avec un timeout de 3 secondes
-                    event = await asyncio.wait_for(event_iterator.__anext__(), timeout=3.0)
+                # Attendre le prochain événement (bloquant)
+                # Cette instruction fait une pause et attend indéfiniment s'il n'y a pas d'événements
+                event = await queue.get()
 
-                    event_count += 1
-                    # Formater l'événement au format SSE
-                    event_data = event.model_dump_json()
-                    sse_message = f"data: {event_data}\n\n"
-
-                    logger.debug(
-                        f"[TIMELINE_STREAM] Sending event #{event_count} to session {session_id}: "
-                        f"{event.type}"
-                    )
-                    yield sse_message
-
-                except asyncio.TimeoutError:
-                    # Timeout expiré, envoyer un ping keep-alive
-                    ping_count += 1
-                    logger.debug(
-                        f"[TIMELINE_STREAM] Sending keep-alive ping #{ping_count} to session {session_id}"
-                    )
-                    yield ": ping\n\n"
-
-                except StopAsyncIteration:
-                    # Le stream d'événements est terminé
+                # Vérifier si c'est le signal de fin (sentinelle None)
+                if event is None:
                     logger.info(
-                        f"[TIMELINE_STREAM] Stream completed for session {session_id} "
-                        f"with {event_count} events and {ping_count} pings"
+                        f"[TIMELINE_STREAM] Received sentinel (None) for session {session_id} "
+                        f"after {event_count} events - ending stream"
                     )
                     break
 
-            # Envoyer le signal de fin au client
+                # C'est un événement normal, l'envoyer au client
+                event_count += 1
+                event_data = event.model_dump_json()
+                sse_message = f"data: {event_data}\n\n"
+
+                logger.debug(
+                    f"[TIMELINE_STREAM] Sending event #{event_count} to session {session_id}: "
+                    f"{event.type}"
+                )
+                yield sse_message
+
+            # Envoyer le signal de fin au client UNIQUEMENT après la fin réelle du workflow
             yield "data: [DONE]\n\n"
             logger.info(f"[TIMELINE_STREAM] Sent [DONE] signal and closing stream for session {session_id}")
 
