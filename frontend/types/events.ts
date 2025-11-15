@@ -194,6 +194,12 @@ export interface ExecuteSuccessResponse {
   status: string;
 }
 
+// Response type for async workflow execution
+export interface ExecuteWorkflowResponse {
+  message: string;
+  session_id: string;
+}
+
 export interface RespondSuccessResponse {
   result: string;
   project_id: string;

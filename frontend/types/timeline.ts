@@ -18,9 +18,12 @@ export interface TimelineEvent {
     | 'ROUTER_DECISION'
     | 'AGENT_START'
     | 'AGENT_COMPLETE'
-    | 'WORKFLOW_COMPLETE';
+    | 'WORKFLOW_COMPLETE'
+    | 'IMPACT_PLAN_READY'
+    | 'CLARIFICATION_NEEDED'
+    | 'ERROR';
   agent_name?: string;
   message: string;
-  status: 'IN_PROGRESS' | 'SUCCESS' | 'ERROR' | 'AWAITING_APPROVAL';
+  status: 'IN_PROGRESS' | 'SUCCESS' | 'ERROR' | 'WAITING';
   details?: Record<string, any>;
 }

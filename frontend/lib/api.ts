@@ -9,6 +9,7 @@ import type {
   ClarificationNeededResponse,
   ApprovalNeededResponse,
   ExecuteSuccessResponse,
+  ExecuteWorkflowResponse,
   RespondSuccessResponse,
 } from "@/types/events";
 
@@ -532,12 +533,13 @@ export async function deleteWorkItem(
 }
 
 /**
- * Execute a workflow with multi-turn conversation support
- * Returns either a final result (200), a clarification request (202), or an approval request (202)
+ * Execute a workflow asynchronously in the background
+ * Always returns HTTP 202 Accepted with a session_id for real-time SSE streaming
+ * The client should connect to /api/v1/timeline/stream/{session_id} to receive events
  */
 export async function executeWorkflow(
   request: ChatRequest
-): Promise<ExecuteSuccessResponse | ClarificationNeededResponse | ApprovalNeededResponse> {
+): Promise<ExecuteWorkflowResponse> {
   const response = await fetch(`${API_URL}/execute`, {
     method: "POST",
     headers: getAuthHeaders(),
@@ -547,7 +549,7 @@ export async function executeWorkflow(
   // Check for 401 errors
   await handleResponse(response);
 
-  if (!response.ok && response.status !== 202) {
+  if (!response.ok || response.status !== 202) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
