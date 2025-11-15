@@ -53,6 +53,13 @@ export function useTimelineStream(sessionId: string | null): TimelineEvent[] {
 
       // Gestionnaire pour les messages reçus
       onmessage(event) {
+        // Ignorer les messages vides (keep-alive pings)
+        // Le backend envoie des pings sous forme de commentaires SSE ": ping\n\n"
+        // qui peuvent arriver comme des messages avec event.data vide
+        if (!event.data || event.data.trim() === '') {
+          return;
+        }
+
         try {
           // Parser le JSON reçu
           const timelineEvent: TimelineEvent = JSON.parse(event.data);
@@ -60,7 +67,7 @@ export function useTimelineStream(sessionId: string | null): TimelineEvent[] {
           // Ajouter le nouvel événement au tableau
           setEvents((prevEvents) => [...prevEvents, timelineEvent]);
         } catch (error) {
-          console.error('Erreur lors du parsing de l\'événement SSE:', error, event.data);
+          console.error('Failed to parse SSE event data:', event.data, error);
         }
       },
 
