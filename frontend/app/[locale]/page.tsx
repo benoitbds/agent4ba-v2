@@ -520,8 +520,6 @@ export default function Home() {
       const response = await sendApprovalDecision(threadId, true);
       setStatusMessage(`${t('status.approved')} ${response.result}`);
       setStatusType('success');
-      setImpactPlan(null);
-      setThreadId(null);
 
       // Mettre à jour le statut de l'événement IMPACT_PLAN_READY dans la timeline
       const impactPlanEvent = timelineEvents.find(event => event.type === 'IMPACT_PLAN_READY' && event.status === 'WAITING');
@@ -530,72 +528,69 @@ export default function Home() {
         updateEvent(impactPlanEvent.event_id, { status: 'SUCCESS' });
       }
 
-      // Refresh backlog after approval
-      try {
-        const items = await getProjectBacklog(selectedProject);
-        setBacklogItems(items);
-      } catch (error) {
-        if (handleUnauthorizedError(error)) return;
-        console.error("Failed to refresh backlog:", error);
-      }
+      // Fermer la modale immédiatement après la confirmation
+      setImpactPlan(null);
+      setThreadId(null);
 
-      // Refresh timeline after approval
-      try {
-        const history = await getProjectTimelineHistory(selectedProject);
-        const historySessions: TimelineSession[] = history.map((historySession, index) => {
-          const sessionTimestamp = new Date(historySession.timestamp);
-          const sessionId = `history-${sessionTimestamp.getTime()}-${index}`;
-          const userRequestEvent = historySession.events.find((evt: SSEEvent) => evt.type === "user_request");
-          const userQuery = userRequestEvent && "query" in userRequestEvent ? userRequestEvent.query : t('agentTimeline.historicalSession');
-          const toolRunsMap = new Map<string, ToolRunState>();
-          const agentEvents: TimelineEvent[] = [];
+      // Refresh backlog et timeline en arrière-plan (sans bloquer la fermeture de la modale)
+      Promise.all([
+        getProjectBacklog(selectedProject).then((items) => setBacklogItems(items)),
+        getProjectTimelineHistory(selectedProject).then((history) => {
+          const historySessions: TimelineSession[] = history.map((historySession, index) => {
+            const sessionTimestamp = new Date(historySession.timestamp);
+            const sessionId = `history-${sessionTimestamp.getTime()}-${index}`;
+            const userRequestEvent = historySession.events.find((evt: SSEEvent) => evt.type === "user_request");
+            const userQuery = userRequestEvent && "query" in userRequestEvent ? userRequestEvent.query : t('agentTimeline.historicalSession');
+            const toolRunsMap = new Map<string, ToolRunState>();
+            const agentEvents: TimelineEvent[] = [];
 
-          historySession.events.forEach((evt: SSEEvent, eventIndex: number) => {
-            if (evt.type === "tool_used") {
-              const toolEvent = evt as ToolUsedEvent;
-              const existingToolRun = toolRunsMap.get(toolEvent.tool_run_id);
-              if (!existingToolRun) {
-                toolRunsMap.set(toolEvent.tool_run_id, {
-                  tool_run_id: toolEvent.tool_run_id,
-                  tool_name: toolEvent.tool_name,
-                  tool_icon: toolEvent.tool_icon,
-                  description: toolEvent.description,
-                  status: toolEvent.status,
-                  details: (toolEvent.details || {}) as Record<string, string | number | boolean | null | undefined>,
-                  started_at: sessionTimestamp,
-                  completed_at: toolEvent.status !== "running" ? sessionTimestamp : undefined,
-                });
-              } else {
-                toolRunsMap.set(toolEvent.tool_run_id, {
-                  ...existingToolRun,
-                  status: toolEvent.status,
-                  details: { ...existingToolRun.details, ...(toolEvent.details || {}) } as Record<string, string | number | boolean | null | undefined>,
-                  completed_at: toolEvent.status !== "running" ? sessionTimestamp : existingToolRun.completed_at,
+            historySession.events.forEach((evt: SSEEvent, eventIndex: number) => {
+              if (evt.type === "tool_used") {
+                const toolEvent = evt as ToolUsedEvent;
+                const existingToolRun = toolRunsMap.get(toolEvent.tool_run_id);
+                if (!existingToolRun) {
+                  toolRunsMap.set(toolEvent.tool_run_id, {
+                    tool_run_id: toolEvent.tool_run_id,
+                    tool_name: toolEvent.tool_name,
+                    tool_icon: toolEvent.tool_icon,
+                    description: toolEvent.description,
+                    status: toolEvent.status,
+                    details: (toolEvent.details || {}) as Record<string, string | number | boolean | null | undefined>,
+                    started_at: sessionTimestamp,
+                    completed_at: toolEvent.status !== "running" ? sessionTimestamp : undefined,
+                  });
+                } else {
+                  toolRunsMap.set(toolEvent.tool_run_id, {
+                    ...existingToolRun,
+                    status: toolEvent.status,
+                    details: { ...existingToolRun.details, ...(toolEvent.details || {}) } as Record<string, string | number | boolean | null | undefined>,
+                    completed_at: toolEvent.status !== "running" ? sessionTimestamp : existingToolRun.completed_at,
+                  });
+                }
+              } else if (evt.type === "agent_start" || evt.type === "agent_plan") {
+                agentEvents.push({
+                  id: `${sessionId}-agent-${eventIndex}`,
+                  timestamp: sessionTimestamp,
+                  event: evt,
                 });
               }
-            } else if (evt.type === "agent_start" || evt.type === "agent_plan") {
-              agentEvents.push({
-                id: `${sessionId}-agent-${eventIndex}`,
-                timestamp: sessionTimestamp,
-                event: evt,
-              });
-            }
-          });
+            });
 
-          return {
-            id: sessionId,
-            user_query: userQuery,
-            timestamp: sessionTimestamp,
-            tool_runs: toolRunsMap,
-            agent_events: agentEvents,
-            is_expanded: false,
-          };
-        });
-        setSessions(historySessions);
-      } catch (error) {
+            return {
+              id: sessionId,
+              user_query: userQuery,
+              timestamp: sessionTimestamp,
+              tool_runs: toolRunsMap,
+              agent_events: agentEvents,
+              is_expanded: false,
+            };
+          });
+          setSessions(historySessions);
+        })
+      ]).catch((error) => {
         if (handleUnauthorizedError(error)) return;
-        console.error("Failed to refresh timeline:", error);
-      }
+        console.error("Failed to refresh data after approval:", error);
+      });
     } catch (error) {
       if (handleUnauthorizedError(error)) return;
       console.error("Error approving plan:", error);
