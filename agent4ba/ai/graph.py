@@ -14,6 +14,7 @@ from litellm import completion
 from agent4ba.ai import backlog_agent, document_agent, epic_architect_agent, story_teller_agent, test_agent
 from agent4ba.ai.nodes import ask_for_clarification, handle_unknown_intent
 from agent4ba.ai.schemas import RouterDecision
+from agent4ba.api.timeline_service import TimelineEvent, get_timeline_service
 from agent4ba.core.logger import setup_logger
 from agent4ba.core.registry_service import load_agent_registry
 from agent4ba.core.storage import ProjectContextService
@@ -120,6 +121,21 @@ def entry_node(state: GraphState) -> dict[str, Any]:
     else:
         logger.info("[ENTRY_NODE] No context provided")
 
+    # Envoyer un événement de timeline pour le début du workflow
+    thread_id = state.get("thread_id", "")
+    if thread_id:
+        timeline_service = get_timeline_service()
+        event = TimelineEvent(
+            type="WORKFLOW_START",
+            message=f"Processing query for project {state['project_id']}",
+            status="IN_PROGRESS",
+            details={
+                "project_id": state["project_id"],
+                "user_query": state["user_query"],
+            },
+        )
+        timeline_service.add_event(thread_id, event)
+
     return {}
 
 
@@ -190,6 +206,18 @@ def task_rewriter_node(state: GraphState) -> dict[str, Any]:
 
         logger.info(f"[TASK_REWRITER_NODE] Rewritten task: {rewritten_task}")
 
+        # Envoyer un événement de timeline pour la tâche reformulée
+        thread_id = state.get("thread_id", "")
+        if thread_id:
+            timeline_service = get_timeline_service()
+            event = TimelineEvent(
+                type="TASK_REWRITTEN",
+                message=f"Rewritten task: '{rewritten_task}'",
+                status="SUCCESS",
+                details={"rewritten_task": rewritten_task},
+            )
+            timeline_service.add_event(thread_id, event)
+
         return {
             "rewritten_task": rewritten_task,
         }
@@ -232,6 +260,17 @@ def router_node(state: GraphState) -> dict[str, Any]:
 
 
     logger.info(f"[ROUTER_NODE] Routing based on rewritten task: {rewritten_task}")
+
+    # Envoyer un événement de timeline pour le début du routage
+    thread_id = state.get("thread_id", "")
+    if thread_id:
+        timeline_service = get_timeline_service()
+        event = TimelineEvent(
+            type="ROUTER_DECIDING",
+            message="Router analyzing task and deciding which agent to use...",
+            status="IN_PROGRESS",
+        )
+        timeline_service.add_event(thread_id, event)
 
     if not rewritten_task:
         logger.warning("[ROUTER_NODE] No rewritten task found, routing to end")
@@ -322,6 +361,16 @@ def router_node(state: GraphState) -> dict[str, Any]:
         # LOG CRUCIAL: Afficher la chaîne de pensée du routeur
         logger.info(f"[ROUTER_THOUGHT] {router_decision.thought}")
 
+        # Envoyer un événement de timeline pour la pensée du routeur
+        if thread_id:
+            event = TimelineEvent(
+                type="ROUTER_THOUGHT",
+                message=f"Router thought: '{router_decision.thought}'",
+                status="IN_PROGRESS",
+                details={"thought": router_decision.thought},
+            )
+            timeline_service.add_event(thread_id, event)
+
         # Extraire les éléments de la décision
         agent_id = router_decision.decision.get("agent", "backlog_agent")
         agent_task = router_decision.decision.get("task", "decompose_objective")
@@ -355,6 +404,21 @@ def router_node(state: GraphState) -> dict[str, Any]:
         logger.info(f"[ROUTER_NODE] Selected agent: {agent_id}")
         logger.info(f"[ROUTER_NODE] Selected task: {agent_task}")
         logger.info(f"[ROUTER_NODE] Extracted args: {args}")
+
+        # Envoyer un événement de timeline pour la décision de routage
+        if thread_id:
+            event = TimelineEvent(
+                type="ROUTER_DECISION",
+                message=f"Routing to agent: {agent_id} (task: {agent_task})",
+                status="SUCCESS",
+                agent_name=agent_id,
+                details={
+                    "agent_id": agent_id,
+                    "agent_task": agent_task,
+                    "args": args,
+                },
+            )
+            timeline_service.add_event(thread_id, event)
 
         # Vérifier si une clarification est nécessaire
         # Par exemple, si generate_test_cases ou generate_acceptance_criteria
@@ -543,34 +607,48 @@ def agent_node(state: GraphState) -> dict[str, Any]:
     logger.info(f"[AGENT_NODE] Agent ID: {agent_id}")
     logger.info(f"[AGENT_NODE] Agent task: {agent_task}")
 
+    # Envoyer un événement de timeline pour le début de l'exécution de l'agent
+    thread_id = state.get("thread_id", "")
+    if thread_id:
+        timeline_service = get_timeline_service()
+        event = TimelineEvent(
+            type="AGENT_START",
+            agent_name=agent_id,
+            message=f"Agent {agent_id} starting task: {agent_task}",
+            status="IN_PROGRESS",
+            details={"agent_task": agent_task},
+        )
+        timeline_service.add_event(thread_id, event)
+
     # Dispatcher vers le bon agent selon agent_id
+    result = {}
     if agent_id == "backlog_agent":
         # Router vers la méthode appropriée du backlog_agent
         if agent_task == "decompose_objective":
-            return backlog_agent.decompose_objective(state)
+            result = backlog_agent.decompose_objective(state)
         elif agent_task == "review_quality":
-            return backlog_agent.review_quality(state)
+            result = backlog_agent.review_quality(state)
         elif agent_task == "improve_description":
-            return backlog_agent.improve_description(state)
+            result = backlog_agent.improve_description(state)
         elif agent_task == "generate_acceptance_criteria":
-            return backlog_agent.generate_acceptance_criteria(state)
+            result = backlog_agent.generate_acceptance_criteria(state)
         elif agent_task == "generate_specification":
-            return {
+            result = {
                 "status": "completed",
                 "result": "Stub: Generating detailed specification (not yet implemented)",
             }
         elif agent_task == "search_requirements":
-            return {
+            result = {
                 "status": "completed",
                 "result": "Stub: Searching requirements (not yet implemented)",
             }
         elif agent_task == "estimate_stories":
-            return {
+            result = {
                 "status": "completed",
                 "result": "Stub: Estimating story points (not yet implemented)",
             }
         else:
-            return {
+            result = {
                 "status": "error",
                 "result": f"Unknown task '{agent_task}' for backlog_agent",
             }
@@ -578,9 +656,9 @@ def agent_node(state: GraphState) -> dict[str, Any]:
     elif agent_id == "epic_architect_agent":
         # Router vers la méthode appropriée de l'epic_architect_agent
         if agent_task == "generate_epics":
-            return epic_architect_agent.generate_epics(state)
+            result = epic_architect_agent.generate_epics(state)
         else:
-            return {
+            result = {
                 "status": "error",
                 "result": f"Unknown task '{agent_task}' for epic_architect_agent",
             }
@@ -588,9 +666,9 @@ def agent_node(state: GraphState) -> dict[str, Any]:
     elif agent_id == "story_teller_agent":
         # Router vers la méthode appropriée du story_teller_agent
         if agent_task == "decompose_feature_into_stories":
-            return story_teller_agent.decompose_feature_into_stories(state)
+            result = story_teller_agent.decompose_feature_into_stories(state)
         else:
-            return {
+            result = {
                 "status": "error",
                 "result": f"Unknown task '{agent_task}' for story_teller_agent",
             }
@@ -598,9 +676,9 @@ def agent_node(state: GraphState) -> dict[str, Any]:
     elif agent_id == "document_agent":
         # Router vers la méthode appropriée du document_agent
         if agent_task == "extract_features":
-            return document_agent.extract_requirements(state)
+            result = document_agent.extract_requirements(state)
         else:
-            return {
+            result = {
                 "status": "error",
                 "result": f"Unknown task '{agent_task}' for document_agent",
             }
@@ -608,18 +686,36 @@ def agent_node(state: GraphState) -> dict[str, Any]:
     elif agent_id == "test_agent":
         # Router vers la méthode appropriée du test_agent
         if agent_task == "generate_test_cases":
-            return test_agent.generate_test_cases(state)
+            result = test_agent.generate_test_cases(state)
         else:
-            return {
+            result = {
                 "status": "error",
                 "result": f"Unknown task '{agent_task}' for test_agent",
             }
 
     else:
-        return {
+        result = {
             "status": "error",
             "result": f"Unknown agent: {agent_id}",
         }
+
+    # Envoyer un événement de timeline pour la fin de l'exécution de l'agent
+    if thread_id:
+        agent_status = result.get("status", "completed")
+        event_status = "SUCCESS" if agent_status in ["completed", "awaiting_approval"] else "ERROR"
+        event = TimelineEvent(
+            type="AGENT_COMPLETE",
+            agent_name=agent_id,
+            message=f"Agent {agent_id} completed with status: {agent_status}",
+            status=event_status,
+            details={
+                "agent_task": agent_task,
+                "agent_status": agent_status,
+            },
+        )
+        timeline_service.add_event(thread_id, event)
+
+    return result
 
 
 def approval_node(state: GraphState) -> dict[str, Any]:
@@ -761,6 +857,29 @@ def end_node(state: GraphState) -> dict[str, Any]:
     logger.info("[END_NODE] Workflow completed")
     logger.info(f"[END_NODE] Final result: {state.get('result', 'No result')}")
     logger.info(f"[END_NODE] Status: {state.get('status', 'unknown')}")
+
+    # Envoyer un événement de timeline pour la fin du workflow
+    thread_id = state.get("thread_id", "")
+    if thread_id:
+        timeline_service = get_timeline_service()
+        status = state.get("status", "completed")
+        result = state.get("result", "No result")
+
+        event_status = "SUCCESS" if status in ["completed", "awaiting_approval", "approved"] else "ERROR"
+        event = TimelineEvent(
+            type="WORKFLOW_COMPLETE",
+            message=f"Workflow completed with status: {status}",
+            status=event_status,
+            details={
+                "status": status,
+                "result": result,
+            },
+        )
+        timeline_service.add_event(thread_id, event)
+
+        # Signaler la fin du stream pour cette session
+        timeline_service.signal_done(thread_id)
+
     return {}
 
 
