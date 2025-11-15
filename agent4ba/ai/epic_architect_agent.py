@@ -67,9 +67,10 @@ def generate_epics(state: Any) -> dict[str, Any]:
 
     logger.info(f"Objective: {objective}")
 
-    # Récupérer le thread_id et la queue d'événements
+    # Récupérer le thread_id, la boucle d'événements et la queue d'événements
     thread_id = state.get("thread_id", "")
-    event_queue = get_event_queue(thread_id) if thread_id else None
+    event_loop = state.get("event_loop")
+    event_queue = get_event_queue(thread_id, loop=event_loop) if thread_id else None
 
     # Initialiser la liste d'événements
     agent_events = []
