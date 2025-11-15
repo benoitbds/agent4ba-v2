@@ -1,5 +1,9 @@
 """Factory pour créer et configurer l'application FastAPI."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any
+
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -33,12 +37,15 @@ class MaxBodySizeMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-def create_app() -> FastAPI:
+def create_app(lifespan: Any = None) -> FastAPI:
     """
     Crée et configure l'instance FastAPI de l'application.
 
     Cette fonction centralise la configuration de l'application,
     y compris les middlewares et les paramètres CORS.
+
+    Args:
+        lifespan: Gestionnaire de cycle de vie optionnel pour l'application
 
     Returns:
         Instance configurée de l'application FastAPI
@@ -47,6 +54,7 @@ def create_app() -> FastAPI:
         title="Agent4BA V2",
         description="Backend pour la gestion de backlog assistée par IA",
         version="0.1.0",
+        lifespan=lifespan,
     )
 
     # Middleware pour limiter la taille des uploads à 50 Mo

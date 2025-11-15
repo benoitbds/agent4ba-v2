@@ -10,6 +10,8 @@ import threading
 from collections.abc import AsyncIterator
 from typing import Any
 
+from agent4ba.api import app_context
+
 
 class EventQueue:
     """Queue thread-safe pour les événements d'agents."""
@@ -72,20 +74,25 @@ def get_event_queue(thread_id: str, loop: asyncio.AbstractEventLoop | None = Non
 
     Args:
         thread_id: Identifiant du thread
-        loop: Boucle d'événements asyncio (requis pour la création)
+        loop: Boucle d'événements asyncio (paramètre obsolète, ignoré)
 
     Returns:
         Queue d'événements pour ce thread
     """
     with _queue_lock:
         if thread_id not in _event_queues:
-            if loop is None:
-                # Essayer de récupérer la boucle courante
+            # Récupérer la boucle depuis le contexte applicatif global
+            event_loop = app_context.EVENT_LOOP
+            if event_loop is None:
+                # Fallback: essayer de récupérer la boucle courante
                 try:
-                    loop = asyncio.get_running_loop()
+                    event_loop = asyncio.get_running_loop()
                 except RuntimeError:
-                    raise ValueError("No event loop available and none provided")
-            _event_queues[thread_id] = EventQueue(loop)
+                    raise ValueError(
+                        "No event loop available in app_context. "
+                        "Ensure the application has started properly."
+                    )
+            _event_queues[thread_id] = EventQueue(event_loop)
         return _event_queues[thread_id]
 
 
