@@ -5,8 +5,9 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import status
 
 from agent4ba.ai.graph import app as workflow_app
 from agent4ba.api.app_factory import create_app
@@ -507,59 +508,52 @@ async def continue_workflow(thread_id: str, request: ApprovalRequest) -> ChatRes
     )
 
 
-@app.post("/execute")
-async def execute_workflow(request: ChatRequest) -> JSONResponse:
+def run_workflow_in_background(
+    session_id: str,
+    project_id: str,
+    query: str,
+    document_content: str,
+    context: list[dict[str, Any]] | None,
+) -> None:
     """
-    Exécute un workflow de manière synchrone (sans streaming).
+    Fonction wrapper synchrone qui exécute le workflow LangGraph en arrière-plan.
 
-    Cet endpoint lance l'exécution du workflow. Si le workflow nécessite une
-    clarification de l'utilisateur, il retourne HTTP 202 avec un conversation_id
-    pour permettre la reprise via l'endpoint /respond.
+    Cette fonction contient toute la logique d'exécution du workflow qui était
+    auparavant dans le endpoint execute_workflow. Elle est exécutée dans une
+    tâche de fond par FastAPI pour permettre le streaming temps réel via SSE.
 
     Args:
-        request: Requête contenant project_id et query
-
-    Returns:
-        - HTTP 200 avec le résultat final si le workflow se termine normalement
-        - HTTP 202 avec conversation_id et question si une clarification est nécessaire
-
-    Raises:
-        HTTPException: En cas d'erreur d'exécution du workflow
+        session_id: Identifiant unique de la session
+        project_id: Identifiant du projet
+        query: Requête de l'utilisateur
+        document_content: Contenu du document (optionnel)
+        context: Contexte de la conversation (optionnel)
     """
-    logger.info(f"[EXECUTE] Starting workflow for project: {request.project_id}")
-    logger.info(f"[EXECUTE] User query: {request.query}")
+    from agent4ba.api.timeline_service import TimelineEvent as TLEvent
 
-    # Utiliser le session_id fourni par le frontend ou générer un nouveau
+    logger.info(f"[BACKGROUND] Starting workflow execution for session: {session_id}")
+
+    # Récupérer les services nécessaires
     session_manager = get_session_manager()
-    conversation_id = request.session_id if request.session_id else session_manager.create_session()
-
-    # Si un session_id est fourni, activer le streaming temps réel vers TimelineService
-    timeline_service = get_timeline_service() if request.session_id else None
-    if timeline_service and request.session_id:
-        logger.info(f"[EXECUTE] Real-time streaming enabled for session: {request.session_id}")
+    timeline_service = get_timeline_service()
 
     # Liste pour accumuler tous les événements de cette session pour l'historique
     timeline_events: list[dict[str, Any]] = []
 
     # Ajouter le thread_id event
-    thread_id_event = ThreadIdEvent(thread_id=conversation_id)
+    thread_id_event = ThreadIdEvent(thread_id=session_id)
     timeline_events.append(thread_id_event.model_dump())
 
     # Ajouter la requête de l'utilisateur
-    user_request_event = UserRequestEvent(query=request.query)
+    user_request_event = UserRequestEvent(query=query)
     timeline_events.append(user_request_event.model_dump())
-
-    # Convertir le context en liste de dictionnaires si présent
-    context_list = None
-    if request.context:
-        context_list = [item.model_dump() for item in request.context]
 
     # Préparer l'état initial pour le graphe
     initial_state: dict[str, Any] = {
-        "project_id": request.project_id,
-        "user_query": request.query,
-        "document_content": request.document_content or "",
-        "context": context_list,
+        "project_id": project_id,
+        "user_query": query,
+        "document_content": document_content or "",
+        "context": context,
         "intent": {},
         "next_node": "",
         "agent_task": "",
@@ -568,75 +562,64 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
         "approval_decision": None,
         "result": "",
         "agent_events": [],
-        "thread_id": conversation_id,
+        "thread_id": session_id,
         "clarification_needed": False,
         "clarification_question": "",
         "user_response": "",
     }
 
-    # Configuration pour LangGraph avec le conversation_id
-    config: dict[str, Any] = {"configurable": {"thread_id": conversation_id}}
-
-    # Import TimelineEvent en haut pour éviter les imports répétés
-    from agent4ba.api.timeline_service import TimelineEvent as TLEvent
+    # Configuration pour LangGraph avec le session_id
+    config: dict[str, Any] = {"configurable": {"thread_id": session_id}}
 
     try:
-        # Exécuter le workflow
-        logger.info("[EXECUTE] Starting workflow execution...")
+        # Pousser l'événement WORKFLOW_START immédiatement
+        workflow_start = TLEvent(
+            type="WORKFLOW_START",
+            message=f"Processing query for project {project_id}",
+            status="IN_PROGRESS",
+        )
+        timeline_service.add_event(session_id, workflow_start)
+        logger.info("[BACKGROUND] Pushed WORKFLOW_START event")
 
-        # Pousser l'événement WORKFLOW_START immédiatement si streaming activé
-        if timeline_service and request.session_id:
-            workflow_start = TLEvent(
-                type="WORKFLOW_START",
-                message=f"Processing query for project {request.project_id}",
-                status="IN_PROGRESS",
-            )
-            timeline_service.add_event(request.session_id, workflow_start)
-            logger.info("[EXECUTE] Pushed WORKFLOW_START event")
-
-        # Si streaming temps réel activé, utiliser stream() pour obtenir les mises à jour progressives
+        # Exécuter le workflow avec streaming pour pousser les événements en temps réel
         final_state: dict[str, Any] = {}
         processed_event_ids = set()  # Pour éviter les doublons
 
-        if timeline_service and request.session_id:
-            logger.info("[EXECUTE] Using stream() for real-time event pushing")
-            for state_update in workflow_app.stream(initial_state, config):  # type: ignore[arg-type]
-                # Accumuler l'état final
-                for node_name, node_state in state_update.items():
-                    logger.info(f"[EXECUTE] Processing node: {node_name}")
+        logger.info("[BACKGROUND] Using stream() for real-time event pushing")
+        for state_update in workflow_app.stream(initial_state, config):  # type: ignore[arg-type]
+            # Accumuler l'état final
+            for node_name, node_state in state_update.items():
+                logger.info(f"[BACKGROUND] Processing node: {node_name}")
 
-                    if isinstance(node_state, dict):
-                        final_state.update(node_state)
+                if isinstance(node_state, dict):
+                    final_state.update(node_state)
 
-                        # Si des agent_events sont présents dans cette mise à jour, les pousser immédiatement
-                        if "agent_events" in node_state and node_state["agent_events"]:
-                            new_events = node_state["agent_events"]
-                            logger.info(f"[EXECUTE] Found {len(new_events)} agent_events in node {node_name}")
+                    # Si des agent_events sont présents dans cette mise à jour, les pousser immédiatement
+                    if "agent_events" in node_state and node_state["agent_events"]:
+                        new_events = node_state["agent_events"]
+                        logger.info(f"[BACKGROUND] Found {len(new_events)} agent_events in node {node_name}")
 
-                            # Convertir et pousser uniquement les nouveaux événements
-                            for event_data in new_events:
-                                # Utiliser event_id pour détecter les doublons
-                                event_id = event_data.get("event_id") or f"{event_data.get('type')}_{len(timeline_events)}"
+                        # Convertir et pousser uniquement les nouveaux événements
+                        for event_data in new_events:
+                            # Utiliser event_id pour détecter les doublons
+                            event_id = event_data.get("event_id") or f"{event_data.get('type')}_{len(timeline_events)}"
 
-                                if event_id not in processed_event_ids:
-                                    processed_event_ids.add(event_id)
-                                    timeline_events.append(event_data)
+                            if event_id not in processed_event_ids:
+                                processed_event_ids.add(event_id)
+                                timeline_events.append(event_data)
 
-                                    # Convertir en TimelineEvent et pousser au TimelineService
-                                    tl_event = TLEvent(
-                                        type=event_data.get("type", "UNKNOWN"),
-                                        message=event_data.get("message", ""),
-                                        status=event_data.get("status", "IN_PROGRESS"),
-                                        agent_name=event_data.get("agent_name"),
-                                        details=event_data.get("details"),
-                                    )
-                                    timeline_service.add_event(request.session_id, tl_event)
-                                    logger.info(
-                                        f"[EXECUTE] Pushed event to TimelineService: {tl_event.type}"
-                                    )
-        else:
-            # Sinon, utiliser invoke() pour une exécution plus rapide sans streaming
-            final_state = workflow_app.invoke(initial_state, config)  # type: ignore[arg-type]
+                                # Convertir en TimelineEvent et pousser au TimelineService
+                                tl_event = TLEvent(
+                                    type=event_data.get("type", "UNKNOWN"),
+                                    message=event_data.get("message", ""),
+                                    status=event_data.get("status", "IN_PROGRESS"),
+                                    agent_name=event_data.get("agent_name"),
+                                    details=event_data.get("details"),
+                                )
+                                timeline_service.add_event(session_id, tl_event)
+                                logger.info(
+                                    f"[BACKGROUND] Pushed event to TimelineService: {tl_event.type}"
+                                )
 
         # Extraire tous les événements de l'état final pour l'historique
         agent_events = final_state.get("agent_events", [])
@@ -646,127 +629,109 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
                 event_id = event.get("event_id") or f"{event.get('type')}_{len(timeline_events)}"
                 if event_id not in processed_event_ids:
                     timeline_events.append(event)
-            logger.info(f"[EXECUTE] Extracted {len(agent_events)} total agent events from state")
+            logger.info(f"[BACKGROUND] Extracted {len(agent_events)} total agent events from state")
 
-        # Pousser l'événement WORKFLOW_COMPLETE si streaming activé
-        if timeline_service and request.session_id:
-            workflow_status = final_state.get("status", "completed")
-            workflow_complete = TLEvent(
-                type="WORKFLOW_COMPLETE",
-                message=f"Workflow completed with status: {workflow_status}",
-                status="SUCCESS" if workflow_status != "error" else "ERROR",
-            )
-            timeline_service.add_event(request.session_id, workflow_complete)
-            logger.info("[EXECUTE] Pushed WORKFLOW_COMPLETE event")
-
-        # Signaler la fin du stream si activé
-        if timeline_service and request.session_id:
-            timeline_service.signal_done(request.session_id)
-            logger.info(f"[EXECUTE] Signaled stream done for session: {request.session_id}")
+        # Extraire le statut du workflow
+        workflow_status = final_state.get("status", "completed")
 
         # Vérifier si une clarification est nécessaire
         if final_state.get("clarification_needed", False):
             clarification_question = final_state.get(
                 "clarification_question", "Veuillez préciser votre demande."
             )
-
-            logger.info(f"[EXECUTE] Clarification needed: {clarification_question}")
+            logger.info(f"[BACKGROUND] Clarification needed: {clarification_question}")
 
             # Sauvegarder le checkpoint
-            session_manager.save_checkpoint(conversation_id, final_state)
+            session_manager.save_checkpoint(session_id, final_state)
 
             # Ajouter un événement pour la clarification
-            # Note: On pourrait créer un événement spécifique pour la clarification
-            # Pour l'instant, on utilise WorkflowCompleteEvent avec le status
             clarification_event = WorkflowCompleteEvent(
                 result=clarification_question,
                 status="clarification_needed",
             )
             timeline_events.append(clarification_event.model_dump())
 
-            # Sauvegarder les événements dans l'historique de la timeline
-            storage = ProjectContextService()
-            storage.save_timeline_events(request.project_id, timeline_events)
-            logger.info(f"[EXECUTE] Saved {len(timeline_events)} events to timeline history")
-
-            # Retourner HTTP 202 avec la question
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "status": "clarification_needed",
-                    "conversation_id": conversation_id,
-                    "question": clarification_question,
-                },
+            # Pousser l'événement de clarification au TimelineService
+            clarification_tl_event = TLEvent(
+                type="CLARIFICATION_NEEDED",
+                message=clarification_question,
+                status="WAITING",
             )
+            timeline_service.add_event(session_id, clarification_tl_event)
+            logger.info("[BACKGROUND] Pushed CLARIFICATION_NEEDED event")
 
-        # Le workflow s'est terminé normalement
-        result = final_state.get("result", "Workflow completed")
-        status = final_state.get("status", "completed")
-        impact_plan = final_state.get("impact_plan", {})
+            # Signaler la fin du stream (le workflow attend une réponse)
+            timeline_service.signal_done(session_id)
+            logger.info(f"[BACKGROUND] Signaled stream done (clarification needed) for session: {session_id}")
 
-        logger.info(f"[EXECUTE] Workflow completed with status: {status}")
-
-        # Si le workflow attend une approbation, retourner 202
-        # L'état est déjà sauvegardé par LangGraph grâce à interrupt_before=["approval"]
-        if status == "awaiting_approval":
-            logger.info("[EXECUTE] Workflow awaiting approval (interrupted before approval node)")
-            logger.info(f"[EXECUTE] Thread ID for resuming: {conversation_id}")
+        # Si le workflow attend une approbation
+        elif workflow_status == "awaiting_approval":
+            logger.info("[BACKGROUND] Workflow awaiting approval (interrupted before approval node)")
+            logger.info(f"[BACKGROUND] Thread ID for resuming: {session_id}")
 
             # Ajouter l'événement ImpactPlanReadyEvent
+            impact_plan = final_state.get("impact_plan", {})
             impact_plan_event = ImpactPlanReadyEvent(
                 impact_plan=impact_plan,
-                thread_id=conversation_id,
-                status=status,
+                thread_id=session_id,
+                status=workflow_status,
             )
             timeline_events.append(impact_plan_event.model_dump())
 
-            # Sauvegarder les événements dans l'historique de la timeline
-            storage = ProjectContextService()
-            storage.save_timeline_events(request.project_id, timeline_events)
-            logger.info(f"[EXECUTE] Saved {len(timeline_events)} events to timeline history")
-
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "status": "awaiting_approval",
-                    "thread_id": conversation_id,
-                    "result": result,
-                    "impact_plan": impact_plan,
-                    "project_id": request.project_id,
-                },
+            # Pousser l'événement d'approbation au TimelineService
+            approval_tl_event = TLEvent(
+                type="IMPACT_PLAN_READY",
+                message="Impact plan ready for approval",
+                status="WAITING",
+                details={"impact_plan": impact_plan, "thread_id": session_id},
             )
+            timeline_service.add_event(session_id, approval_tl_event)
+            logger.info("[BACKGROUND] Pushed IMPACT_PLAN_READY event")
 
-        # Workflow vraiment terminé, nettoyer la session
-        session_manager.delete_session(conversation_id)
+            # Signaler la fin du stream (le workflow attend une approbation)
+            timeline_service.signal_done(session_id)
+            logger.info(f"[BACKGROUND] Signaled stream done (approval needed) for session: {session_id}")
 
-        # Ajouter l'événement WorkflowCompleteEvent
-        complete_event = WorkflowCompleteEvent(
-            result=result if result else "Workflow completed",
-            status=status,
-        )
-        timeline_events.append(complete_event.model_dump())
+        else:
+            # Workflow vraiment terminé
+            # Nettoyer la session
+            if session_manager.session_exists(session_id):
+                session_manager.delete_session(session_id)
+
+            # Ajouter l'événement WorkflowCompleteEvent
+            result = final_state.get("result", "Workflow completed")
+            complete_event = WorkflowCompleteEvent(
+                result=result if result else "Workflow completed",
+                status=workflow_status,
+            )
+            timeline_events.append(complete_event.model_dump())
+
+            # Pousser l'événement WORKFLOW_COMPLETE au TimelineService
+            workflow_complete = TLEvent(
+                type="WORKFLOW_COMPLETE",
+                message=f"Workflow completed with status: {workflow_status}",
+                status="SUCCESS" if workflow_status != "error" else "ERROR",
+            )
+            timeline_service.add_event(session_id, workflow_complete)
+            logger.info("[BACKGROUND] Pushed WORKFLOW_COMPLETE event")
+
+            # Signaler la fin du stream
+            timeline_service.signal_done(session_id)
+            logger.info(f"[BACKGROUND] Signaled stream done for session: {session_id}")
 
         # Sauvegarder les événements dans l'historique de la timeline
         storage = ProjectContextService()
-        storage.save_timeline_events(request.project_id, timeline_events)
-        logger.info(f"[EXECUTE] Saved {len(timeline_events)} events to timeline history")
+        storage.save_timeline_events(project_id, timeline_events)
+        logger.info(f"[BACKGROUND] Saved {len(timeline_events)} events to timeline history")
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "result": result,
-                "project_id": request.project_id,
-                "status": status,
-            },
-        )
+        logger.info(f"[BACKGROUND] Workflow {session_id} finished with status: {workflow_status}")
 
     except Exception as e:
-        logger.error(f"[EXECUTE] Error during workflow execution: {e}", exc_info=True)
+        logger.error(f"[BACKGROUND] Error during workflow execution: {e}", exc_info=True)
 
         # Signaler la fin du stream même en cas d'erreur
-        if timeline_service and request.session_id:
-            timeline_service.signal_done(request.session_id)
-            logger.info(f"[EXECUTE] Signaled stream done after error for session: {request.session_id}")
+        timeline_service.signal_done(session_id)
+        logger.info(f"[BACKGROUND] Signaled stream done after error for session: {session_id}")
 
         # Ajouter un événement d'erreur
         error_event = ErrorEvent(
@@ -775,25 +740,78 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
         )
         timeline_events.append(error_event.model_dump())
 
+        # Pousser l'événement d'erreur au TimelineService
+        error_tl_event = TLEvent(
+            type="ERROR",
+            message=f"Workflow error: {str(e)}",
+            status="ERROR",
+        )
+        timeline_service.add_event(session_id, error_tl_event)
+
         # Même en cas d'erreur, sauvegarder les événements
         try:
             storage = ProjectContextService()
-            storage.save_timeline_events(request.project_id, timeline_events)
+            storage.save_timeline_events(project_id, timeline_events)
             logger.info(
-                f"[EXECUTE] Saved {len(timeline_events)} events to "
+                f"[BACKGROUND] Saved {len(timeline_events)} events to "
                 "timeline history (after error)"
             )
         except Exception as save_error:
             logger.error(f"Failed to save timeline events: {save_error}")
 
         # Nettoyer la session en cas d'erreur
-        if session_manager.session_exists(conversation_id):
-            session_manager.delete_session(conversation_id)
+        if session_manager.session_exists(session_id):
+            session_manager.delete_session(session_id)
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error executing workflow: {e}",
-        ) from e
+
+@app.post("/execute")
+async def execute_workflow(request: ChatRequest, background_tasks: BackgroundTasks) -> JSONResponse:
+    """
+    Lance l'exécution d'un workflow en tâche de fond et retourne immédiatement.
+
+    Cet endpoint lance l'exécution du workflow en arrière-plan via BackgroundTasks
+    et retourne immédiatement un session_id au client. Le client peut ensuite
+    s'abonner au flux SSE via /api/v1/timeline/stream/{session_id} pour recevoir
+    les événements en temps réel au fur et à mesure de l'exécution.
+
+    Args:
+        request: Requête contenant project_id et query
+        background_tasks: Gestionnaire de tâches de fond FastAPI
+
+    Returns:
+        HTTP 202 Accepted avec le session_id pour suivre l'exécution
+    """
+    logger.info(f"[EXECUTE] Starting workflow for project: {request.project_id}")
+    logger.info(f"[EXECUTE] User query: {request.query}")
+
+    # Utiliser le session_id fourni par le frontend ou générer un nouveau
+    session_id = request.session_id if request.session_id else str(uuid.uuid4())
+    logger.info(f"[EXECUTE] Using session_id: {session_id}")
+
+    # Convertir le context en liste de dictionnaires si présent
+    context_list = None
+    if request.context:
+        context_list = [item.model_dump() for item in request.context]
+
+    # Ajouter la tâche de fond pour exécuter le workflow
+    background_tasks.add_task(
+        run_workflow_in_background,
+        session_id=session_id,
+        project_id=request.project_id,
+        query=request.query,
+        document_content=request.document_content or "",
+        context=context_list,
+    )
+    logger.info(f"[EXECUTE] Background task added for session: {session_id}")
+
+    # Retourner une réponse immédiate avec le session_id
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        content={
+            "message": "Workflow started",
+            "session_id": session_id,
+        },
+    )
 
 
 @app.post("/respond", response_model=ChatResponse)

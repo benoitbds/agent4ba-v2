@@ -368,45 +368,57 @@ export default function Home() {
           session_id: newSessionId, // Passer le session_id au backend
         });
 
-        // Vérifier le type de réponse
-        if ("conversation_id" in response && response.status === "clarification_needed") {
-          // Réponse 202: Clarification nécessaire
-          console.log("[MULTI-TURN] Clarification needed:", response.question);
+        // Le backend retourne toujours 202 Accepted avec le session_id
+        // Les événements (workflow complete, approval needed, etc.) arrivent via SSE
+        console.log("[EXECUTE] Workflow started with session_id:", response.session_id);
 
-          setConversationId(response.conversation_id);
-          setClarificationQuestion(response.question);
-          setInputPlaceholder(t('newRequest.clarificationPlaceholder') || "Entrez votre réponse...");
+        // La suite de la logique est gérée par le useEffect qui écoute timelineEvents
+      }
+    } catch (error) {
+      if (handleUnauthorizedError(error)) return;
+      console.error("Error executing workflow:", error);
+      setStatusMessage(
+        `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
+      );
+      setStatusType('error');
 
-          setStatusMessage(response.question);
-          setStatusType('warning');
-        } else if ("thread_id" in response && response.status === "awaiting_approval") {
-          // Réponse 202: Approbation nécessaire
-          console.log("[APPROVAL] Approval needed for thread:", response.thread_id);
+      // En cas d'erreur, réinitialiser l'état de conversation
+      setConversationId(null);
+      setClarificationQuestion(null);
+      setInputPlaceholder(t('newRequest.placeholder'));
+    } finally {
+      setIsStreaming(false);
+      // Clear context after sending the request (only for new requests)
+      if (!isRespondingToClarification) {
+        setChatContext([]);
+      }
+    }
+  };
 
-          setThreadId(response.thread_id);
-          setImpactPlan(response.impact_plan);
+  // useEffect pour écouter les événements de timeline et réagir aux événements spéciaux
+  useEffect(() => {
+    if (timelineEvents.length === 0) return;
 
-          setStatusMessage(t('status.approvalRequired') || "Approval required for the ImpactPlan");
-          setStatusType('info');
-        } else {
-          // Réponse 200: Workflow terminé
-          console.log("[MULTI-TURN] Workflow completed");
+    // Récupérer le dernier événement
+    const lastEvent = timelineEvents[timelineEvents.length - 1];
 
-          setStatusMessage(`${t('agentTimeline.workflowComplete')}: ${response.result}`);
-          setStatusType('success');
+    if (lastEvent.type === 'WORKFLOW_COMPLETE') {
+      console.log("[TIMELINE] Workflow completed");
+      setStatusMessage(lastEvent.message);
+      setStatusType('success');
 
-          // Rafraîchir le backlog après la complétion
-          try {
-            const items = await getProjectBacklog(selectedProject);
-            setBacklogItems(items);
-          } catch (error) {
+      // Rafraîchir le backlog après la complétion
+      if (selectedProject) {
+        getProjectBacklog(selectedProject)
+          .then((items) => setBacklogItems(items))
+          .catch((error) => {
             if (handleUnauthorizedError(error)) return;
             console.error("Failed to refresh backlog:", error);
-          }
+          });
 
-          // Rafraîchir la timeline après la complétion
-          try {
-            const history = await getProjectTimelineHistory(selectedProject);
+        // Rafraîchir la timeline après la complétion
+        getProjectTimelineHistory(selectedProject)
+          .then((history) => {
             const historySessions: TimelineSession[] = history.map((historySession, index) => {
               const sessionTimestamp = new Date(historySession.timestamp);
               const sessionId = `history-${sessionTimestamp.getTime()}-${index}`;
@@ -457,32 +469,33 @@ export default function Home() {
               };
             });
             setSessions(historySessions);
-          } catch (error) {
+          })
+          .catch((error) => {
             if (handleUnauthorizedError(error)) return;
             console.error("Failed to refresh timeline:", error);
-          }
-        }
+          });
       }
-    } catch (error) {
-      if (handleUnauthorizedError(error)) return;
-      console.error("Error executing workflow:", error);
-      setStatusMessage(
-        `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
-      );
-      setStatusType('error');
+    } else if (lastEvent.type === 'IMPACT_PLAN_READY') {
+      console.log("[TIMELINE] Impact plan ready for approval");
 
-      // En cas d'erreur, réinitialiser l'état de conversation
-      setConversationId(null);
-      setClarificationQuestion(null);
-      setInputPlaceholder(t('newRequest.placeholder'));
-    } finally {
-      setIsStreaming(false);
-      // Clear context after sending the request (only for new requests)
-      if (!isRespondingToClarification) {
-        setChatContext([]);
+      // Extraire les détails de l'impact plan depuis l'événement
+      if (lastEvent.details && lastEvent.details.impact_plan && lastEvent.details.thread_id) {
+        setThreadId(lastEvent.details.thread_id as string);
+        setImpactPlan(lastEvent.details.impact_plan as ImpactPlan);
+        setStatusMessage(t('status.approvalRequired') || "Approval required for the ImpactPlan");
+        setStatusType('info');
       }
+    } else if (lastEvent.type === 'CLARIFICATION_NEEDED') {
+      console.log("[TIMELINE] Clarification needed:", lastEvent.message);
+
+      // Utiliser le session_id actuel comme conversation_id pour la clarification
+      setConversationId(sessionId);
+      setClarificationQuestion(lastEvent.message);
+      setInputPlaceholder(t('newRequest.clarificationPlaceholder') || "Entrez votre réponse...");
+      setStatusMessage(lastEvent.message);
+      setStatusType('warning');
     }
-  };
+  }, [timelineEvents, selectedProject, sessionId, t, handleUnauthorizedError]);
 
   // Toggle session expansion
   const handleToggleSession = (sessionId: string) => {
