@@ -12,16 +12,22 @@ import type { TimelineEvent } from '@/types/timeline';
  * Fonction utilitaire pour construire l'URL de l'API en évitant les doubles slashs
  *
  * @param path - Le chemin relatif de l'endpoint (ex: '/api/v1/timeline/stream')
- * @returns L'URL complète sans doubles slashs
+ * @returns L'URL complète sans doubles slashs ni duplication de /api
  */
 function getApiUrl(path: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
 
   // Supprimer le slash final de la base si présent
-  const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  let cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 
   // S'assurer que le chemin commence par un slash
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
+
+  // Si la base se termine par /api et que le path commence par /api,
+  // enlever /api de la base pour éviter /api/api
+  if (cleanBase.endsWith('/api') && cleanPath.startsWith('/api')) {
+    cleanBase = cleanBase.slice(0, -4); // Enlever '/api'
+  }
 
   return `${cleanBase}${cleanPath}`;
 }
