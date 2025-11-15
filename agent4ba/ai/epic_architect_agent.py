@@ -15,6 +15,7 @@ from agent4ba.core.logger import setup_logger
 from agent4ba.core.models import WorkItem
 from agent4ba.core.storage import ProjectContextService
 from agent4ba.core.workitem_utils import assign_sequential_ids
+from agent4ba.utils.json_parser import JSONParsingError, extract_and_parse_json
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -196,6 +197,7 @@ def generate_epics(state: Any) -> dict[str, Any]:
         response_text = response.choices[0].message.content
 
         logger.info(f"LLM response received: {len(response_text)} characters")
+        logger.debug(f"Raw LLM response:\n{response_text}")
 
         # Mettre à jour le statut
         llm_event_completed = {
@@ -215,8 +217,9 @@ def generate_epics(state: Any) -> dict[str, Any]:
         if event_queue:
             event_queue.put(llm_event_completed)
 
-        # Parser la réponse JSON
-        work_items_data = json.loads(response_text)
+        # Parser la réponse JSON de manière robuste
+        # (gère les balises markdown et le texte supplémentaire)
+        work_items_data = extract_and_parse_json(response_text)
 
         if not isinstance(work_items_data, list):
             raise ValueError("LLM response is not a list of work items")
@@ -280,8 +283,8 @@ def generate_epics(state: Any) -> dict[str, Any]:
             "agent_events": agent_events,
         }
 
-    except json.JSONDecodeError as e:
-        logger.error("Error parsing JSON.", exc_info=True)
+    except JSONParsingError as e:
+        logger.error(f"Failed to parse LLM response after extraction: {e}", exc_info=True)
         llm_event_error = {
             "type": "tool_used",
             "tool_run_id": llm_run_id,
