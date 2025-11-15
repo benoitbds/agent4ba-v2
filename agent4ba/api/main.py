@@ -84,7 +84,7 @@ async def health_check() -> JSONResponse:
     return JSONResponse(content={"status": "ok"})
 
 
-@app.get("/api/v1/timeline/stream/{session_id}")
+@app.get("/timeline/stream/{session_id}")
 async def stream_timeline_events(session_id: str) -> StreamingResponse:
     """
     Endpoint SSE pour streamer les événements de timeline d'une session.
@@ -791,7 +791,7 @@ async def execute_workflow(request: ChatRequest, background_tasks: BackgroundTas
 
     Cet endpoint lance l'exécution du workflow en arrière-plan via BackgroundTasks
     et retourne immédiatement un session_id au client. Le client peut ensuite
-    s'abonner au flux SSE via /api/v1/timeline/stream/{session_id} pour recevoir
+    s'abonner au flux SSE via /timeline/stream/{session_id} pour recevoir
     les événements en temps réel au fur et à mesure de l'exécution.
 
     Args:
