@@ -326,11 +326,6 @@ export default function Home() {
     setStatusMessage(null);
     setStatusType(null);
 
-    // Réinitialiser la timeline SSE pour une nouvelle requête
-    if (!isRespondingToClarification) {
-      setSessionId(null);
-    }
-
     try {
       if (isRespondingToClarification) {
         // Cas 1: Réponse à une clarification
@@ -359,10 +354,18 @@ export default function Home() {
         // Cas 2: Nouvelle requête
         console.log("[MULTI-TURN] Starting new request");
 
+        // Générer un session_id AVANT d'appeler /execute pour le streaming temps réel
+        const newSessionId = crypto.randomUUID();
+        console.log("[TIMELINE] Generated session_id for real-time streaming:", newSessionId);
+
+        // Ouvrir immédiatement la connexion SSE AVANT l'exécution du workflow
+        setSessionId(newSessionId);
+
         const response = await executeWorkflow({
           project_id: selectedProject,
           query,
           context: chatContext.length > 0 ? chatContext : undefined,
+          session_id: newSessionId, // Passer le session_id au backend
         });
 
         // Vérifier le type de réponse
@@ -371,7 +374,6 @@ export default function Home() {
           console.log("[MULTI-TURN] Clarification needed:", response.question);
 
           setConversationId(response.conversation_id);
-          setSessionId(response.conversation_id); // Utiliser conversation_id comme session_id pour le SSE
           setClarificationQuestion(response.question);
           setInputPlaceholder(t('newRequest.clarificationPlaceholder') || "Entrez votre réponse...");
 
@@ -382,7 +384,6 @@ export default function Home() {
           console.log("[APPROVAL] Approval needed for thread:", response.thread_id);
 
           setThreadId(response.thread_id);
-          setSessionId(response.thread_id); // Utiliser thread_id comme session_id pour le SSE
           setImpactPlan(response.impact_plan);
 
           setStatusMessage(t('status.approvalRequired') || "Approval required for the ImpactPlan");
