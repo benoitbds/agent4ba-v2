@@ -529,9 +529,14 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
     logger.info(f"[EXECUTE] Starting workflow for project: {request.project_id}")
     logger.info(f"[EXECUTE] User query: {request.query}")
 
-    # Générer un conversation_id unique
+    # Utiliser le session_id fourni par le frontend ou générer un nouveau
     session_manager = get_session_manager()
-    conversation_id = session_manager.create_session()
+    conversation_id = request.session_id if request.session_id else session_manager.create_session()
+
+    # Si un session_id est fourni, activer le streaming temps réel vers TimelineService
+    timeline_service = get_timeline_service() if request.session_id else None
+    if timeline_service and request.session_id:
+        logger.info(f"[EXECUTE] Real-time streaming enabled for session: {request.session_id}")
 
     # Liste pour accumuler tous les événements de cette session pour l'historique
     timeline_events: list[dict[str, Any]] = []
@@ -573,15 +578,58 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
     config: dict[str, Any] = {"configurable": {"thread_id": conversation_id}}
 
     try:
-        # Exécuter le workflow de manière synchrone
+        # Exécuter le workflow
         logger.info("[EXECUTE] Starting workflow execution...")
-        final_state = workflow_app.invoke(initial_state, config)  # type: ignore[arg-type]
 
-        # Extraire les événements détaillés de l'agent depuis l'état final
+        # Si streaming temps réel activé, utiliser stream() pour obtenir les mises à jour progressives
+        final_state: dict[str, Any] = {}
+        if timeline_service and request.session_id:
+            logger.info("[EXECUTE] Using stream() for real-time event pushing")
+            for state_update in workflow_app.stream(initial_state, config):  # type: ignore[arg-type]
+                # Accumuler l'état final
+                for node_name, node_state in state_update.items():
+                    if isinstance(node_state, dict):
+                        final_state.update(node_state)
+
+                        # Si des agent_events sont présents dans cette mise à jour, les pousser immédiatement
+                        if "agent_events" in node_state and node_state["agent_events"]:
+                            new_events = node_state["agent_events"]
+                            # Convertir et pousser uniquement les nouveaux événements
+                            for event_data in new_events:
+                                if event_data not in timeline_events:
+                                    timeline_events.append(event_data)
+
+                                    # Convertir en TimelineEvent et pousser au TimelineService
+                                    from agent4ba.api.timeline_service import TimelineEvent as TLEvent
+
+                                    tl_event = TLEvent(
+                                        type=event_data.get("type", "UNKNOWN"),
+                                        message=event_data.get("message", ""),
+                                        status=event_data.get("status", "IN_PROGRESS"),
+                                        agent_name=event_data.get("agent_name"),
+                                        details=event_data.get("details"),
+                                    )
+                                    timeline_service.add_event(request.session_id, tl_event)
+                                    logger.debug(
+                                        f"[EXECUTE] Pushed event to TimelineService: {tl_event.type}"
+                                    )
+        else:
+            # Sinon, utiliser invoke() pour une exécution plus rapide sans streaming
+            final_state = workflow_app.invoke(initial_state, config)  # type: ignore[arg-type]
+
+        # Extraire tous les événements de l'état final pour l'historique
         agent_events = final_state.get("agent_events", [])
         if agent_events:
-            timeline_events.extend(agent_events)
-            logger.info(f"[EXECUTE] Extracted {len(agent_events)} agent events from state")
+            # Ajouter uniquement les événements qui ne sont pas déjà dans timeline_events
+            for event in agent_events:
+                if event not in timeline_events:
+                    timeline_events.append(event)
+            logger.info(f"[EXECUTE] Extracted {len(agent_events)} total agent events from state")
+
+        # Signaler la fin du stream si activé
+        if timeline_service and request.session_id:
+            timeline_service.signal_done(request.session_id)
+            logger.info(f"[EXECUTE] Signaled stream done for session: {request.session_id}")
 
         # Vérifier si une clarification est nécessaire
         if final_state.get("clarification_needed", False):
@@ -681,6 +729,11 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
 
     except Exception as e:
         logger.error(f"[EXECUTE] Error during workflow execution: {e}", exc_info=True)
+
+        # Signaler la fin du stream même en cas d'erreur
+        if timeline_service and request.session_id:
+            timeline_service.signal_done(request.session_id)
+            logger.info(f"[EXECUTE] Signaled stream done after error for session: {request.session_id}")
 
         # Ajouter un événement d'erreur
         error_event = ErrorEvent(

@@ -23,6 +23,10 @@ class ChatRequest(BaseModel):
     context: list[ContextItem] | None = Field(
         None, description="Contexte optionnel (documents ou work items ciblés)"
     )
+    session_id: str | None = Field(
+        None,
+        description="Identifiant de session pour le streaming temps réel des événements",
+    )
 
     model_config = {
         "json_schema_extra": {

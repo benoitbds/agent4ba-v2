@@ -61,6 +61,7 @@ export interface ChatRequest {
   project_id: string;
   query: string;
   context?: ContextItem[];
+  session_id?: string; // Pour le streaming temps réel des événements
 }
 
 export interface ApprovalRequest {
