@@ -514,6 +514,7 @@ def run_workflow_in_background(
     query: str,
     document_content: str,
     context: list[dict[str, Any]] | None,
+    loop: asyncio.AbstractEventLoop,
 ) -> None:
     """
     Fonction wrapper synchrone qui exécute le workflow LangGraph en arrière-plan.
@@ -528,6 +529,7 @@ def run_workflow_in_background(
         query: Requête de l'utilisateur
         document_content: Contenu du document (optionnel)
         context: Contexte de la conversation (optionnel)
+        loop: Boucle d'événements asyncio pour les appels thread-safe
     """
     from agent4ba.api.timeline_service import TimelineEvent as TLEvent
 
@@ -566,6 +568,7 @@ def run_workflow_in_background(
         "clarification_needed": False,
         "clarification_question": "",
         "user_response": "",
+        "event_loop": loop,  # Ajouter la boucle d'événements pour les appels thread-safe
     }
 
     # Configuration pour LangGraph avec le session_id
@@ -788,6 +791,10 @@ async def execute_workflow(request: ChatRequest, background_tasks: BackgroundTas
     session_id = request.session_id if request.session_id else str(uuid.uuid4())
     logger.info(f"[EXECUTE] Using session_id: {session_id}")
 
+    # Capturer la boucle d'événements asyncio avant de lancer la tâche de fond
+    current_loop = asyncio.get_running_loop()
+    logger.info(f"[EXECUTE] Captured event loop: {current_loop}")
+
     # Convertir le context en liste de dictionnaires si présent
     context_list = None
     if request.context:
@@ -801,6 +808,7 @@ async def execute_workflow(request: ChatRequest, background_tasks: BackgroundTas
         query=request.query,
         document_content=request.document_content or "",
         context=context_list,
+        loop=current_loop,
     )
     logger.info(f"[EXECUTE] Background task added for session: {session_id}")
 

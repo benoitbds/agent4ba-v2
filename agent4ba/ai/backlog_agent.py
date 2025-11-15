@@ -108,9 +108,10 @@ def decompose_objective(state: Any) -> dict[str, Any]:
 
     logger.info(f"Objective: {objective}")
 
-    # Récupérer le thread_id et la queue d'événements
+    # Récupérer le thread_id, la boucle d'événements et la queue d'événements
     thread_id = state.get("thread_id", "")
-    event_queue = get_event_queue(thread_id) if thread_id else None
+    event_loop = state.get("event_loop")
+    event_queue = get_event_queue(thread_id, loop=event_loop) if thread_id else None
 
     # Initialiser la liste d'événements (pour compatibilité)
     agent_events = []
@@ -394,9 +395,10 @@ def improve_description(state: Any) -> dict[str, Any]:
 
     logger.info(f"Item ID: {item_id}")
 
-    # Récupérer le thread_id et la queue d'événements
+    # Récupérer le thread_id, la boucle d'événements et la queue d'événements
     thread_id = state.get("thread_id", "")
-    event_queue = get_event_queue(thread_id) if thread_id else None
+    event_loop = state.get("event_loop")
+    event_queue = get_event_queue(thread_id, loop=event_loop) if thread_id else None
 
     # Initialiser la liste d'événements
     agent_events = []
@@ -654,9 +656,10 @@ def review_quality(state: Any) -> dict[str, Any]:
     """
     logger.info("Reviewing backlog quality with INVEST criteria...")
 
-    # Récupérer le thread_id et la queue d'événements
+    # Récupérer le thread_id, la boucle d'événements et la queue d'événements
     thread_id = state.get("thread_id", "")
-    event_queue = get_event_queue(thread_id) if thread_id else None
+    event_loop = state.get("event_loop")
+    event_queue = get_event_queue(thread_id, loop=event_loop) if thread_id else None
 
     # Initialiser la liste d'événements
     agent_events = []
@@ -996,9 +999,10 @@ def generate_acceptance_criteria(state: Any) -> dict[str, Any]:
 
     logger.info(f"Item ID: {item_id}")
 
-    # Récupérer le thread_id et la queue d'événements
+    # Récupérer le thread_id, la boucle d'événements et la queue d'événements
     thread_id = state.get("thread_id", "")
-    event_queue = get_event_queue(thread_id) if thread_id else None
+    event_loop = state.get("event_loop")
+    event_queue = get_event_queue(thread_id, loop=event_loop) if thread_id else None
 
     # Initialiser la liste d'événements
     agent_events = []
