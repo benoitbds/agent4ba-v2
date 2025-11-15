@@ -475,10 +475,11 @@ export default function Home() {
             console.error("Failed to refresh timeline:", error);
           });
       }
-    } else if (lastEvent.type === 'IMPACT_PLAN_READY') {
+    } else if (lastEvent.type === 'IMPACT_PLAN_READY' && lastEvent.status === 'WAITING') {
       console.log("[TIMELINE] Impact plan ready for approval");
 
       // Extraire les détails de l'impact plan depuis l'événement
+      // Ne traiter cet événement que si le statut est WAITING (pas encore approuvé)
       if (lastEvent.details && lastEvent.details.impact_plan && lastEvent.details.thread_id) {
         setThreadId(lastEvent.details.thread_id as string);
         setImpactPlan(lastEvent.details.impact_plan as ImpactPlan);
