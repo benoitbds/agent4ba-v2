@@ -577,31 +577,52 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
     # Configuration pour LangGraph avec le conversation_id
     config: dict[str, Any] = {"configurable": {"thread_id": conversation_id}}
 
+    # Import TimelineEvent en haut pour éviter les imports répétés
+    from agent4ba.api.timeline_service import TimelineEvent as TLEvent
+
     try:
         # Exécuter le workflow
         logger.info("[EXECUTE] Starting workflow execution...")
 
+        # Pousser l'événement WORKFLOW_START immédiatement si streaming activé
+        if timeline_service and request.session_id:
+            workflow_start = TLEvent(
+                type="WORKFLOW_START",
+                message=f"Processing query for project {request.project_id}",
+                status="IN_PROGRESS",
+            )
+            timeline_service.add_event(request.session_id, workflow_start)
+            logger.info("[EXECUTE] Pushed WORKFLOW_START event")
+
         # Si streaming temps réel activé, utiliser stream() pour obtenir les mises à jour progressives
         final_state: dict[str, Any] = {}
+        processed_event_ids = set()  # Pour éviter les doublons
+
         if timeline_service and request.session_id:
             logger.info("[EXECUTE] Using stream() for real-time event pushing")
             for state_update in workflow_app.stream(initial_state, config):  # type: ignore[arg-type]
                 # Accumuler l'état final
                 for node_name, node_state in state_update.items():
+                    logger.info(f"[EXECUTE] Processing node: {node_name}")
+
                     if isinstance(node_state, dict):
                         final_state.update(node_state)
 
                         # Si des agent_events sont présents dans cette mise à jour, les pousser immédiatement
                         if "agent_events" in node_state and node_state["agent_events"]:
                             new_events = node_state["agent_events"]
+                            logger.info(f"[EXECUTE] Found {len(new_events)} agent_events in node {node_name}")
+
                             # Convertir et pousser uniquement les nouveaux événements
                             for event_data in new_events:
-                                if event_data not in timeline_events:
+                                # Utiliser event_id pour détecter les doublons
+                                event_id = event_data.get("event_id") or f"{event_data.get('type')}_{len(timeline_events)}"
+
+                                if event_id not in processed_event_ids:
+                                    processed_event_ids.add(event_id)
                                     timeline_events.append(event_data)
 
                                     # Convertir en TimelineEvent et pousser au TimelineService
-                                    from agent4ba.api.timeline_service import TimelineEvent as TLEvent
-
                                     tl_event = TLEvent(
                                         type=event_data.get("type", "UNKNOWN"),
                                         message=event_data.get("message", ""),
@@ -610,7 +631,7 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
                                         details=event_data.get("details"),
                                     )
                                     timeline_service.add_event(request.session_id, tl_event)
-                                    logger.debug(
+                                    logger.info(
                                         f"[EXECUTE] Pushed event to TimelineService: {tl_event.type}"
                                     )
         else:
@@ -622,9 +643,21 @@ async def execute_workflow(request: ChatRequest) -> JSONResponse:
         if agent_events:
             # Ajouter uniquement les événements qui ne sont pas déjà dans timeline_events
             for event in agent_events:
-                if event not in timeline_events:
+                event_id = event.get("event_id") or f"{event.get('type')}_{len(timeline_events)}"
+                if event_id not in processed_event_ids:
                     timeline_events.append(event)
             logger.info(f"[EXECUTE] Extracted {len(agent_events)} total agent events from state")
+
+        # Pousser l'événement WORKFLOW_COMPLETE si streaming activé
+        if timeline_service and request.session_id:
+            workflow_status = final_state.get("status", "completed")
+            workflow_complete = TLEvent(
+                type="WORKFLOW_COMPLETE",
+                message=f"Workflow completed with status: {workflow_status}",
+                status="SUCCESS" if workflow_status != "error" else "ERROR",
+            )
+            timeline_service.add_event(request.session_id, workflow_complete)
+            logger.info("[EXECUTE] Pushed WORKFLOW_COMPLETE event")
 
         # Signaler la fin du stream si activé
         if timeline_service and request.session_id:
