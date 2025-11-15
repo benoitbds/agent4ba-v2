@@ -79,7 +79,7 @@ export function useTimelineStream(sessionId: string | null, token: string | null
           console.log(`[TIMELINE_STREAM] onopen: status=${response.status}, content-type='${contentType}'`);
 
           // Valider la connexion : statut OK ET content-type correct
-          if (response.ok && contentType === 'text/event-stream') {
+          if (response.ok && contentType?.startsWith('text/event-stream')) {
             console.log('[TIMELINE_STREAM] ✓ Connection established successfully. EventStream is valid.');
             setIsConnected(true);
           } else {
