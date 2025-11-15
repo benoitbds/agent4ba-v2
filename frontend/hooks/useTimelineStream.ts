@@ -14,92 +14,100 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
  * Hook personnalisé pour consommer le flux SSE de timeline
  *
  * @param sessionId - L'ID de session pour se connecter au flux SSE (peut être null)
- * @returns Un tableau d'événements de timeline reçus en temps réel
+ * @param token - Le token d'authentification (peut être null)
+ * @returns Un objet contenant les événements de timeline et l'état de connexion
  *
  * @example
- * const timelineEvents = useTimelineStream(sessionId);
+ * const { events, isConnected } = useTimelineStream(sessionId, token);
  */
-export function useTimelineStream(sessionId: string | null): TimelineEvent[] {
+export function useTimelineStream(sessionId: string | null, token: string | null) {
   const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
 
   useEffect(() => {
-    // Ne rien faire si aucun sessionId n'est fourni
-    if (!sessionId) {
-      // Réinitialiser les événements quand sessionId devient null
-      setEvents([]);
+    if (!sessionId || !token) {
+      setEvents([]); // Réinitialiser si pas de session
       return;
     }
 
-    // Créer un AbortController pour gérer l'annulation de la connexion
     const ctrl = new AbortController();
+    console.log(`[TIMELINE_STREAM] Initializing for session: ${sessionId}`);
+    setEvents([]); // Vider les événements précédents pour la nouvelle session
+    setIsConnected(false);
 
-    // URL du endpoint SSE
-    const eventSourceUrl = `${API_URL}/api/v1/timeline/stream/${sessionId}`;
+    const connect = async () => {
+      await fetchEventSource(`${API_URL}/api/v1/timeline/stream/${sessionId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'text/event-stream',
+        },
+        signal: ctrl.signal,
 
-    // Récupérer le token d'authentification depuis localStorage
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        onopen: async (response) => {
+          if (response.ok && response.headers.get('content-type') === 'text/event-stream') {
+            console.log('[TIMELINE_STREAM] Connection established successfully.');
+            setIsConnected(true);
+          } else {
+            console.error(`[TIMELINE_STREAM] Failed to open connection: status=${response.status}`, response);
+            setIsConnected(false);
+            ctrl.abort(); // Arrêter si l'ouverture échoue
+          }
+        },
 
-    // Configurer les headers d'authentification
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+        onmessage(event) {
+          console.log(`[TIMELINE_STREAM] Raw event received:`, event);
 
-    // Lancer la connexion SSE avec fetchEventSource
-    fetchEventSource(eventSourceUrl, {
-      method: 'GET',
-      headers,
-      signal: ctrl.signal,
+          if (event.data) {
+            try {
+              // Gérer le signal de fin spécial
+              if (event.data === '[DONE]') {
+                  console.log('[TIMELINE_STREAM] Received [DONE] signal. Closing connection.');
+                  ctrl.abort();
+                  return;
+              }
 
-      // Gestionnaire pour les messages reçus
-      onmessage(event) {
-        // Ignorer les messages vides (keep-alive pings)
-        // Le backend envoie des pings sous forme de commentaires SSE ": ping\n\n"
-        // qui peuvent arriver comme des messages avec event.data vide
-        if (!event.data || event.data.trim() === '') {
-          return;
-        }
+              const parsedEvent: TimelineEvent = JSON.parse(event.data);
+              console.log('[TIMELINE_STREAM] Parsed event:', parsedEvent);
 
-        try {
-          // Parser le JSON reçu
-          const timelineEvent: TimelineEvent = JSON.parse(event.data);
+              setEvents((prevEvents) => [...prevEvents, parsedEvent]);
 
-          // Ajouter le nouvel événement au tableau
-          setEvents((prevEvents) => [...prevEvents, timelineEvent]);
-        } catch (error) {
-          console.error('Failed to parse SSE event data:', event.data, error);
-        }
-      },
+            } catch (e) {
+              console.error('[TIMELINE_STREAM] Failed to parse event data:', event.data, e);
+            }
+          } else {
+            console.log('[TIMELINE_STREAM] Received an empty event, likely a keep-alive ping.');
+          }
+        },
 
-      // Gestionnaire d'erreurs
-      onerror(err) {
-        console.error('Erreur de connexion SSE:', err);
+        onclose() {
+          console.log(`[TIMELINE_STREAM] Connection closed for session: ${sessionId}`);
+          setIsConnected(false);
+          // Ne pas throw d'erreur ici pour éviter les re-connexions infinies
+          // si la fermeture est intentionnelle (via ctrl.abort()).
+        },
 
-        // Arrêter la connexion en cas d'erreur fatale (401, 403, 404, etc.)
-        // En jetant une erreur, on empêche fetchEventSource de retry automatiquement
-        throw err;
-      },
-
-      // Gestionnaire de fermeture
-      onclose() {
-        console.log(`[TIMELINE_STREAM] Connexion fermée pour la session: ${sessionId}`);
-      },
-
-      // Désactiver le retry automatique en cas d'erreur
-      // Nous gérons manuellement les reconnexions
-      openWhenHidden: false,
-    }).catch((error) => {
-      // Gérer les erreurs qui ne sont pas des annulations
-      if (error.name !== 'AbortError') {
-        console.error('Erreur fatale dans le stream SSE:', error);
-      }
-    });
-
-    // Fonction de nettoyage : annuler la connexion
-    return () => {
-      ctrl.abort();
+        onerror(err) {
+          console.error('[TIMELINE_STREAM] Connection error:', err);
+          setIsConnected(false);
+          // Important: Lancer l'erreur arrête les tentatives de reconnexion de la bibliothèque.
+          // À n'utiliser que pour les erreurs fatales.
+          throw err;
+        },
+      });
     };
-  }, [sessionId]); // Se réexécute quand sessionId change
 
-  return events;
+    connect();
+
+    // Fonction de cleanup
+    return () => {
+      console.log(`[TIMELINE_STREAM] Cleanup: Aborting connection for session ${sessionId}.`);
+      ctrl.abort();
+      setEvents([]);
+      setIsConnected(false);
+    };
+
+  }, [sessionId, token]); // Dépendances explicites
+
+  return { events, isConnected };
 }

@@ -143,6 +143,10 @@ async def stream_timeline_events(session_id: str) -> StreamingResponse:
                     )
                     break
 
+            # Envoyer le signal de fin au client
+            yield "data: [DONE]\n\n"
+            logger.info(f"[TIMELINE_STREAM] Sent [DONE] signal and closing stream for session {session_id}")
+
         except Exception as e:
             logger.error(
                 f"[TIMELINE_STREAM] Error streaming events for session {session_id}: {e}",
