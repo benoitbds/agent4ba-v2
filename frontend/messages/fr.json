@@ -23,6 +23,7 @@
   "status": {
     "processing": "Traitement en cours...",
     "impactPlanReady": "ImpactPlan prêt pour validation",
+    "approvalRequired": "Approbation requise pour l'ImpactPlan",
     "approved": "Approuvé:",
     "rejected": "Rejeté:",
     "error": "Erreur:",

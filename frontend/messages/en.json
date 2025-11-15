@@ -23,6 +23,7 @@
   "status": {
     "processing": "Processing...",
     "impactPlanReady": "ImpactPlan ready for validation",
+    "approvalRequired": "Approval required for the ImpactPlan",
     "approved": "Approved:",
     "rejected": "Rejected:",
     "error": "Error:",
