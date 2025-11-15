@@ -1,6 +1,6 @@
 /**
  * Hook React pour gérer la connexion SSE à la timeline du backend
- * Consomme le flux Server-Sent Events sur /api/v1/timeline/stream/{session_id}
+ * Consomme le flux Server-Sent Events sur /timeline/stream/{session_id}
  * Utilise @microsoft/fetch-event-source pour une meilleure gestion de l'authentification
  */
 
@@ -55,7 +55,7 @@ export function useTimelineStream(sessionId: string | null, token: string | null
     const ctrl = new AbortController();
 
     // Construire l'URL avec la fonction utilitaire pour éviter les doubles slashs
-    const eventSourceUrl = getApiUrl(`/api/v1/timeline/stream/${sessionId}`);
+    const eventSourceUrl = getApiUrl(`/timeline/stream/${sessionId}`);
     console.log(`[TIMELINE_STREAM] Initializing for session: ${sessionId}`);
     console.log(`[TIMELINE_STREAM] EventSource URL: ${eventSourceUrl}`);
 
