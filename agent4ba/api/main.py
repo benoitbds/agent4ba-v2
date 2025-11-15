@@ -13,6 +13,7 @@ from agent4ba.api.app_factory import create_app
 from agent4ba.api.auth import get_current_user, router as auth_router
 from agent4ba.api.event_queue import cleanup_event_queue, get_event_queue
 from agent4ba.api.session_manager import get_session_manager
+from agent4ba.api.timeline_service import get_timeline_service
 from agent4ba.api.events import (
     AgentPlanEvent,
     AgentStartEvent,
@@ -64,6 +65,74 @@ async def health_check() -> JSONResponse:
         JSONResponse avec le statut de l'application
     """
     return JSONResponse(content={"status": "ok"})
+
+
+@app.get("/api/v1/timeline/stream/{session_id}")
+async def stream_timeline_events(session_id: str) -> StreamingResponse:
+    """
+    Endpoint SSE pour streamer les événements de timeline d'une session.
+
+    Ce endpoint permet au frontend de s'abonner à un flux d'événements
+    correspondant à une session de traitement et d'afficher la progression
+    du workflow agentique en temps réel.
+
+    Args:
+        session_id: Identifiant unique de la session (thread_id)
+
+    Returns:
+        StreamingResponse avec les événements au format SSE
+    """
+    timeline_service = get_timeline_service()
+    logger.info(f"[TIMELINE_STREAM] Client connected for session: {session_id}")
+
+    async def event_generator() -> AsyncIterator[str]:
+        """Générateur d'événements SSE."""
+        try:
+            event_count = 0
+            async for event in timeline_service.stream_events(session_id):
+                event_count += 1
+                # Formater l'événement au format SSE
+                event_data = event.model_dump_json()
+                sse_message = f"data: {event_data}\n\n"
+
+                logger.debug(
+                    f"[TIMELINE_STREAM] Sending event #{event_count} to session {session_id}: "
+                    f"{event.type}"
+                )
+                yield sse_message
+
+            logger.info(
+                f"[TIMELINE_STREAM] Stream completed for session {session_id} "
+                f"with {event_count} events"
+            )
+
+        except Exception as e:
+            logger.error(
+                f"[TIMELINE_STREAM] Error streaming events for session {session_id}: {e}",
+                exc_info=True,
+            )
+            # Envoyer un événement d'erreur au client
+            error_data = {
+                "type": "error",
+                "message": f"Stream error: {str(e)}",
+                "status": "ERROR",
+            }
+            yield f"data: {error_data}\n\n"
+
+        finally:
+            # Optionnel : nettoyer la session après le stream
+            # timeline_service.cleanup_session(session_id)
+            logger.info(f"[TIMELINE_STREAM] Client disconnected from session: {session_id}")
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Désactive le buffering nginx
+        },
+    )
 
 
 async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
