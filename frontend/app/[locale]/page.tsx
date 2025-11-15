@@ -22,7 +22,7 @@ import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, Too
 export default function Home() {
   const t = useTranslations();
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, token } = useAuth();
   const [projects, setProjects] = useState<string[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [backlogItems, setBacklogItems] = useState<WorkItem[]>([]);
@@ -48,7 +48,7 @@ export default function Home() {
 
   // Real-time timeline SSE state
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const timelineEvents = useTimelineStream(sessionId);
+  const { events: timelineEvents, isConnected } = useTimelineStream(sessionId, token);
 
   // Helper function to handle 401 errors - use useCallback to memoize
   const handleUnauthorizedError = useCallback((error: unknown) => {
