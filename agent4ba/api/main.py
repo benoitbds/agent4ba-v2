@@ -3,11 +3,14 @@
 import asyncio
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi import status
+
+from agent4ba.api import app_context
 
 from agent4ba.ai.graph import app as workflow_app
 from agent4ba.api.app_factory import create_app
@@ -43,15 +46,28 @@ from agent4ba.core.storage import ProjectContextService
 # Configurer le logger
 logger = setup_logger(__name__)
 
-app = FastAPI(
-    title="Agent4BA V2",
-    description="Backend pour la gestion de backlog assistée par IA",
-    version="0.1.0",
-)
 
-# Création de l'application via la factory
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Gestionnaire du cycle de vie de l'application FastAPI.
+
+    Capture la boucle d'événements asyncio au démarrage et la stocke
+    dans le contexte applicatif global pour permettre les appels thread-safe
+    dans les agents et services.
+    """
+    # Capture the event loop on startup
+    app_context.EVENT_LOOP = asyncio.get_running_loop()
+    logger.info("--- Event loop captured and stored in app_context ---")
+    yield
+    # Cleanup on shutdown (optional)
+    app_context.EVENT_LOOP = None
+    logger.info("--- Event loop released from app_context ---")
+
+
+# Création de l'application via la factory avec le lifespan
 # La configuration CORS et autres middlewares sont gérés dans app_factory.py
-app = create_app()
+app = create_app(lifespan=lifespan)
 
 # Enregistrer le router d'authentification
 app.include_router(auth_router)
@@ -514,7 +530,6 @@ def run_workflow_in_background(
     query: str,
     document_content: str,
     context: list[dict[str, Any]] | None,
-    loop: asyncio.AbstractEventLoop,
 ) -> None:
     """
     Fonction wrapper synchrone qui exécute le workflow LangGraph en arrière-plan.
@@ -529,7 +544,6 @@ def run_workflow_in_background(
         query: Requête de l'utilisateur
         document_content: Contenu du document (optionnel)
         context: Contexte de la conversation (optionnel)
-        loop: Boucle d'événements asyncio pour les appels thread-safe
     """
     from agent4ba.api.timeline_service import TimelineEvent as TLEvent
 
@@ -568,7 +582,6 @@ def run_workflow_in_background(
         "clarification_needed": False,
         "clarification_question": "",
         "user_response": "",
-        "event_loop": loop,  # Ajouter la boucle d'événements pour les appels thread-safe
     }
 
     # Configuration pour LangGraph avec le session_id
@@ -791,10 +804,6 @@ async def execute_workflow(request: ChatRequest, background_tasks: BackgroundTas
     session_id = request.session_id if request.session_id else str(uuid.uuid4())
     logger.info(f"[EXECUTE] Using session_id: {session_id}")
 
-    # Capturer la boucle d'événements asyncio avant de lancer la tâche de fond
-    current_loop = asyncio.get_running_loop()
-    logger.info(f"[EXECUTE] Captured event loop: {current_loop}")
-
     # Convertir le context en liste de dictionnaires si présent
     context_list = None
     if request.context:
@@ -808,7 +817,6 @@ async def execute_workflow(request: ChatRequest, background_tasks: BackgroundTas
         query=request.query,
         document_content=request.document_content or "",
         context=context_list,
-        loop=current_loop,
     )
     logger.info(f"[EXECUTE] Background task added for session: {session_id}")
 
