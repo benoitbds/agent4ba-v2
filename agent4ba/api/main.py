@@ -86,25 +86,45 @@ async def stream_timeline_events(session_id: str) -> StreamingResponse:
     logger.info(f"[TIMELINE_STREAM] Client connected for session: {session_id}")
 
     async def event_generator() -> AsyncIterator[str]:
-        """Générateur d'événements SSE."""
+        """Générateur d'événements SSE avec keep-alive pings."""
         try:
             event_count = 0
-            async for event in timeline_service.stream_events(session_id):
-                event_count += 1
-                # Formater l'événement au format SSE
-                event_data = event.model_dump_json()
-                sse_message = f"data: {event_data}\n\n"
+            ping_count = 0
 
-                logger.debug(
-                    f"[TIMELINE_STREAM] Sending event #{event_count} to session {session_id}: "
-                    f"{event.type}"
-                )
-                yield sse_message
+            # Créer un itérateur asynchrone pour les événements
+            event_iterator = timeline_service.stream_events(session_id).__aiter__()
 
-            logger.info(
-                f"[TIMELINE_STREAM] Stream completed for session {session_id} "
-                f"with {event_count} events"
-            )
+            while True:
+                try:
+                    # Attendre le prochain événement avec un timeout de 3 secondes
+                    event = await asyncio.wait_for(event_iterator.__anext__(), timeout=3.0)
+
+                    event_count += 1
+                    # Formater l'événement au format SSE
+                    event_data = event.model_dump_json()
+                    sse_message = f"data: {event_data}\n\n"
+
+                    logger.debug(
+                        f"[TIMELINE_STREAM] Sending event #{event_count} to session {session_id}: "
+                        f"{event.type}"
+                    )
+                    yield sse_message
+
+                except asyncio.TimeoutError:
+                    # Timeout expiré, envoyer un ping keep-alive
+                    ping_count += 1
+                    logger.debug(
+                        f"[TIMELINE_STREAM] Sending keep-alive ping #{ping_count} to session {session_id}"
+                    )
+                    yield ": ping\n\n"
+
+                except StopAsyncIteration:
+                    # Le stream d'événements est terminé
+                    logger.info(
+                        f"[TIMELINE_STREAM] Stream completed for session {session_id} "
+                        f"with {event_count} events and {ping_count} pings"
+                    )
+                    break
 
         except Exception as e:
             logger.error(
