@@ -1,5 +1,6 @@
 """LangGraph workflow orchestrator for Agent4BA."""
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -57,6 +58,7 @@ class GraphState(TypedDict):
     result: str
     agent_events: list[dict[str, Any]]
     thread_id: str  # Ajout du thread_id pour accéder à la queue
+    event_loop: asyncio.AbstractEventLoop | None  # Boucle d'événements pour les appels thread-safe
 
     # Champs pour la boucle de clarification
     ambiguous_intent: bool  # Indique si une ambiguïté a été détectée
