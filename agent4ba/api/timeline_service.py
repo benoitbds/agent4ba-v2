@@ -93,6 +93,9 @@ class TimelineService:
         self._queues: dict[str, asyncio.Queue[TimelineEvent | None]] = {}
         self._events: dict[str, list[TimelineEvent]] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
+        self._session_loops: dict[str, asyncio.AbstractEventLoop] = {}
+        self._pending_events: dict[str, list[TimelineEvent | None]] = {}
+        self._data_lock = threading.Lock()
         self._initialized = True
 
         logger.info("[TIMELINE_SERVICE] Service initialized")
@@ -114,6 +117,34 @@ class TimelineService:
 
         return self._queues[session_id]
 
+    def register_session_loop(
+        self,
+        session_id: str,
+        loop: asyncio.AbstractEventLoop,
+    ) -> asyncio.Queue[TimelineEvent | None]:
+        """Enregistre la boucle d'événements utilisée pour une session SSE."""
+
+        queue = self._get_or_create_queue(session_id)
+
+        with self._data_lock:
+            self._session_loops[session_id] = loop
+            pending_events = self._pending_events.pop(session_id, [])
+
+        if pending_events:
+            logger.info(
+                f"[TIMELINE_SERVICE] Flushing {len(pending_events)} pending events for session: {session_id}"
+            )
+            for pending_event in pending_events:
+                if loop.is_closed():
+                    logger.warning(
+                        f"[TIMELINE_SERVICE] Event loop closed before flushing events for session {session_id}"
+                    )
+                    break
+                # Utiliser call_soon_threadsafe pour garantir la sécurité thread
+                loop.call_soon_threadsafe(queue.put_nowait, pending_event)
+
+        return queue
+
     def add_event(self, session_id: str, event: TimelineEvent) -> None:
         """
         Ajoute un événement à la timeline d'une session.
@@ -126,31 +157,34 @@ class TimelineService:
         """
         try:
             # Récupérer la boucle d'événements courante ou en créer une
+            running_loop: asyncio.AbstractEventLoop | None = None
             try:
-                loop = asyncio.get_running_loop()
+                running_loop = asyncio.get_running_loop()
             except RuntimeError:
-                # Pas de boucle courante, on utilise call_soon_threadsafe n'est pas possible
-                # On doit créer une tâche dans la boucle principale
-                logger.warning(
-                    f"[TIMELINE_SERVICE] No running loop for session {session_id}, "
-                    "event may not be queued immediately"
-                )
-                # Pour le moment, on stocke juste dans l'historique
+                running_loop = None
+
+            queue = self._get_or_create_queue(session_id)
+
+            with self._data_lock:
                 if session_id not in self._events:
                     self._events[session_id] = []
                 self._events[session_id].append(event)
-                return
+                session_loop = self._session_loops.get(session_id)
 
-            # Ajouter l'événement à la queue de manière thread-safe
-            queue = self._get_or_create_queue(session_id)
+            target_loop = running_loop or session_loop
 
-            # Ajouter à l'historique
-            if session_id not in self._events:
-                self._events[session_id] = []
-            self._events[session_id].append(event)
-
-            # Mettre l'événement dans la queue de manière thread-safe
-            loop.call_soon_threadsafe(queue.put_nowait, event)
+            if target_loop:
+                target_loop.call_soon_threadsafe(queue.put_nowait, event)
+                logger.debug(
+                    f"[TIMELINE_SERVICE] Queued event for session {session_id} on loop {id(target_loop)}"
+                )
+            else:
+                with self._data_lock:
+                    self._pending_events.setdefault(session_id, []).append(event)
+                logger.warning(
+                    f"[TIMELINE_SERVICE] No event loop available for session {session_id}, "
+                    "storing event for later delivery"
+                )
 
             logger.debug(
                 f"[TIMELINE_SERVICE] Added event to session {session_id}: "
@@ -172,14 +206,30 @@ class TimelineService:
         """
         try:
             if session_id in self._queues:
+                queue = self._queues[session_id]
+                running_loop: asyncio.AbstractEventLoop | None = None
+
                 try:
-                    loop = asyncio.get_running_loop()
-                    queue = self._queues[session_id]
-                    loop.call_soon_threadsafe(queue.put_nowait, None)
-                    logger.info(f"[TIMELINE_SERVICE] Signaled done for session: {session_id}")
+                    running_loop = asyncio.get_running_loop()
                 except RuntimeError:
+                    running_loop = None
+
+                with self._data_lock:
+                    session_loop = self._session_loops.get(session_id)
+
+                target_loop = running_loop or session_loop
+
+                if target_loop:
+                    target_loop.call_soon_threadsafe(queue.put_nowait, None)
+                    logger.info(
+                        f"[TIMELINE_SERVICE] Signaled done for session: {session_id}"
+                    )
+                else:
+                    with self._data_lock:
+                        self._pending_events.setdefault(session_id, []).append(None)
                     logger.warning(
-                        f"[TIMELINE_SERVICE] No running loop to signal done for session {session_id}"
+                        f"[TIMELINE_SERVICE] No available loop to signal done for session {session_id}, "
+                        "delivering once a loop is registered"
                     )
         except Exception as e:
             logger.error(
@@ -200,7 +250,8 @@ class TimelineService:
         Yields:
             Événements de timeline au fur et à mesure de leur ajout
         """
-        queue = self._get_or_create_queue(session_id)
+        loop = asyncio.get_running_loop()
+        queue = self.register_session_loop(session_id, loop)
         logger.info(f"[TIMELINE_SERVICE] Starting stream for session: {session_id}")
 
         event_count = 0
@@ -263,6 +314,15 @@ class TimelineService:
 
             if session_id in self._session_locks:
                 del self._session_locks[session_id]
+
+            with self._data_lock:
+                self._session_loops.pop(session_id, None)
+                if session_id in self._pending_events:
+                    pending_count = len(self._pending_events[session_id])
+                    del self._pending_events[session_id]
+                    logger.info(
+                        f"[TIMELINE_SERVICE] Dropped {pending_count} pending events for session: {session_id}"
+                    )
 
         except Exception as e:
             logger.error(
