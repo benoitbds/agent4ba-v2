@@ -90,17 +90,43 @@ function extractMermaidCode(message: string): string {
 }
 
 /**
+ * Filtre les événements de bas niveau (agent_start, agent_plan, tool_used)
+ * qui sont déjà représentés par les événements de haut niveau
+ */
+function shouldShowEvent(event: TimelineEvent): boolean {
+  const lowLevelTypes = ['agent_start', 'agent_plan', 'tool_used'];
+  return !lowLevelTypes.includes(event.type);
+}
+
+/**
+ * Élimine les événements en double (même event_id)
+ */
+function deduplicateEvents(events: TimelineEvent[]): TimelineEvent[] {
+  const seen = new Set<string>();
+  return events.filter(event => {
+    if (seen.has(event.event_id)) {
+      return false;
+    }
+    seen.add(event.event_id);
+    return true;
+  });
+}
+
+/**
  * Composant d'affichage de la timeline
  */
 export default function TimelineDisplay({ events }: TimelineDisplayProps) {
   const timelineEndRef = useRef<HTMLDivElement | null>(null);
 
+  // Filtrer et dédupliquer les événements
+  const filteredEvents = deduplicateEvents(events).filter(shouldShowEvent);
+
   // Auto-scroll vers le bas quand de nouveaux événements arrivent
   useEffect(() => {
     timelineEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [events.length]);
+  }, [filteredEvents.length]);
 
-  if (events.length === 0) {
+  if (filteredEvents.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400">
         <div className="text-center">
@@ -118,7 +144,7 @@ export default function TimelineDisplay({ events }: TimelineDisplayProps) {
       </h2>
 
       <div className="flex-1 overflow-y-auto pr-2 space-y-2">
-        {events.map((event, index) => (
+        {filteredEvents.map((event, index) => (
           <div
             key={event.event_id}
             className="timeline-event-enter bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
@@ -153,15 +179,32 @@ export default function TimelineDisplay({ events }: TimelineDisplayProps) {
                 </div>
 
                 {/* Message ou Diagramme Mermaid */}
-                {isMermaidCode(event.message) ? (
-                  <div className="mb-2">
-                    <MermaidDiagram code={extractMermaidCode(event.message)} />
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-700 mb-2">
-                    {event.message}
-                  </p>
-                )}
+                {(() => {
+                  // Vérifier d'abord dans le message
+                  if (isMermaidCode(event.message)) {
+                    return (
+                      <div className="mb-2">
+                        <MermaidDiagram code={extractMermaidCode(event.message)} />
+                      </div>
+                    );
+                  }
+
+                  // Vérifier ensuite dans details.result (pour WORKFLOW_COMPLETE par exemple)
+                  if (event.details && 'result' in event.details && typeof event.details.result === 'string' && isMermaidCode(event.details.result)) {
+                    return (
+                      <div className="mb-2">
+                        <MermaidDiagram code={extractMermaidCode(event.details.result)} />
+                      </div>
+                    );
+                  }
+
+                  // Sinon afficher le message normal
+                  return (
+                    <p className="text-sm text-gray-700 mb-2">
+                      {event.message}
+                    </p>
+                  );
+                })()}
 
                 {/* Status badge */}
                 <div className="flex items-center gap-2">
