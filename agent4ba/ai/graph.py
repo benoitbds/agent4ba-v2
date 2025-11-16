@@ -17,6 +17,7 @@ from agent4ba.ai import (
     diagram_master_agent,
     document_agent,
     epic_architect_agent,
+    refiner_agent,
     story_teller_agent,
     test_agent,
 )
@@ -156,6 +157,42 @@ def entry_node(state: GraphState) -> dict[str, Any]:
     else:
         logger.info("[ENTRY_NODE] No context provided")
 
+        # HEURISTIQUE DE RAFFINEMENT AUTO
+        # Si le contexte est vide ET que la requête ne contient pas de mots-clés de création explicite,
+        # charger automatiquement l'intégralité du backlog comme contexte
+        user_query = state.get("user_query", "").lower()
+        creation_keywords = ["génère", "génerer", "crée", "créer", "liste", "create", "generate"]
+
+        # Vérifier si la requête contient un mot-clé de création
+        is_creation_request = any(keyword in user_query for keyword in creation_keywords)
+
+        if not is_creation_request:
+            logger.info("[ENTRY_NODE] No explicit creation keyword detected, loading full backlog as context")
+            project_id = state['project_id']
+            storage = ProjectContextService()
+
+            try:
+                existing_items = storage.load_context(project_id)
+                if len(existing_items) > 0:
+                    # Construire une liste de contexte avec tous les work items
+                    auto_context = []
+                    for item in existing_items:
+                        auto_context.append({
+                            'type': 'work_item',
+                            'id': item.id,
+                            'name': item.title,
+                        })
+
+                    logger.info(f"[ENTRY_NODE] Auto-loaded {len(auto_context)} work items as context for potential refinement")
+                    # Mettre à jour le contexte dans l'état
+                    context = auto_context
+                else:
+                    logger.info("[ENTRY_NODE] No existing backlog found, will proceed as creation request")
+            except FileNotFoundError:
+                logger.info("[ENTRY_NODE] No existing backlog found, will proceed as creation request")
+            except Exception as e:
+                logger.warning(f"[ENTRY_NODE] Error loading backlog for auto-context: {e}")
+
     # Envoyer un événement de timeline pour le début du workflow
     thread_id = state.get("thread_id", "")
     if thread_id:
@@ -171,10 +208,14 @@ def entry_node(state: GraphState) -> dict[str, Any]:
         )
         timeline_service.add_event(thread_id, event)
 
-    # Retourner le work item chargé (ou None)
+    # Retourner le work item chargé (ou None) et le contexte potentiellement mis à jour
     result = {}
     if context_work_item:
         result["context_work_item"] = context_work_item
+
+    # Si le contexte a été modifié (auto-chargement), le retourner
+    if context is not None and context != state.get("context"):
+        result["context"] = context
 
     return result
 
@@ -425,6 +466,8 @@ def router_node(state: GraphState) -> dict[str, Any]:
             "story_teller_agent": "story_teller_agent",
             "backlogagent": "backlog_agent",
             "backlog_agent": "backlog_agent",
+            "refineragent": "refiner_agent",
+            "refiner_agent": "refiner_agent",
             "testagent": "test_agent",
             "test_agent": "test_agent",
             "documentagent": "document_agent",
@@ -743,6 +786,16 @@ def agent_node(state: GraphState) -> dict[str, Any]:
             result = {
                 "status": "error",
                 "result": f"Unknown task '{agent_task}' for diagram_master_agent",
+            }
+
+    elif agent_id == "refiner_agent":
+        # Router vers la méthode appropriée du refiner_agent
+        if agent_task == "refine_backlog":
+            result = refiner_agent.refine_backlog(state)
+        else:
+            result = {
+                "status": "error",
+                "result": f"Unknown task '{agent_task}' for refiner_agent",
             }
 
     else:
