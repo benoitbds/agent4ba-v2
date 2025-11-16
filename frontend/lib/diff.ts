@@ -27,6 +27,7 @@ export interface ArrayChange<T> {
 export interface DiagramChange {
   added: Diagram[];
   removed: Diagram[];
+  modified: Array<{ before: Diagram; after: Diagram }>;
   unchanged: Diagram[];
 }
 
@@ -93,14 +94,27 @@ function compareDiagrams(
 
   const added: Diagram[] = [];
   const removed: Diagram[] = [];
+  const modified: Array<{ before: Diagram; after: Diagram }> = [];
   const unchanged: Diagram[] = [];
 
-  // Trouver les diagrammes ajoutés et inchangés
-  for (const diagram of after) {
-    if (!beforeMap.has(diagram.id)) {
-      added.push(diagram);
+  // Trouver les diagrammes ajoutés, modifiés et inchangés
+  for (const afterDiagram of after) {
+    const beforeDiagram = beforeMap.get(afterDiagram.id);
+
+    if (!beforeDiagram) {
+      // Nouveau diagramme
+      added.push(afterDiagram);
     } else {
-      unchanged.push(diagram);
+      // Vérifier si le diagramme a été modifié
+      const hasChanged =
+        beforeDiagram.title !== afterDiagram.title ||
+        beforeDiagram.code !== afterDiagram.code;
+
+      if (hasChanged) {
+        modified.push({ before: beforeDiagram, after: afterDiagram });
+      } else {
+        unchanged.push(afterDiagram);
+      }
     }
   }
 
@@ -112,11 +126,11 @@ function compareDiagrams(
   }
 
   // S'il n'y a aucun changement, retourner null
-  if (added.length === 0 && removed.length === 0) {
+  if (added.length === 0 && removed.length === 0 && modified.length === 0) {
     return null;
   }
 
-  return { added, removed, unchanged };
+  return { added, removed, modified, unchanged };
 }
 
 /**

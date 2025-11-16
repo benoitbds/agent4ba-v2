@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import type { WorkItem } from "@/types/events";
-import { calculateDiff, hasDiff, type WorkItemDiff, type SimpleChange, type ArrayChange } from "@/lib/diff";
+import { calculateDiff, hasDiff, type WorkItemDiff, type SimpleChange, type ArrayChange, type DiagramChange } from "@/lib/diff";
 import { type ReactElement } from "react";
 
 interface DiffViewerProps {
@@ -98,6 +98,127 @@ function ArrayChangeDiff({
               >
                 <span className="text-gray-400 text-sm flex-shrink-0">•</span>
                 <span className="text-sm text-gray-600">{item}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Composant pour afficher les changements de diagrammes
+ */
+function DiagramChangeDiff({
+  change,
+}: {
+  change: DiagramChange;
+}): ReactElement {
+  const t = useTranslations();
+
+  return (
+    <div className="border border-blue-300 rounded overflow-hidden mb-3">
+      <div className="bg-blue-100 px-3 py-2 border-b border-blue-200">
+        <span className="text-sm font-semibold text-blue-800">
+          {t("backlog.diagrams")}
+        </span>
+      </div>
+      <div className="p-3 space-y-2">
+        {/* Diagrammes supprimés */}
+        {change.removed.map((diagram) => (
+          <div
+            key={`removed-${diagram.id}`}
+            className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded"
+          >
+            <span className="text-red-600 font-bold text-sm flex-shrink-0">−</span>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm font-semibold text-red-800 line-through">
+                  {diagram.title}
+                </span>
+                <span className="text-xs text-red-600 font-mono">
+                  {diagram.id}
+                </span>
+              </div>
+              <div className="text-xs text-red-700">
+                Diagramme supprimé
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Diagrammes ajoutés */}
+        {change.added.map((diagram) => (
+          <div
+            key={`added-${diagram.id}`}
+            className="flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded"
+          >
+            <span className="text-green-600 font-bold text-sm flex-shrink-0">+</span>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm font-semibold text-green-800">
+                  ✨ {diagram.title}
+                </span>
+                <span className="text-xs text-green-600 font-mono">
+                  {diagram.id}
+                </span>
+              </div>
+              <div className="text-xs text-green-700">
+                {t("timeline.diagramAdded")}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Diagrammes modifiés */}
+        {change.modified.map(({ before, after }) => (
+          <div
+            key={`modified-${after.id}`}
+            className="border border-orange-200 rounded overflow-hidden bg-orange-50"
+          >
+            <div className="bg-orange-100 px-3 py-2 border-b border-orange-200">
+              <span className="text-sm font-semibold text-orange-800">
+                ✏️ Diagramme modifié
+              </span>
+            </div>
+            <div className="grid grid-cols-2 divide-x divide-orange-200">
+              {/* Before */}
+              <div className="p-3 bg-red-50">
+                <div className="text-xs font-semibold text-red-800 mb-2">Avant</div>
+                <div className="text-sm text-gray-800">
+                  <div className="font-semibold line-through">{before.title}</div>
+                  <div className="text-xs text-gray-600 font-mono mt-1">{before.id}</div>
+                </div>
+              </div>
+              {/* After */}
+              <div className="p-3 bg-green-50">
+                <div className="text-xs font-semibold text-green-800 mb-2">Après</div>
+                <div className="text-sm text-gray-800">
+                  <div className="font-semibold">{after.title}</div>
+                  <div className="text-xs text-gray-600 font-mono mt-1">{after.id}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Diagrammes inchangés */}
+        {change.unchanged.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <span className="text-xs text-gray-500 font-semibold block mb-2">
+              Inchangés ({change.unchanged.length})
+            </span>
+            {change.unchanged.map((diagram) => (
+              <div
+                key={`unchanged-${diagram.id}`}
+                className="flex items-start gap-2 p-2 bg-gray-50 border border-gray-200 rounded mb-1"
+              >
+                <span className="text-gray-400 text-sm flex-shrink-0">•</span>
+                <div className="flex-1">
+                  <span className="text-sm text-gray-600">{diagram.title}</span>
+                  <span className="text-xs text-gray-500 font-mono ml-2">{diagram.id}</span>
+                </div>
               </div>
             ))}
           </div>
@@ -215,6 +336,11 @@ export default function DiffViewer({ before, after }: DiffViewerProps): ReactEle
           label={t("backlog.acceptanceCriteria")}
           change={diff.acceptance_criteria}
         />
+      )}
+
+      {/* Changements de diagrammes */}
+      {diff.diagrams && (
+        <DiagramChangeDiff change={diff.diagrams} />
       )}
 
       {/* Changements d'attributs */}
