@@ -13,6 +13,7 @@
     "@microsoft/fetch-event-source": "^2.0.1",
     "diff": "^8.0.2",
     "lucide-react": "^0.552.0",
+    "mermaid": "^11.4.1",
     "next": "^15.1.4",
     "next-intl": "^4.5.1",
     "react": "^19.0.0",

@@ -12,7 +12,14 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from litellm import completion
 
-from agent4ba.ai import backlog_agent, document_agent, epic_architect_agent, story_teller_agent, test_agent
+from agent4ba.ai import (
+    backlog_agent,
+    diagram_master_agent,
+    document_agent,
+    epic_architect_agent,
+    story_teller_agent,
+    test_agent,
+)
 from agent4ba.ai.nodes import ask_for_clarification, handle_unknown_intent
 from agent4ba.ai.schemas import RouterDecision
 from agent4ba.api.timeline_service import TimelineEvent, get_timeline_service
@@ -390,6 +397,8 @@ def router_node(state: GraphState) -> dict[str, Any]:
             "test_agent": "test_agent",
             "documentagent": "document_agent",
             "document_agent": "document_agent",
+            "diagrammasteragent": "diagram_master_agent",
+            "diagram_master_agent": "diagram_master_agent",
             "fallbackagent": "fallback_agent",
             "fallback_agent": "fallback_agent",
         }
@@ -692,6 +701,16 @@ def agent_node(state: GraphState) -> dict[str, Any]:
             result = {
                 "status": "error",
                 "result": f"Unknown task '{agent_task}' for test_agent",
+            }
+
+    elif agent_id == "diagram_master_agent":
+        # Router vers la méthode appropriée du diagram_master_agent
+        if agent_task == "generate_diagram":
+            result = diagram_master_agent.generate_diagram(state)
+        else:
+            result = {
+                "status": "error",
+                "result": f"Unknown task '{agent_task}' for diagram_master_agent",
             }
 
     else:
