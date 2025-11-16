@@ -249,7 +249,8 @@
     "invite": "Inviter",
     "currentUsers": "Utilisateurs actuels",
     "noUsers": "Aucun utilisateur dans ce projet pour le moment.",
-    "removeUser": "Retirer l'utilisateur"
+    "removeUser": "Retirer l'utilisateur",
+    "manageUsers": "Gérer les utilisateurs"
   },
   "auth": {
     "login": {
