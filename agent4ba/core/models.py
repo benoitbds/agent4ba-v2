@@ -1,5 +1,6 @@
 """Data models for Agent4BA."""
 
+import uuid
 from typing import Any, List, Literal
 
 from pydantic import BaseModel, Field
@@ -53,6 +54,17 @@ class TestCase(BaseModel):
     )
 
 
+class Diagram(BaseModel):
+    """Représente un diagramme Mermaid.js."""
+
+    id: str = Field(
+        default_factory=lambda: f"diag_{uuid.uuid4().hex[:8]}",
+        description="Identifiant unique du diagramme",
+    )
+    title: str = Field(..., description="Titre du diagramme")
+    code: str = Field(..., description="Code Mermaid.js du diagramme")
+
+
 class WorkItem(BaseModel):
     """Représente un élément de travail (user story, task, bug, test_case, etc.)."""
 
@@ -78,6 +90,10 @@ class WorkItem(BaseModel):
     steps: list[TestCaseStep] = Field(
         default_factory=list,
         description="Liste des étapes détaillées du cas de test (pour les test_case uniquement)",
+    )
+    diagrams: list[Diagram] = Field(
+        default_factory=list,
+        description="Liste des diagrammes associés à ce work item",
     )
     validation_status: Literal["ia_generated", "human_validated", "ia_modified"] = Field(
         default="ia_generated",
