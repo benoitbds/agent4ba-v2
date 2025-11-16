@@ -1,14 +1,16 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ClipboardPlus, ChevronRight, ChevronDown, Sparkles, UserCheck, Plus } from "lucide-react";
+import { ClipboardPlus, ChevronRight, ChevronDown, Sparkles, UserCheck, Plus, FileText } from "lucide-react";
 import { useState } from "react";
-import type { WorkItem } from "@/types/events";
+import type { WorkItem, Diagram } from "@/types/events";
 import EditWorkItemModal from "./EditWorkItemModal";
 import WorkItemFormModal from "./WorkItemFormModal";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import TestCaseCard from "./TestCaseCard";
-import { updateWorkItem, validateWorkItem, generateAcceptanceCriteria, generateTestCases, createWorkItem, deleteWorkItem } from "@/lib/api";
+import DiagramEditorModal from "./DiagramEditorModal";
+import MermaidDiagram from "./MermaidDiagram";
+import { updateWorkItem, validateWorkItem, generateAcceptanceCriteria, generateTestCases, createWorkItem, deleteWorkItem, updateFullWorkItem } from "@/lib/api";
 import { toast } from "sonner";
 
 interface BacklogViewProps {
@@ -97,6 +99,11 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<WorkItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // État pour gérer la modale d'édition de diagramme
+  const [isDiagramEditorOpen, setIsDiagramEditorOpen] = useState(false);
+  const [selectedDiagram, setSelectedDiagram] = useState<Diagram | null>(null);
+  const [diagramWorkItem, setDiagramWorkItem] = useState<WorkItem | null>(null);
 
   // Fonction pour toggler l'état d'un item (feature, story, etc.)
   const toggleItem = (itemId: string) => {
@@ -245,6 +252,32 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
       console.error("Error deleting work item:", error);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Fonction pour ouvrir l'éditeur de diagramme
+  const handleDiagramClick = (diagram: Diagram, item: WorkItem, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setSelectedDiagram(diagram);
+    setDiagramWorkItem(item);
+    setIsDiagramEditorOpen(true);
+  };
+
+  // Fonction pour sauvegarder un diagramme modifié
+  const handleSaveDiagram = async (updatedWorkItem: WorkItem) => {
+    try {
+      await updateFullWorkItem(projectId, updatedWorkItem.id, updatedWorkItem);
+      toast.success(t("backlog.diagramUpdated"));
+      // Rafraîchir le backlog
+      if (onItemUpdated) {
+        onItemUpdated();
+      }
+    } catch (error) {
+      toast.error(t("backlog.diagramUpdateError"));
+      console.error("Error updating diagram:", error);
+      throw error;
     }
   };
 
@@ -416,6 +449,40 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
                   )}
                 </div>
               )}
+
+              {/* Section Diagrammes */}
+              {item.diagrams && item.diagrams.length > 0 && (
+                <div className="mt-3 border-t border-gray-200 pt-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    <h4 className="text-sm font-semibold text-gray-700">
+                      {t("backlog.diagrams")} ({item.diagrams.length})
+                    </h4>
+                  </div>
+                  <div className="space-y-2">
+                    {item.diagrams.map((diagram) => (
+                      <div
+                        key={diagram.id}
+                        onClick={(e) => handleDiagramClick(diagram, item, e)}
+                        className="cursor-pointer border border-gray-200 rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1">
+                            <h5 className="text-sm font-semibold text-gray-800 mb-2">
+                              {diagram.title}
+                            </h5>
+                            <div className="bg-white rounded border border-gray-200 overflow-hidden">
+                              <div className="transform scale-75 origin-top-left" style={{ width: '133.33%', height: 'auto' }}>
+                                <MermaidDiagram code={diagram.code} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Boutons d'action */}
@@ -494,6 +561,18 @@ export default function BacklogView({ items, projectId, onSelectItem, onItemUpda
         message={t("backlog.confirmDeleteMessage", { title: itemToDelete?.title || "" })}
         isDeleting={isDeleting}
       />
+
+      {/* Modal d'édition de diagramme */}
+      {selectedDiagram && diagramWorkItem && (
+        <DiagramEditorModal
+          isOpen={isDiagramEditorOpen}
+          diagram={selectedDiagram}
+          workItem={diagramWorkItem}
+          projectId={projectId}
+          onClose={() => setIsDiagramEditorOpen(false)}
+          onSave={handleSaveDiagram}
+        />
+      )}
     </div>
   );
 }

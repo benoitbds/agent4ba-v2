@@ -2,7 +2,7 @@
  * Utilitaires pour calculer les différences entre deux WorkItems
  */
 
-import type { WorkItem } from "@/types/events";
+import type { WorkItem, Diagram } from "@/types/events";
 
 /**
  * Type représentant un changement simple d'une valeur
@@ -22,12 +22,22 @@ export interface ArrayChange<T> {
 }
 
 /**
+ * Type représentant un changement de diagramme
+ */
+export interface DiagramChange {
+  added: Diagram[];
+  removed: Diagram[];
+  unchanged: Diagram[];
+}
+
+/**
  * Type représentant tous les changements possibles dans un WorkItem
  */
 export interface WorkItemDiff {
   title: SimpleChange<string> | null;
   description: SimpleChange<string> | null;
   acceptance_criteria: ArrayChange<string> | null;
+  diagrams: DiagramChange | null;
   type: SimpleChange<WorkItem["type"]> | null;
   parent_id: SimpleChange<string | null> | null;
   validation_status: SimpleChange<WorkItem["validation_status"]> | null;
@@ -62,6 +72,44 @@ function compareArrays<T>(
   const added = after.filter((item) => !beforeSet.has(item));
   const removed = before.filter((item) => !afterSet.has(item));
   const unchanged = after.filter((item) => beforeSet.has(item));
+
+  // S'il n'y a aucun changement, retourner null
+  if (added.length === 0 && removed.length === 0) {
+    return null;
+  }
+
+  return { added, removed, unchanged };
+}
+
+/**
+ * Compare deux tableaux de diagrammes
+ */
+function compareDiagrams(
+  before: Diagram[] = [],
+  after: Diagram[] = []
+): DiagramChange | null {
+  const beforeMap = new Map(before.map((d) => [d.id, d]));
+  const afterMap = new Map(after.map((d) => [d.id, d]));
+
+  const added: Diagram[] = [];
+  const removed: Diagram[] = [];
+  const unchanged: Diagram[] = [];
+
+  // Trouver les diagrammes ajoutés et inchangés
+  for (const diagram of after) {
+    if (!beforeMap.has(diagram.id)) {
+      added.push(diagram);
+    } else {
+      unchanged.push(diagram);
+    }
+  }
+
+  // Trouver les diagrammes supprimés
+  for (const diagram of before) {
+    if (!afterMap.has(diagram.id)) {
+      removed.push(diagram);
+    }
+  }
 
   // S'il n'y a aucun changement, retourner null
   if (added.length === 0 && removed.length === 0) {
@@ -116,6 +164,7 @@ export function calculateDiff(before: WorkItem, after: WorkItem): WorkItemDiff {
       before.acceptance_criteria,
       after.acceptance_criteria
     ),
+    diagrams: compareDiagrams(before.diagrams, after.diagrams),
     type: compareSimpleValue(before.type, after.type),
     parent_id: compareSimpleValue(before.parent_id, after.parent_id),
     validation_status: compareSimpleValue(
@@ -134,6 +183,7 @@ export function hasDiff(diff: WorkItemDiff): boolean {
     diff.title !== null ||
     diff.description !== null ||
     diff.acceptance_criteria !== null ||
+    diff.diagrams !== null ||
     diff.type !== null ||
     diff.parent_id !== null ||
     diff.validation_status !== null ||

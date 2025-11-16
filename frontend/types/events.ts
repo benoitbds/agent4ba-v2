@@ -13,6 +13,12 @@ export interface TestCase {
   steps: TestCaseStep[];
 }
 
+export interface Diagram {
+  id: string;
+  title: string;
+  code: string;
+}
+
 export interface WorkItem {
   id: string;
   project_id: string;
@@ -22,6 +28,7 @@ export interface WorkItem {
   parent_id: string | null;
   acceptance_criteria?: string[];
   test_cases?: TestCase[];
+  diagrams?: Diagram[];
   validation_status: "ia_generated" | "human_validated" | "ia_modified";
   attributes: {
     priority?: string;
