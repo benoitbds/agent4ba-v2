@@ -86,7 +86,8 @@ def generate_diagram(state: Any) -> dict[str, Any]:
     if event_queue:
         event_queue.put(plan_event)
 
-    # Récupérer le contexte (chunks de documents RAG)
+    # Construire le contexte en priorité depuis le work item complet
+    context_work_item = state.get("context_work_item")
     context = state.get("context", [])
     context_text = ""
 
@@ -95,9 +96,9 @@ def generate_diagram(state: Any) -> dict[str, Any]:
     context_event = {
         "type": "tool_used",
         "tool_run_id": context_run_id,
-        "tool_name": "Récupération contexte RAG",
+        "tool_name": "Récupération contexte",
         "tool_icon": "📚",
-        "description": "Chargement des chunks de documents pour comprendre le processus",
+        "description": "Chargement du work item ou des documents pour comprendre le processus",
         "status": "running",
         "details": {},
     }
@@ -105,7 +106,45 @@ def generate_diagram(state: Any) -> dict[str, Any]:
     if event_queue:
         event_queue.put(context_event)
 
-    if context and len(context) > 0:
+    # Priorité 1: Utiliser le work item complet s'il est disponible
+    if context_work_item:
+        logger.info(f"[DiagramMasterAgent] Using full work item: {context_work_item.id}")
+        context_parts = []
+
+        # Ajouter le titre
+        context_parts.append(f"# {context_work_item.title}")
+
+        # Ajouter la description si présente
+        if context_work_item.description:
+            context_parts.append(f"## Description\n{context_work_item.description}")
+
+        # Ajouter les critères d'acceptation si présents
+        if context_work_item.acceptance_criteria and len(context_work_item.acceptance_criteria) > 0:
+            criteria_text = "\n".join([f"- {criterion}" for criterion in context_work_item.acceptance_criteria])
+            context_parts.append(f"## Critères d'acceptation\n{criteria_text}")
+
+        context_text = "\n\n".join(context_parts)
+        logger.info(f"[DiagramMasterAgent] Work item context loaded: {len(context_text)} chars")
+
+        context_event_completed = {
+            "type": "tool_used",
+            "tool_run_id": context_run_id,
+            "tool_name": "Récupération contexte",
+            "tool_icon": "📚",
+            "description": f"Work item '{context_work_item.id}' chargé avec succès",
+            "status": "completed",
+            "details": {
+                "source": "work_item",
+                "work_item_id": context_work_item.id,
+                "chars_count": len(context_text)
+            },
+        }
+        agent_events[-1] = context_event_completed
+        if event_queue:
+            event_queue.put(context_event_completed)
+
+    # Priorité 2: Sinon, utiliser les chunks de documents RAG
+    elif context and len(context) > 0:
         # Construire le texte de contexte à partir des chunks
         context_parts = []
         for ctx_item in context:
@@ -116,22 +155,22 @@ def generate_diagram(state: Any) -> dict[str, Any]:
                 name = ctx_item.get("name", "Document")
                 context_parts.append(f"[{name}]:\n{content}")
             elif ctx_type == "work_item":
-                # Si c'est un work item, utiliser sa description
+                # Si c'est un work item dans le contexte (sans être chargé complètement)
                 description = ctx_item.get("description", "")
                 name = ctx_item.get("name", ctx_item.get("id", "Work Item"))
                 context_parts.append(f"[{name}]:\n{description}")
 
         context_text = "\n\n".join(context_parts)
-        logger.info(f"[DiagramMasterAgent] Context loaded: {len(context)} items, {len(context_text)} chars")
+        logger.info(f"[DiagramMasterAgent] RAG context loaded: {len(context)} items, {len(context_text)} chars")
 
         context_event_completed = {
             "type": "tool_used",
             "tool_run_id": context_run_id,
-            "tool_name": "Récupération contexte RAG",
+            "tool_name": "Récupération contexte",
             "tool_icon": "📚",
-            "description": "Chargement des chunks de documents pour comprendre le processus",
+            "description": "Chunks de documents RAG chargés",
             "status": "completed",
-            "details": {"items_count": len(context), "chars_count": len(context_text)},
+            "details": {"source": "rag_documents", "items_count": len(context), "chars_count": len(context_text)},
         }
         agent_events[-1] = context_event_completed
         if event_queue:
@@ -141,11 +180,11 @@ def generate_diagram(state: Any) -> dict[str, Any]:
         context_event_completed = {
             "type": "tool_used",
             "tool_run_id": context_run_id,
-            "tool_name": "Récupération contexte RAG",
+            "tool_name": "Récupération contexte",
             "tool_icon": "📚",
-            "description": "Chargement des chunks de documents pour comprendre le processus",
+            "description": "Aucun contexte fourni",
             "status": "completed",
-            "details": {"items_count": 0, "warning": "Aucun contexte fourni"},
+            "details": {"source": "none", "items_count": 0, "warning": "Aucun contexte fourni"},
         }
         agent_events[-1] = context_event_completed
         if event_queue:

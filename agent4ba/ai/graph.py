@@ -53,6 +53,7 @@ class GraphState(TypedDict):
     user_query: str
     document_content: str
     context: list[dict] | None  # Contexte optionnel (documents ou work items ciblés)
+    context_work_item: Any  # Work item complet chargé depuis le contexte (si présent)
     rewritten_task: str  # Tâche reformulée par le task_rewriter_node
     intent: dict[str, Any]
     intent_args: dict[str, Any]  # Arguments extraits de l'intention
@@ -122,10 +123,36 @@ def entry_node(state: GraphState) -> dict[str, Any]:
 
     # Logger le contexte si présent
     context = state.get("context")
+    context_work_item = None
+
     if context:
         logger.info(f"[ENTRY_NODE] Context provided: {len(context)} items")
         for ctx_item in context:
             logger.info(f"[ENTRY_NODE]   - {ctx_item['type']}: {ctx_item['id']}")
+
+            # Si c'est un work item, charger l'objet complet
+            if ctx_item['type'] == 'work_item':
+                work_item_id = ctx_item['id']
+                project_id = state['project_id']
+
+                try:
+                    logger.info(f"[ENTRY_NODE] Loading full work item: {work_item_id}")
+                    storage = ProjectContextService()
+                    existing_items = storage.load_context(project_id)
+
+                    # Trouver le work item correspondant
+                    for item in existing_items:
+                        if item.id == work_item_id:
+                            context_work_item = item
+                            logger.info(f"[ENTRY_NODE] Work item loaded: {item.title}")
+                            logger.info(f"[ENTRY_NODE] Description: {item.description[:100] if item.description else 'N/A'}...")
+                            break
+
+                    if not context_work_item:
+                        logger.warning(f"[ENTRY_NODE] Work item {work_item_id} not found in backlog")
+
+                except Exception as e:
+                    logger.error(f"[ENTRY_NODE] Error loading work item: {e}", exc_info=True)
     else:
         logger.info("[ENTRY_NODE] No context provided")
 
@@ -144,7 +171,12 @@ def entry_node(state: GraphState) -> dict[str, Any]:
         )
         timeline_service.add_event(thread_id, event)
 
-    return {}
+    # Retourner le work item chargé (ou None)
+    result = {}
+    if context_work_item:
+        result["context_work_item"] = context_work_item
+
+    return result
 
 
 def task_rewriter_node(state: GraphState) -> dict[str, Any]:
