@@ -15,6 +15,7 @@ from agent4ba.api import app_context
 from agent4ba.ai.graph import app as workflow_app
 from agent4ba.api.app_factory import create_app
 from agent4ba.api.auth import get_current_user, router as auth_router
+from agent4ba.api.users import router as users_router
 from agent4ba.api.event_queue import cleanup_event_queue, get_event_queue
 from agent4ba.api.session_manager import get_session_manager
 from agent4ba.api.timeline_service import get_timeline_service
@@ -74,6 +75,9 @@ app = create_app(lifespan=lifespan)
 
 # Enregistrer le router d'authentification
 app.include_router(auth_router)
+
+# Enregistrer le router de gestion des utilisateurs
+app.include_router(users_router)
 
 
 @app.get("/health")

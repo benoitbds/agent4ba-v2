@@ -1,10 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { X, UserPlus, Trash2, Loader2 } from "lucide-react";
 import { useProjectUsers } from "@/hooks/useProjectUsers";
 import { useAuth } from "@/context/AuthContext";
+
+interface SearchUser {
+  id: string;
+  username: string;
+}
 
 interface ProjectUsersModalProps {
   isOpen: boolean;
@@ -19,6 +24,117 @@ export function ProjectUsersModal({ isOpen, onClose, projectId }: ProjectUsersMo
   const [newUsername, setNewUsername] = useState("");
   const [addingUser, setAddingUser] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Autocomplete states
+  const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<SearchUser | null>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fonction de recherche d'utilisateurs
+  const searchUsers = useCallback(async (query: string) => {
+    if (!query.trim() || query.length < 1) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const url = `${baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl}/users/search?query=${encodeURIComponent(query)}`;
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to search users");
+      }
+
+      const results: SearchUser[] = await response.json();
+      setSearchResults(results);
+      setShowDropdown(results.length > 0);
+    } catch (err) {
+      console.error("Error searching users:", err);
+      setSearchResults([]);
+      setShowDropdown(false);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [token]);
+
+  // Debounce pour la recherche
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (newUsername && !selectedUser) {
+        searchUsers(newUsername);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [newUsername, selectedUser, searchUsers]);
+
+  // Fermer le dropdown si on clique en dehors
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Gérer la sélection d'un utilisateur
+  const handleSelectUser = (user: SearchUser) => {
+    setSelectedUser(user);
+    setNewUsername(user.username);
+    setShowDropdown(false);
+    setSearchResults([]);
+    setHighlightedIndex(-1);
+  };
+
+  // Gérer les touches clavier pour la navigation
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showDropdown || searchResults.length === 0) return;
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setHighlightedIndex((prev) =>
+          prev < searchResults.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (highlightedIndex >= 0 && highlightedIndex < searchResults.length) {
+          handleSelectUser(searchResults[highlightedIndex]);
+        } else if (searchResults.length === 1) {
+          handleSelectUser(searchResults[0]);
+        }
+        break;
+      case "Escape":
+        setShowDropdown(false);
+        setHighlightedIndex(-1);
+        break;
+    }
+  };
 
   const handleAddUser = async () => {
     if (!newUsername.trim()) return;
@@ -51,6 +167,8 @@ export function ProjectUsersModal({ isOpen, onClose, projectId }: ProjectUsersMo
       // Refresh the users list
       await mutate();
       setNewUsername("");
+      setSelectedUser(null);
+      setSearchResults([]);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -122,19 +240,59 @@ export function ProjectUsersModal({ isOpen, onClose, projectId }: ProjectUsersMo
               {t("users.addUser", { default: "Ajouter un utilisateur" })}
             </h3>
             <div className="flex gap-2">
-              <input
-                type="text"
-                value={newUsername}
-                onChange={(e) => setNewUsername(e.target.value)}
-                placeholder={t("users.usernamePlaceholder", { default: "Nom d'utilisateur" })}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyPress={(e) => {
-                  if (e.key === "Enter") handleAddUser();
-                }}
-              />
+              <div className="flex-1 relative" ref={dropdownRef}>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => {
+                    setNewUsername(e.target.value);
+                    setSelectedUser(null);
+                  }}
+                  onKeyDown={handleKeyDown}
+                  onFocus={() => {
+                    if (searchResults.length > 0) {
+                      setShowDropdown(true);
+                    }
+                  }}
+                  placeholder={t("users.usernamePlaceholder", { default: "Nom d'utilisateur" })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autoComplete="off"
+                />
+                {isSearching && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                  </div>
+                )}
+
+                {/* Dropdown de suggestions */}
+                {showDropdown && searchResults.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {searchResults.map((user, index) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => handleSelectUser(user)}
+                        className={`w-full text-left px-4 py-2 hover:bg-blue-50 transition-colors ${
+                          index === highlightedIndex ? "bg-blue-100" : ""
+                        } ${index === 0 ? "rounded-t-lg" : ""} ${
+                          index === searchResults.length - 1 ? "rounded-b-lg" : ""
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
+                            {user.username.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-gray-900">{user.username}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleAddUser}
-                disabled={addingUser || !newUsername.trim()}
+                disabled={addingUser || !selectedUser}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {addingUser ? (
