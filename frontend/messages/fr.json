@@ -312,7 +312,9 @@
       "code": "Code Mermaid",
       "preview": "Aperçu en direct",
       "codePlaceholder": "Entrez votre code Mermaid ici...",
-      "emptyPreview": "Entrez du code pour voir l'aperçu"
+      "emptyPreview": "Entrez du code pour voir l'aperçu",
+      "parseError": "Erreur de syntaxe dans le code Mermaid.",
+      "parseErrorWithLine": "Erreur de syntaxe dans le code Mermaid à la ligne {line}."
     }
   }
 }

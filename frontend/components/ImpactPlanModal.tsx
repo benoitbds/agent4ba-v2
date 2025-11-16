@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import type { ImpactPlan, WorkItem, ModifiedItem } from "@/types/events";
 import { useState, type ReactElement } from "react";
 import DiffViewer from "./DiffViewer";
+import MermaidDiagram from "./MermaidDiagram";
 
 interface ImpactPlanModalProps {
   impactPlan: ImpactPlan;
@@ -86,7 +87,7 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
           <div className="p-3 space-y-2">
             {addedDiagrams.map((diagram) => (
               <div key={diagram.id} className="bg-white p-3 rounded border border-blue-200">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-2">
                   <span className="text-sm font-semibold text-blue-900">
                     {diagram.title}
                   </span>
@@ -94,8 +95,12 @@ function ModifiedItemView({ modifiedItem }: { modifiedItem: ModifiedItem }): Rea
                     {diagram.id}
                   </span>
                 </div>
-                <div className="text-xs text-blue-700">
+                <div className="text-xs text-blue-700 mb-3">
                   {t("timeline.diagramAddedToItem", { itemId: after.id })}
+                </div>
+                {/* Prévisualisation du diagramme */}
+                <div className="mt-2">
+                  <MermaidDiagram code={diagram.code} />
                 </div>
               </div>
             ))}

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import { AlertCircle } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface MermaidDiagramProps {
   code: string;
@@ -24,11 +25,26 @@ function extractMermaidCode(rawCode: string): string {
 }
 
 /**
+ * Extrait le numéro de ligne d'un message d'erreur Mermaid
+ * @param errorMessage - Message d'erreur de Mermaid
+ * @returns Numéro de ligne ou null si non trouvé
+ */
+function extractLineNumber(errorMessage: string): number | null {
+  // Chercher des patterns comme "line 7", "on line 5", "in line 3", etc.
+  const lineMatch = errorMessage.match(/(?:line|Line)\s+(\d+)/);
+  if (lineMatch) {
+    return parseInt(lineMatch[1], 10);
+  }
+  return null;
+}
+
+/**
  * Composant pour afficher un diagramme Mermaid avec gestion d'erreur non bloquante
  *
  * @param code - Code Mermaid à rendre
  */
 export default function MermaidDiagram({ code }: MermaidDiagramProps) {
+  const t = useTranslations();
   const containerRef = useRef<HTMLDivElement>(null);
   const [parseError, setParseError] = useState<string | null>(null);
 
@@ -71,7 +87,17 @@ export default function MermaidDiagram({ code }: MermaidDiagramProps) {
         console.error('Error rendering Mermaid diagram:', err);
         // Ne pas effacer le conteneur - garder le dernier SVG valide
         // Juste définir l'erreur pour afficher une bannière discrète
-        setParseError(err instanceof Error ? err.message : 'Unknown error');
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+
+        // Extraire le numéro de ligne si possible
+        const lineNumber = extractLineNumber(errorMessage);
+
+        // Créer un message d'erreur simplifié et traduit
+        const simplifiedError = lineNumber
+          ? t('diagram.editor.parseErrorWithLine', { line: lineNumber })
+          : t('diagram.editor.parseError');
+
+        setParseError(simplifiedError);
       }
     };
 
@@ -93,10 +119,7 @@ export default function MermaidDiagram({ code }: MermaidDiagramProps) {
           <div className="flex items-start gap-2 p-3">
             <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-red-900">
-                Parse Error
-              </p>
-              <p className="text-xs text-red-700 mt-0.5 break-words">
+              <p className="text-xs text-red-700 break-words">
                 {parseError}
               </p>
             </div>
