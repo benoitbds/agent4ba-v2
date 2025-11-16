@@ -225,6 +225,163 @@ class ProjectContextService:
         import shutil
         shutil.rmtree(project_dir)
 
+    def create_project(self, project_id: str, creator_user_id: str) -> None:
+        """
+        Crée un nouveau projet et associe automatiquement l'utilisateur créateur.
+
+        Args:
+            project_id: Identifiant unique du projet
+            creator_user_id: ID de l'utilisateur qui crée le projet
+
+        Raises:
+            ValueError: Si le projet existe déjà
+        """
+        project_dir = self._get_project_dir(project_id)
+
+        if project_dir.exists():
+            raise ValueError(f"Project '{project_id}' already exists")
+
+        # Créer le répertoire du projet
+        project_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialiser un backlog vide
+        self.save_backlog(project_id, [])
+
+        # Créer le fichier de gestion des utilisateurs du projet
+        users_file = project_dir / "users.json"
+        users_data = {
+            "project_id": project_id,
+            "user_ids": [creator_user_id],
+        }
+
+        with users_file.open("w", encoding="utf-8") as f:
+            json.dump(users_data, f, indent=2, ensure_ascii=False)
+
+    def add_user_to_project(self, project_id: str, user_id: str) -> None:
+        """
+        Ajoute un utilisateur à un projet.
+
+        Args:
+            project_id: Identifiant unique du projet
+            user_id: ID de l'utilisateur à ajouter
+
+        Raises:
+            FileNotFoundError: Si le projet n'existe pas
+        """
+        project_dir = self._get_project_dir(project_id)
+
+        if not project_dir.exists():
+            raise FileNotFoundError(f"Project '{project_id}' does not exist")
+
+        users_file = project_dir / "users.json"
+
+        # Charger les utilisateurs existants
+        if users_file.exists():
+            with users_file.open("r", encoding="utf-8") as f:
+                users_data = json.load(f)
+        else:
+            users_data = {"project_id": project_id, "user_ids": []}
+
+        # Ajouter l'utilisateur s'il n'est pas déjà présent
+        if user_id not in users_data["user_ids"]:
+            users_data["user_ids"].append(user_id)
+
+        # Sauvegarder
+        with users_file.open("w", encoding="utf-8") as f:
+            json.dump(users_data, f, indent=2, ensure_ascii=False)
+
+    def remove_user_from_project(self, project_id: str, user_id: str) -> None:
+        """
+        Retire un utilisateur d'un projet.
+
+        Args:
+            project_id: Identifiant unique du projet
+            user_id: ID de l'utilisateur à retirer
+
+        Raises:
+            FileNotFoundError: Si le projet n'existe pas
+            ValueError: Si l'utilisateur n'est pas membre du projet
+        """
+        project_dir = self._get_project_dir(project_id)
+
+        if not project_dir.exists():
+            raise FileNotFoundError(f"Project '{project_id}' does not exist")
+
+        users_file = project_dir / "users.json"
+
+        if not users_file.exists():
+            raise FileNotFoundError(f"No users file found for project '{project_id}'")
+
+        # Charger les utilisateurs existants
+        with users_file.open("r", encoding="utf-8") as f:
+            users_data = json.load(f)
+
+        # Retirer l'utilisateur
+        if user_id not in users_data["user_ids"]:
+            raise ValueError(f"User '{user_id}' is not a member of project '{project_id}'")
+
+        users_data["user_ids"].remove(user_id)
+
+        # Sauvegarder
+        with users_file.open("w", encoding="utf-8") as f:
+            json.dump(users_data, f, indent=2, ensure_ascii=False)
+
+    def is_user_authorized_for_project(self, project_id: str, user_id: str) -> bool:
+        """
+        Vérifie si un utilisateur est autorisé à accéder à un projet.
+
+        Args:
+            project_id: Identifiant unique du projet
+            user_id: ID de l'utilisateur
+
+        Returns:
+            True si l'utilisateur est autorisé, False sinon
+        """
+        project_dir = self._get_project_dir(project_id)
+
+        if not project_dir.exists():
+            return False
+
+        users_file = project_dir / "users.json"
+
+        if not users_file.exists():
+            return False
+
+        # Charger les utilisateurs du projet
+        with users_file.open("r", encoding="utf-8") as f:
+            users_data = json.load(f)
+
+        return user_id in users_data.get("user_ids", [])
+
+    def get_project_users(self, project_id: str) -> list[str]:
+        """
+        Récupère la liste des IDs des utilisateurs d'un projet.
+
+        Args:
+            project_id: Identifiant unique du projet
+
+        Returns:
+            Liste des IDs des utilisateurs du projet
+
+        Raises:
+            FileNotFoundError: Si le projet n'existe pas
+        """
+        project_dir = self._get_project_dir(project_id)
+
+        if not project_dir.exists():
+            raise FileNotFoundError(f"Project '{project_id}' does not exist")
+
+        users_file = project_dir / "users.json"
+
+        if not users_file.exists():
+            return []
+
+        # Charger les utilisateurs du projet
+        with users_file.open("r", encoding="utf-8") as f:
+            users_data = json.load(f)
+
+        return users_data.get("user_ids", [])
+
     def update_work_item_in_backlog(
         self, project_id: str, item_id: str, updated_data: dict
     ) -> WorkItem:

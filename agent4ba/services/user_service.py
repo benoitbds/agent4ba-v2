@@ -127,6 +127,7 @@ class UserService:
             username=username,
             hashed_password=hashed_password,
             is_active=True,
+            project_ids=[],
         )
 
         # Sauvegarder
@@ -168,3 +169,89 @@ class UserService:
             return None
 
         return user
+
+    def add_project_to_user(self, user_id: str, project_id: str) -> User:
+        """
+        Ajoute un projet à la liste des projets d'un utilisateur.
+
+        Args:
+            user_id: ID de l'utilisateur
+            project_id: ID du projet à ajouter
+
+        Returns:
+            L'utilisateur mis à jour
+
+        Raises:
+            ValueError: Si l'utilisateur n'existe pas
+        """
+        users = self._load_users()
+        user_index = None
+
+        for idx, user_data in enumerate(users):
+            if user_data["id"] == user_id:
+                user_index = idx
+                break
+
+        if user_index is None:
+            raise ValueError(f"User with id '{user_id}' not found")
+
+        # Ajouter le project_id s'il n'est pas déjà présent
+        if "project_ids" not in users[user_index]:
+            users[user_index]["project_ids"] = []
+
+        if project_id not in users[user_index]["project_ids"]:
+            users[user_index]["project_ids"].append(project_id)
+
+        self._save_users(users)
+        return User(**users[user_index])
+
+    def remove_project_from_user(self, user_id: str, project_id: str) -> User:
+        """
+        Retire un projet de la liste des projets d'un utilisateur.
+
+        Args:
+            user_id: ID de l'utilisateur
+            project_id: ID du projet à retirer
+
+        Returns:
+            L'utilisateur mis à jour
+
+        Raises:
+            ValueError: Si l'utilisateur n'existe pas
+        """
+        users = self._load_users()
+        user_index = None
+
+        for idx, user_data in enumerate(users):
+            if user_data["id"] == user_id:
+                user_index = idx
+                break
+
+        if user_index is None:
+            raise ValueError(f"User with id '{user_id}' not found")
+
+        # Retirer le project_id s'il existe
+        if "project_ids" in users[user_index] and project_id in users[user_index]["project_ids"]:
+            users[user_index]["project_ids"].remove(project_id)
+
+        self._save_users(users)
+        return User(**users[user_index])
+
+    def get_user_projects(self, user_id: str) -> list[str]:
+        """
+        Récupère la liste des projets d'un utilisateur.
+
+        Args:
+            user_id: ID de l'utilisateur
+
+        Returns:
+            Liste des IDs de projets
+
+        Raises:
+            ValueError: Si l'utilisateur n'existe pas
+        """
+        user = self.get_user_by_id(user_id)
+        if user is None:
+            raise ValueError(f"User with id '{user_id}' not found")
+
+        return user.project_ids

@@ -20,6 +20,7 @@ interface HeaderProps {
   onOpenDocuments: () => void;
   onCreateProject: () => void;
   onDeleteProject: () => void;
+  onManageUsers: () => void;
 }
 
 export function Header({
@@ -29,6 +30,7 @@ export function Header({
   onOpenDocuments,
   onCreateProject,
   onDeleteProject,
+  onManageUsers,
 }: HeaderProps) {
   const router = useRouter();
   const t = useTranslations();
@@ -63,6 +65,7 @@ export function Header({
               onOpenDocuments={onOpenDocuments}
               onCreateProject={onCreateProject}
               onDeleteProject={onDeleteProject}
+              onManageUsers={onManageUsers}
               disabled={false}
             />
           </div>
@@ -119,6 +122,16 @@ export function Header({
                   className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span>{t("documents.title", { default: "Documents" })}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    onManageUsers();
+                  }}
+                  disabled={!selectedProject}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span>{t("users.manageUsers", { default: "Gérer les utilisateurs" })}</span>
                 </button>
                 <button
                   onClick={() => {

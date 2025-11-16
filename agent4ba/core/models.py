@@ -12,6 +12,10 @@ class User(BaseModel):
     username: str = Field(..., description="Nom d'utilisateur unique")
     hashed_password: str = Field(..., description="Mot de passe hashé")
     is_active: bool = Field(default=True, description="Indique si l'utilisateur est actif")
+    project_ids: List[str] = Field(
+        default_factory=list,
+        description="Liste des identifiants de projets auxquels l'utilisateur est associé",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -21,6 +25,7 @@ class User(BaseModel):
                     "username": "john_doe",
                     "hashed_password": "$2b$12$...",
                     "is_active": True,
+                    "project_ids": ["project-1", "project-2"],
                 }
             ]
         }
