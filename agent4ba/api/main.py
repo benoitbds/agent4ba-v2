@@ -358,7 +358,7 @@ async def event_stream(request: ChatRequest) -> AsyncIterator[str]:
             impact_plan_event = ImpactPlanReadyEvent(
                 impact_plan=impact_plan,
                 thread_id=thread_id,
-                status=status,
+                status="WAITING",
             )
             yield f"data: {impact_plan_event.model_dump_json()}\n\n"
             timeline_events.append(impact_plan_event.model_dump())
@@ -593,15 +593,6 @@ def run_workflow_in_background(
     config: dict[str, Any] = {"configurable": {"thread_id": session_id}}
 
     try:
-        # Pousser l'événement WORKFLOW_START immédiatement
-        workflow_start = TLEvent(
-            type="WORKFLOW_START",
-            message=f"Processing query for project {project_id}",
-            status="IN_PROGRESS",
-        )
-        timeline_service.add_event(session_id, workflow_start)
-        logger.info("[BACKGROUND] Pushed WORKFLOW_START event")
-
         # Exécuter le workflow avec streaming pour pousser les événements en temps réel
         final_state: dict[str, Any] = {}
         processed_event_ids = set()  # Pour éviter les doublons
@@ -695,7 +686,7 @@ def run_workflow_in_background(
             impact_plan_event = ImpactPlanReadyEvent(
                 impact_plan=impact_plan,
                 thread_id=session_id,
-                status=workflow_status,
+                status="WAITING",
             )
             timeline_events.append(impact_plan_event.model_dump())
 

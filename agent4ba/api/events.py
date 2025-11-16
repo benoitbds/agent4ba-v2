@@ -76,8 +76,8 @@ class ImpactPlanReadyEvent(StreamEvent):
     impact_plan: dict[str, Any] = Field(..., description="Plan d'impact généré")
     thread_id: str = Field(..., description="Identifiant du thread pour validation")
     status: str = Field(
-        default="awaiting_approval",
-        description="Statut du workflow",
+        default="WAITING",
+        description="Statut de l'événement pour l'affichage timeline",
     )
 
 
