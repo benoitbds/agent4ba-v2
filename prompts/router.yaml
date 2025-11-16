@@ -27,9 +27,11 @@ system_prompt: |
   - **Tâche**: `generate_diagram`
   - **Quand l'utiliser**:
     * Requête demandant une représentation visuelle d'un processus ou système
+    * Visualisation d'un work item existant (feature, user story) sous forme de diagramme
     * Mots-clés: "dessine", "diagramme", "modélise", "flux", "séquence", "graphique", "visualise", "schéma"
     * Demandes de type "crée un diagramme de...", "montre-moi le flux de...", "représente visuellement..."
-  - **Argument**: `{}` (vide - l'agent utilise le contexte RAG et la requête reformulée)
+    * **IMPORTANT**: S'active AUSSI quand un ID de work item est présent dans le contexte ET que la requête mentionne un diagramme
+  - **Argument**: `{}` (vide - l'agent utilise le work item du contexte OU le contexte RAG et la requête reformulée)
 
   ## 4. **FallbackAgent** - Gestionnaire des requêtes hors-scope
   - **Spécialité**: Gérer les requêtes qui ne correspondent à AUCUN agent
@@ -183,6 +185,28 @@ examples:
     output: |
       {
         "thought": "1. Analyse Sémantique: L'utilisateur demande de modéliser les transitions d'état. 2. Extraction d'Entités: Mot-clé 'modélise' suggère une visualisation. 3. Justification: diagram_master_agent peut créer des diagrammes d'état pour représenter visuellement les transitions. 4. Décision: Utiliser diagram_master_agent avec generate_diagram.",
+        "decision": {
+          "agent": "diagram_master_agent",
+          "task": "generate_diagram",
+          "args": {}
+        }
+      }
+
+  - input: "Génère un diagramme de séquence pour FIR-3"
+    output: |
+      {
+        "thought": "1. Analyse Sémantique: L'utilisateur demande une représentation visuelle (diagramme de séquence) pour un work item spécifique. 2. Extraction d'Entités: ID 'FIR-3' détecté. Mots-clés: 'diagramme de séquence', 'génère'. 3. Justification: diagram_master_agent est spécialisé dans la génération de diagrammes. La présence d'un ID de work item indique que le contexte est déjà chargé. L'agent utilisera le work item complet pour générer le diagramme. story_teller_agent est écarté car il s'agit d'une visualisation, pas d'une décomposition. 4. Décision: Utiliser diagram_master_agent avec generate_diagram.",
+        "decision": {
+          "agent": "diagram_master_agent",
+          "task": "generate_diagram",
+          "args": {}
+        }
+      }
+
+  - input: "Crée un diagramme de flux pour la feature PRO-1"
+    output: |
+      {
+        "thought": "1. Analyse Sémantique: L'utilisateur souhaite visualiser le flux d'une feature existante sous forme de diagramme. 2. Extraction d'Entités: ID 'PRO-1' détecté. Mots-clés: 'diagramme de flux', 'crée'. 3. Justification: diagram_master_agent est le spécialiste de la visualisation. Le work item PRO-1 sera chargé depuis le contexte et utilisé comme source d'information. epic_architect_agent et story_teller_agent sont écartés car l'objectif est la visualisation, pas la création ou décomposition. 4. Décision: Utiliser diagram_master_agent avec generate_diagram.",
         "decision": {
           "agent": "diagram_master_agent",
           "task": "generate_diagram",
