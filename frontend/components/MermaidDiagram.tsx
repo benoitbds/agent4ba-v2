@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
+import { AlertCircle } from 'lucide-react';
 
 interface MermaidDiagramProps {
   code: string;
@@ -23,13 +24,13 @@ function extractMermaidCode(rawCode: string): string {
 }
 
 /**
- * Composant pour afficher un diagramme Mermaid
+ * Composant pour afficher un diagramme Mermaid avec gestion d'erreur non bloquante
  *
  * @param code - Code Mermaid à rendre
  */
 export default function MermaidDiagram({ code }: MermaidDiagramProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
 
   useEffect(() => {
     // Initialiser Mermaid avec la configuration
@@ -49,7 +50,7 @@ export default function MermaidDiagram({ code }: MermaidDiagramProps) {
 
         // 2. Vérifier que le code n'est pas vide après nettoyage
         if (!cleanCode) {
-          setError('Le code Mermaid est vide');
+          setParseError('Le code Mermaid est vide');
           return;
         }
 
@@ -64,38 +65,44 @@ export default function MermaidDiagram({ code }: MermaidDiagramProps) {
           containerRef.current.innerHTML = svg;
         }
 
-        setError(null);
+        // 6. Réinitialiser l'erreur si le rendu réussit
+        setParseError(null);
       } catch (err) {
         console.error('Error rendering Mermaid diagram:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        // Ne pas effacer le conteneur - garder le dernier SVG valide
+        // Juste définir l'erreur pour afficher une bannière discrète
+        setParseError(err instanceof Error ? err.message : 'Unknown error');
       }
     };
 
     renderDiagram();
   }, [code]);
 
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded p-4 text-sm">
-        <p className="text-red-700 font-semibold mb-2">Erreur lors du rendu du diagramme</p>
-        <p className="text-red-600 text-xs">{error}</p>
-        <details className="mt-2">
-          <summary className="cursor-pointer text-red-700 font-medium text-xs">
-            Voir le code Mermaid
-          </summary>
-          <pre className="mt-2 p-2 bg-red-100 rounded text-xs overflow-x-auto">
-            {code}
-          </pre>
-        </details>
-      </div>
-    );
-  }
-
   return (
-    <div
-      ref={containerRef}
-      className="mermaid-diagram bg-white border border-gray-200 rounded p-4 overflow-x-auto"
-      style={{ minHeight: '100px' }}
-    />
+    <div className="relative w-full">
+      {/* Conteneur du diagramme - conserve toujours sa taille */}
+      <div
+        ref={containerRef}
+        className="mermaid-diagram bg-white border border-gray-200 rounded p-4 overflow-x-auto"
+        style={{ minHeight: '100px' }}
+      />
+
+      {/* Bannière d'erreur discrète - affichée uniquement si erreur */}
+      {parseError && (
+        <div className="absolute bottom-0 left-0 right-0 mx-4 mb-4 bg-red-50 border border-red-300 rounded-lg shadow-md animate-in slide-in-from-bottom-2 duration-200">
+          <div className="flex items-start gap-2 p-3">
+            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-red-900">
+                Parse Error
+              </p>
+              <p className="text-xs text-red-700 mt-0.5 break-words">
+                {parseError}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
