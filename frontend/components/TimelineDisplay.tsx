@@ -7,6 +7,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { TimelineEvent } from '@/types/timeline';
+import MermaidDiagram from './MermaidDiagram';
 
 interface TimelineDisplayProps {
   events: TimelineEvent[];
@@ -73,6 +74,22 @@ function formatTimestamp(timestamp: string): string {
 }
 
 /**
+ * Détecte si un message contient un bloc de code Mermaid
+ */
+function isMermaidCode(message: string): boolean {
+  return message.trim().startsWith('```mermaid');
+}
+
+/**
+ * Extrait le code Mermaid d'un message
+ */
+function extractMermaidCode(message: string): string {
+  const lines = message.trim().split('\n');
+  // Retirer la première ligne (```mermaid) et la dernière (```)
+  return lines.slice(1, -1).join('\n');
+}
+
+/**
  * Composant d'affichage de la timeline
  */
 export default function TimelineDisplay({ events }: TimelineDisplayProps) {
@@ -135,10 +152,16 @@ export default function TimelineDisplay({ events }: TimelineDisplayProps) {
                   </span>
                 </div>
 
-                {/* Message */}
-                <p className="text-sm text-gray-700 mb-2">
-                  {event.message}
-                </p>
+                {/* Message ou Diagramme Mermaid */}
+                {isMermaidCode(event.message) ? (
+                  <div className="mb-2">
+                    <MermaidDiagram code={extractMermaidCode(event.message)} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-700 mb-2">
+                    {event.message}
+                  </p>
+                )}
 
                 {/* Status badge */}
                 <div className="flex items-center gap-2">
