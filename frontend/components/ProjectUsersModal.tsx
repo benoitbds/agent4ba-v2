@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { X, UserPlus, Trash2, Loader2 } from "lucide-react";
 import { useProjectUsers } from "@/hooks/useProjectUsers";
+import { useAuth } from "@/context/AuthContext";
 
 interface ProjectUsersModalProps {
   isOpen: boolean;
@@ -13,7 +14,8 @@ interface ProjectUsersModalProps {
 
 export function ProjectUsersModal({ isOpen, onClose, projectId }: ProjectUsersModalProps) {
   const t = useTranslations();
-  const { users, isLoading, error, mutate } = useProjectUsers(isOpen ? projectId : null);
+  const { token } = useAuth();
+  const { users, isLoading, error, mutate } = useProjectUsers(isOpen ? projectId : null, token);
   const [newUsername, setNewUsername] = useState("");
   const [addingUser, setAddingUser] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -25,7 +27,10 @@ export function ProjectUsersModal({ isOpen, onClose, projectId }: ProjectUsersMo
     setActionError(null);
 
     try {
-      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const url = `${baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl}/projects/${projectId}/users`;
 
@@ -57,7 +62,10 @@ export function ProjectUsersModal({ isOpen, onClose, projectId }: ProjectUsersMo
     setActionError(null);
 
     try {
-      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const url = `${baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl}/projects/${projectId}/users/${userId}`;
 

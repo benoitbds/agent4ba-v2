@@ -36,12 +36,14 @@ function getApiUrl(path: string): string {
  * Hook personnalisé pour gérer les utilisateurs d'un projet
  *
  * @param projectId - L'ID du projet
+ * @param token - Le token d'authentification JWT
  * @returns Un objet contenant les utilisateurs, l'état de chargement, l'erreur et une fonction mutate
  *
  * @example
- * const { users, isLoading, error, mutate } = useProjectUsers(projectId);
+ * const { token } = useAuth();
+ * const { users, isLoading, error, mutate } = useProjectUsers(projectId, token);
  */
-export function useProjectUsers(projectId: string | null): UseProjectUsersReturn {
+export function useProjectUsers(projectId: string | null, token: string | null): UseProjectUsersReturn {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,16 +54,16 @@ export function useProjectUsers(projectId: string | null): UseProjectUsersReturn
       return;
     }
 
+    if (!token) {
+      setError('Project ID or authentication token is missing');
+      setUsers([]);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
-
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
       const url = getApiUrl(`/projects/${projectId}/users`);
       console.log(`[USE_PROJECT_USERS] Fetching users for project: ${projectId}`);
       console.log(`[USE_PROJECT_USERS] API URL: ${url}`);
@@ -88,7 +90,7 @@ export function useProjectUsers(projectId: string | null): UseProjectUsersReturn
     } finally {
       setIsLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, token]);
 
   // Fonction mutate pour rafraîchir manuellement la liste
   const mutate = useCallback(async () => {
