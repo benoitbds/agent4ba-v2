@@ -1,13 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { X, UserPlus, Trash2, Loader2 } from "lucide-react";
-
-interface User {
-  id: string;
-  username: string;
-}
+import { useProjectUsers } from "@/hooks/useProjectUsers";
 
 interface ProjectUsersModalProps {
   isOpen: boolean;
@@ -17,52 +13,23 @@ interface ProjectUsersModalProps {
 
 export function ProjectUsersModal({ isOpen, onClose, projectId }: ProjectUsersModalProps) {
   const t = useTranslations();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { users, isLoading, error, mutate } = useProjectUsers(isOpen ? projectId : null);
   const [newUsername, setNewUsername] = useState("");
   const [addingUser, setAddingUser] = useState(false);
-
-  useEffect(() => {
-    if (isOpen && projectId) {
-      loadUsers();
-    }
-  }, [isOpen, projectId]);
-
-  const loadUsers = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:8000/projects/${projectId}/users`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to load users");
-      }
-
-      const data = await response.json();
-      setUsers(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const handleAddUser = async () => {
     if (!newUsername.trim()) return;
 
     setAddingUser(true);
-    setError(null);
+    setActionError(null);
 
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:8000/projects/${projectId}/users`, {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const url = `${baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl}/projects/${projectId}/users`;
+
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -72,26 +39,29 @@ export function ProjectUsersModal({ isOpen, onClose, projectId }: ProjectUsersMo
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ detail: "Failed to add user" }));
         throw new Error(errorData.detail || "Failed to add user");
       }
 
       // Refresh the users list
-      await loadUsers();
+      await mutate();
       setNewUsername("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setActionError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setAddingUser(false);
     }
   };
 
   const handleRemoveUser = async (userId: string) => {
-    setError(null);
+    setActionError(null);
 
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:8000/projects/${projectId}/users/${userId}`, {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const url = `${baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl}/projects/${projectId}/users/${userId}`;
+
+      const response = await fetch(url, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -99,13 +69,14 @@ export function ProjectUsersModal({ isOpen, onClose, projectId }: ProjectUsersMo
       });
 
       if (!response.ok) {
-        throw new Error("Failed to remove user");
+        const errorData = await response.json().catch(() => ({ detail: "Failed to remove user" }));
+        throw new Error(errorData.detail || "Failed to remove user");
       }
 
       // Refresh the users list
-      await loadUsers();
+      await mutate();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setActionError(err instanceof Error ? err.message : "Unknown error");
     }
   };
 
@@ -131,9 +102,9 @@ export function ProjectUsersModal({ isOpen, onClose, projectId }: ProjectUsersMo
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {/* Error Message */}
-          {error && (
+          {(error || actionError) && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-              {error}
+              {error || actionError}
             </div>
           )}
 
@@ -174,7 +145,7 @@ export function ProjectUsersModal({ isOpen, onClose, projectId }: ProjectUsersMo
               {t("users.currentUsers", { default: "Utilisateurs actuels" })}
             </h3>
 
-            {loading ? (
+            {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
               </div>
