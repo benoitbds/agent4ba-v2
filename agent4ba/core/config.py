@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    # Configuration d'authentification
+    DEFAULT_AUTH_SCHEME: str = "bearer"
+
 
 # Instance unique des paramètres pour toute l'application
 settings = Settings()

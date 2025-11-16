@@ -11,6 +11,7 @@ import CreateProjectModal from "@/components/CreateProjectModal";
 import DeleteProjectModal from "@/components/DeleteProjectModal";
 import BacklogView from "@/components/BacklogView";
 import DocumentManagementModal from "@/components/DocumentManagementModal";
+import { ProjectUsersModal } from "@/components/ProjectUsersModal";
 import ContextPills from "@/components/ContextPills";
 import { PrivateRoute } from "@/components/PrivateRoute";
 import { Header } from "@/components/Header";
@@ -38,6 +39,7 @@ export default function Home() {
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
   const [isDeleteProjectModalOpen, setIsDeleteProjectModalOpen] = useState(false);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
   const [chatContext, setChatContext] = useState<ContextItem[]>([]);
   const chatInputRef = useRef<ChatInputRef>(null);
 
@@ -711,6 +713,7 @@ export default function Home() {
           onOpenDocuments={() => setIsDocumentModalOpen(true)}
           onCreateProject={() => setIsCreateProjectModalOpen(true)}
           onDeleteProject={() => setIsDeleteProjectModalOpen(true)}
+          onManageUsers={() => setIsUsersModalOpen(true)}
         />
 
       {/* Main Content */}
@@ -852,6 +855,13 @@ export default function Home() {
         documents={documents}
         onDocumentsChange={handleDocumentUploadSuccess}
         onSelectDocument={handleSelectDocument}
+      />
+
+      {/* Project Users Modal */}
+      <ProjectUsersModal
+        isOpen={isUsersModalOpen}
+        onClose={() => setIsUsersModalOpen(false)}
+        projectId={selectedProject}
       />
       </div>
     </PrivateRoute>

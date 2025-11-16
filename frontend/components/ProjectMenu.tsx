@@ -2,17 +2,18 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { FileText, Plus, Trash2, Settings } from "lucide-react";
+import { FileText, Plus, Trash2, Settings, Users } from "lucide-react";
 
 /**
  * ProjectMenu - Dropdown menu for project-related actions
- * Groups project actions: view documents, create project, delete project
+ * Groups project actions: view documents, create project, delete project, manage users
  */
 interface ProjectMenuProps {
   selectedProject: string;
   onOpenDocuments: () => void;
   onCreateProject: () => void;
   onDeleteProject: () => void;
+  onManageUsers: () => void;
   disabled?: boolean;
 }
 
@@ -21,6 +22,7 @@ export function ProjectMenu({
   onOpenDocuments,
   onCreateProject,
   onDeleteProject,
+  onManageUsers,
   disabled = false,
 }: ProjectMenuProps) {
   const t = useTranslations();
@@ -69,6 +71,19 @@ export function ProjectMenu({
           >
             <FileText className="w-4 h-4" />
             <span>{t("documents.title", { default: "Documents du projet" })}</span>
+          </button>
+
+          {/* Manage Users */}
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              onManageUsers();
+            }}
+            disabled={!selectedProject}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors focus:outline-none focus:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+          >
+            <Users className="w-4 h-4" />
+            <span>{t("users.manageUsers", { default: "Gérer les utilisateurs" })}</span>
           </button>
 
           <div className="border-t border-gray-100 my-1" />

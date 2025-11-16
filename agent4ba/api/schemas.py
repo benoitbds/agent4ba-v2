@@ -199,3 +199,19 @@ class ClarificationNeededResponse(BaseModel):
             ]
         }
     }
+
+
+class AddUserToProjectRequest(BaseModel):
+    """Requête pour ajouter un utilisateur à un projet."""
+
+    username: str = Field(..., description="Nom d'utilisateur à ajouter au projet")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "username": "john_doe",
+                }
+            ]
+        }
+    }

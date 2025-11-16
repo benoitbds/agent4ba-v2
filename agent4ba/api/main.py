@@ -29,6 +29,7 @@ from agent4ba.api.events import (
     WorkflowCompleteEvent,
 )
 from agent4ba.api.schemas import (
+    AddUserToProjectRequest,
     ApprovalRequest,
     ChatRequest,
     ChatResponse,
@@ -41,7 +42,9 @@ from agent4ba.api.schemas import (
 from agent4ba.core.document_ingestion import DocumentIngestionService
 from agent4ba.core.logger import setup_logger
 from agent4ba.core.models import User
+from agent4ba.core.security import get_current_project_user
 from agent4ba.core.storage import ProjectContextService
+from agent4ba.services.user_service import UserService
 
 # Configurer le logger
 logger = setup_logger(__name__)
@@ -963,13 +966,13 @@ async def list_projects(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> JSONResponse:
     """
-    Liste tous les projets disponibles.
+    Liste tous les projets auxquels l'utilisateur a accès.
 
     Args:
         current_user: Utilisateur authentifié (injecté par la dépendance)
 
     Returns:
-        JSONResponse avec la liste des identifiants de projets
+        JSONResponse avec la liste des identifiants de projets de l'utilisateur
 
     """
     storage = ProjectContextService()
@@ -978,11 +981,13 @@ async def list_projects(
     # Créer le répertoire s'il n'existe pas
     projects_dir.mkdir(parents=True, exist_ok=True)
 
-    # Scanner les sous-répertoires
+    # Scanner les sous-répertoires et filtrer par accès utilisateur
     project_ids = []
     for entry in projects_dir.iterdir():
         if entry.is_dir():
-            project_ids.append(entry.name)
+            # Vérifier si l'utilisateur a accès à ce projet
+            if storage.is_user_authorized_for_project(entry.name, current_user.id):
+                project_ids.append(entry.name)
 
     # Trier par ordre alphabétique
     project_ids.sort()
@@ -991,12 +996,16 @@ async def list_projects(
 
 
 @app.post("/projects")
-async def create_project(request: CreateProjectRequest) -> JSONResponse:
+async def create_project(
+    request: CreateProjectRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> JSONResponse:
     """
-    Crée un nouveau projet.
+    Crée un nouveau projet et associe automatiquement l'utilisateur créateur.
 
     Args:
         request: Requête contenant l'identifiant du projet à créer
+        current_user: Utilisateur authentifié (injecté par la dépendance)
 
     Returns:
         JSONResponse avec l'identifiant du projet créé
@@ -1005,35 +1014,37 @@ async def create_project(request: CreateProjectRequest) -> JSONResponse:
         HTTPException: Si le projet existe déjà
     """
     storage = ProjectContextService()
-    projects_dir = storage.base_path
-    project_path = projects_dir / request.project_id
+    user_service = UserService()
 
-    # Vérifier si le projet existe déjà
-    if project_path.exists():
+    try:
+        # Créer le projet et associer l'utilisateur créateur
+        storage.create_project(request.project_id, current_user.id)
+
+        # Ajouter le projet à la liste des projets de l'utilisateur
+        user_service.add_project_to_user(current_user.id, request.project_id)
+
+        return JSONResponse(
+            content={"project_id": request.project_id, "message": "Project created successfully"},
+            status_code=201,
+        )
+    except ValueError as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Project '{request.project_id}' already exists",
-        )
-
-    # Créer le répertoire du projet
-    project_path.mkdir(parents=True, exist_ok=True)
-
-    # Initialiser un backlog vide
-    storage.save_backlog(request.project_id, [])
-
-    return JSONResponse(
-        content={"project_id": request.project_id, "message": "Project created successfully"},
-        status_code=201,
-    )
+            detail=str(e),
+        ) from e
 
 
 @app.delete("/projects/{project_id}", status_code=204)
-async def delete_project(project_id: str) -> None:
+async def delete_project(
+    project_id: str,
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> None:
     """
     Supprime un projet et toutes ses données associées.
 
     Args:
         project_id: Identifiant unique du projet à supprimer
+        current_user: Utilisateur authentifié avec accès au projet
 
     Returns:
         Aucun contenu (code 204)
@@ -1042,8 +1053,21 @@ async def delete_project(project_id: str) -> None:
         HTTPException: Si le projet n'existe pas (404) ou si le project_id est invalide (400)
     """
     storage = ProjectContextService()
+    user_service = UserService()
 
     try:
+        # Récupérer tous les utilisateurs du projet
+        user_ids = storage.get_project_users(project_id)
+
+        # Supprimer le projet de la liste des projets de chaque utilisateur
+        for user_id in user_ids:
+            try:
+                user_service.remove_project_from_user(user_id, project_id)
+            except ValueError:
+                # L'utilisateur n'existe plus, on continue
+                pass
+
+        # Supprimer le projet
         storage.delete_project_data(project_id)
     except FileNotFoundError as e:
         raise HTTPException(
@@ -1057,8 +1081,152 @@ async def delete_project(project_id: str) -> None:
         ) from e
 
 
+@app.get("/projects/{project_id}/users")
+async def get_project_users(
+    project_id: str,
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> JSONResponse:
+    """
+    Liste les utilisateurs associés à un projet.
+
+    Args:
+        project_id: Identifiant unique du projet
+        current_user: Utilisateur authentifié avec accès au projet
+
+    Returns:
+        JSONResponse avec la liste des utilisateurs (id et username)
+
+    Raises:
+        HTTPException: Si le projet n'existe pas
+    """
+    storage = ProjectContextService()
+    user_service = UserService()
+
+    try:
+        user_ids = storage.get_project_users(project_id)
+
+        # Récupérer les informations des utilisateurs
+        users_info = []
+        for user_id in user_ids:
+            user = user_service.get_user_by_id(user_id)
+            if user:
+                users_info.append({
+                    "id": user.id,
+                    "username": user.username,
+                })
+
+        return JSONResponse(content=users_info)
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' not found: {e}",
+        ) from e
+
+
+@app.post("/projects/{project_id}/users", status_code=201)
+async def add_user_to_project(
+    project_id: str,
+    request: AddUserToProjectRequest,
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> JSONResponse:
+    """
+    Ajoute un utilisateur à un projet (invitation).
+
+    Args:
+        project_id: Identifiant unique du projet
+        request: Requête contenant le nom d'utilisateur à ajouter
+        current_user: Utilisateur authentifié avec accès au projet
+
+    Returns:
+        JSONResponse avec un message de confirmation
+
+    Raises:
+        HTTPException: Si le projet ou l'utilisateur n'existe pas
+    """
+    storage = ProjectContextService()
+    user_service = UserService()
+
+    try:
+        # Récupérer l'utilisateur par son username
+        user_to_add = user_service.get_user_by_username(request.username)
+        if user_to_add is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"User '{request.username}' not found",
+            )
+
+        # Ajouter l'utilisateur au projet
+        storage.add_user_to_project(project_id, user_to_add.id)
+
+        # Ajouter le projet à la liste des projets de l'utilisateur
+        user_service.add_project_to_user(user_to_add.id, project_id)
+
+        return JSONResponse(
+            content={
+                "message": f"User '{request.username}' added to project '{project_id}'",
+                "user_id": user_to_add.id,
+            },
+            status_code=201,
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' not found: {e}",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        ) from e
+
+
+@app.delete("/projects/{project_id}/users/{user_id}", status_code=204)
+async def remove_user_from_project(
+    project_id: str,
+    user_id: str,
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> None:
+    """
+    Retire un utilisateur d'un projet.
+
+    Args:
+        project_id: Identifiant unique du projet
+        user_id: ID de l'utilisateur à retirer
+        current_user: Utilisateur authentifié avec accès au projet
+
+    Returns:
+        Aucun contenu (code 204)
+
+    Raises:
+        HTTPException: Si le projet ou l'utilisateur n'existe pas
+    """
+    storage = ProjectContextService()
+    user_service = UserService()
+
+    try:
+        # Retirer l'utilisateur du projet
+        storage.remove_user_from_project(project_id, user_id)
+
+        # Retirer le projet de la liste des projets de l'utilisateur
+        user_service.remove_project_from_user(user_id, project_id)
+
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project or user not found: {e}",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        ) from e
+
+
 @app.get("/projects/{project_id}/backlog")
-async def get_project_backlog(project_id: str) -> JSONResponse:
+async def get_project_backlog(
+    project_id: str,
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> JSONResponse:
     """
     Récupère le backlog actuel d'un projet.
 
@@ -1086,7 +1254,10 @@ async def get_project_backlog(project_id: str) -> JSONResponse:
 
 
 @app.get("/projects/{project_id}/timeline")
-async def get_project_timeline(project_id: str) -> JSONResponse:
+async def get_project_timeline(
+    project_id: str,
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> JSONResponse:
     """
     Récupère l'historique complet de la timeline d'un projet.
 
@@ -1112,7 +1283,10 @@ async def get_project_timeline(project_id: str) -> JSONResponse:
 
 
 @app.get("/projects/{project_id}/documents")
-async def list_project_documents(project_id: str) -> JSONResponse:
+async def list_project_documents(
+    project_id: str,
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> JSONResponse:
     """
     Liste les documents d'un projet.
 
@@ -1147,6 +1321,7 @@ async def list_project_documents(project_id: str) -> JSONResponse:
 async def upload_project_document(
     project_id: str,
     file: UploadFile = File(...),
+    current_user: Annotated[User, Depends(get_current_project_user)] = None,
 ) -> JSONResponse:
     """
     Upload un document pour un projet et le vectorise automatiquement.
@@ -1213,7 +1388,11 @@ async def upload_project_document(
 
 
 @app.delete("/projects/{project_id}/documents/{document_name}", status_code=204)
-async def delete_project_document(project_id: str, document_name: str) -> None:
+async def delete_project_document(
+    project_id: str,
+    document_name: str,
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> None:
     """
     Supprime un document spécifique d'un projet et ses vecteurs associés.
 
@@ -1270,7 +1449,7 @@ async def delete_project_document(project_id: str, document_name: str) -> None:
 async def create_work_item(
     project_id: str,
     request: CreateWorkItemRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_project_user)],
 ) -> JSONResponse:
     """
     Crée un nouveau WorkItem dans le backlog d'un projet.
@@ -1310,7 +1489,7 @@ async def update_work_item(
     project_id: str,
     item_id: str,
     request: UpdateWorkItemRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_project_user)],
 ) -> JSONResponse:
     """
     Met à jour un WorkItem dans le backlog d'un projet.
@@ -1354,7 +1533,7 @@ async def update_work_item(
 async def delete_work_item(
     project_id: str,
     item_id: str,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_project_user)],
 ) -> None:
     """
     Supprime un WorkItem du backlog d'un projet.
@@ -1388,7 +1567,10 @@ async def delete_work_item(
 
 @app.put("/projects/{project_id}/backlog/{item_id}")
 async def update_work_item_legacy(
-    project_id: str, item_id: str, item_data: dict
+    project_id: str,
+    item_id: str,
+    item_data: dict,
+    current_user: Annotated[User, Depends(get_current_project_user)] = None,
 ) -> JSONResponse:
     """
     Met à jour un WorkItem dans le backlog d'un projet (endpoint legacy).
@@ -1424,7 +1606,11 @@ async def update_work_item_legacy(
 
 
 @app.post("/projects/{project_id}/backlog/{item_id}/validate")
-async def validate_work_item(project_id: str, item_id: str) -> JSONResponse:
+async def validate_work_item(
+    project_id: str,
+    item_id: str,
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> JSONResponse:
     """
     Valide un WorkItem dans le backlog d'un projet (marque comme validé par un humain).
 
@@ -1457,7 +1643,9 @@ async def validate_work_item(project_id: str, item_id: str) -> JSONResponse:
 
 @app.post("/projects/{project_id}/work_items/{item_id}/generate-acceptance-criteria")
 async def generate_acceptance_criteria_for_item(
-    project_id: str, item_id: str
+    project_id: str,
+    item_id: str,
+    current_user: Annotated[User, Depends(get_current_project_user)],
 ) -> JSONResponse:
     """
     Génère les critères d'acceptation pour un WorkItem spécifique.
@@ -1549,7 +1737,11 @@ async def generate_acceptance_criteria_for_item(
 
 
 @app.post("/projects/{project_id}/work_items/{item_id}/generate-test-cases")
-async def generate_test_cases_for_item(project_id: str, item_id: str) -> JSONResponse:
+async def generate_test_cases_for_item(
+    project_id: str,
+    item_id: str,
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> JSONResponse:
     """
     Génère les cas de test pour un WorkItem spécifique.
 
