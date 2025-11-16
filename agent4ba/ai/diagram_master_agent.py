@@ -11,6 +11,7 @@ from litellm import completion
 
 from agent4ba.api.event_queue import get_event_queue
 from agent4ba.core.logger import setup_logger
+from agent4ba.core.models import Diagram
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -254,9 +255,95 @@ def generate_diagram(state: Any) -> dict[str, Any]:
         if event_queue:
             event_queue.put(llm_event_completed)
 
-        return {
+        # Déduire un titre pour le diagramme à partir de la requête
+        diagram_title = query[:50] if len(query) <= 50 else query[:47] + "..."
+
+        # Créer l'objet Diagram
+        new_diagram = Diagram(title=diagram_title, code=mermaid_code)
+        logger.info(f"[DiagramMasterAgent] Created diagram object with ID: {new_diagram.id}")
+
+        # Construire l'ImpactPlan
+        impact_plan = {}
+        project_id = state.get("project_id", "")
+
+        if context_work_item:
+            # Si un work item de contexte existe, on propose de le modifier
+            logger.info(f"[DiagramMasterAgent] Adding diagram to existing work item: {context_work_item.id}")
+
+            # Créer l'état "before"
+            item_before = context_work_item.model_copy(deep=True)
+
+            # Créer l'état "after" avec le nouveau diagramme ajouté
+            item_after = context_work_item.model_copy(deep=True)
+            item_after.diagrams.append(new_diagram)
+
+            # Si l'item était validé par un humain, le marquer comme modifié par l'IA
+            if item_before.validation_status == "human_validated":
+                item_after.validation_status = "ia_modified"
+
+            impact_plan = {
+                "new_items": [],
+                "modified_items": [
+                    {
+                        "before": item_before.model_dump(),
+                        "after": item_after.model_dump(),
+                    }
+                ],
+                "deleted_items": [],
+            }
+
+            logger.info("[DiagramMasterAgent] ImpactPlan created to modify existing work item")
+
+        else:
+            # Si aucun work item de contexte n'est fourni, créer un nouveau work item de type diagram
+            logger.info("[DiagramMasterAgent] No context work item, creating new diagram work item")
+
+            # Générer un ID temporaire pour le nouveau work item
+            temp_id = f"{project_id}-DIAG-{uuid.uuid4().hex[:6]}"
+
+            new_work_item = {
+                "id": temp_id,
+                "project_id": project_id,
+                "type": "task",  # Temporairement de type task en attendant le support du type diagram
+                "title": f"Diagramme: {diagram_title}",
+                "description": f"Diagramme généré automatiquement:\n\n```mermaid\n{mermaid_code}\n```",
+                "diagrams": [new_diagram.model_dump()],
+                "validation_status": "ia_generated",
+                "attributes": {"category": "diagram"},
+            }
+
+            impact_plan = {
+                "new_items": [new_work_item],
+                "modified_items": [],
+                "deleted_items": [],
+            }
+
+            logger.info("[DiagramMasterAgent] ImpactPlan created to add new diagram work item")
+
+        # Émettre l'événement de construction de l'ImpactPlan
+        plan_build_run_id = str(uuid.uuid4())
+        plan_build_event = {
+            "type": "tool_used",
+            "tool_run_id": plan_build_run_id,
+            "tool_name": "Construction ImpactPlan",
+            "tool_icon": "📋",
+            "description": "Création du plan d'impact avec le diagramme généré",
             "status": "completed",
-            "result": mermaid_code,
+            "details": {
+                "diagram_id": new_diagram.id,
+                "has_context_item": context_work_item is not None,
+            },
+        }
+        agent_events.append(plan_build_event)
+        if event_queue:
+            event_queue.put(plan_build_event)
+
+        logger.info("[DiagramMasterAgent] Workflow paused, awaiting human approval")
+
+        return {
+            "impact_plan": impact_plan,
+            "status": "awaiting_approval",
+            "result": f"Generated diagram '{diagram_title}' with {len(mermaid_code)} characters of Mermaid code",
             "agent_events": agent_events,
         }
 

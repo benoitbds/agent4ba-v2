@@ -1257,6 +1257,54 @@ async def get_project_backlog(
         ) from e
 
 
+@app.get("/projects/{project_id}/diagrams")
+async def get_project_diagrams(
+    project_id: str,
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> JSONResponse:
+    """
+    Récupère tous les diagrammes d'un projet.
+
+    Parcourt tous les work items du backlog et collecte tous les diagrammes
+    qu'ils contiennent dans une liste plate.
+
+    Args:
+        project_id: Identifiant unique du projet
+
+    Returns:
+        JSONResponse avec la liste de tous les diagrammes du projet,
+        chaque diagramme incluant également le work_item_id source
+
+    Raises:
+        HTTPException: Si le projet n'existe pas ou n'a pas de backlog
+    """
+    storage = ProjectContextService()
+
+    try:
+        work_items = storage.load_context(project_id)
+
+        # Collecter tous les diagrammes de tous les work items
+        all_diagrams = []
+        for work_item in work_items:
+            for diagram in work_item.diagrams:
+                # Ajouter le diagramme avec une référence au work item source
+                diagram_data = diagram.model_dump()
+                diagram_data["work_item_id"] = work_item.id
+                diagram_data["work_item_title"] = work_item.title
+                diagram_data["work_item_type"] = work_item.type
+                all_diagrams.append(diagram_data)
+
+        logger.info(f"[GET_DIAGRAMS] Found {len(all_diagrams)} diagrams in project {project_id}")
+
+        return JSONResponse(content=all_diagrams)
+
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Backlog not found for project '{project_id}': {e}",
+        ) from e
+
+
 @app.get("/projects/{project_id}/timeline")
 async def get_project_timeline(
     project_id: str,
