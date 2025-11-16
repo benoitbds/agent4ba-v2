@@ -77,7 +77,10 @@
     "description": "Description",
     "type": "Type",
     "acceptanceCriteria": "Critères d'acceptation",
-    "attributes": "Attributs"
+    "attributes": "Attributs",
+    "diagrams": "Diagrammes",
+    "diagramUpdated": "Diagramme mis à jour avec succès",
+    "diagramUpdateError": "Erreur lors de la mise à jour du diagramme"
   },
   "timeline": {
     "title": "Timeline d'exécution",
@@ -116,7 +119,10 @@
     "running": "En cours",
     "errorStatus": "⚠ Erreur",
     "noToolsUsed": "Aucun outil utilisé dans cette session",
-    "noChanges": "Aucune modification détectée"
+    "noChanges": "Aucune modification détectée",
+    "diagramAdded": "Ajout du diagramme",
+    "diagramsAdded": "Ajout de {count} diagrammes",
+    "diagramAddedToItem": "Diagramme ajouté à l'item {itemId}"
   },
   "invest": {
     "I": "Independent (Indépendante)",
@@ -240,7 +246,10 @@
     "empty": "(vide)",
     "thread": "Thread :",
     "token": "Token :",
-    "close": "Fermer"
+    "close": "Fermer",
+    "cancel": "Annuler",
+    "save": "Sauvegarder",
+    "saving": "Sauvegarde..."
   },
   "users": {
     "modalTitle": "Gérer les utilisateurs du projet",
@@ -296,5 +305,14 @@
     "steps": "Étapes de test",
     "step": "Étape",
     "expectedResult": "Résultat Attendu"
+  },
+  "diagram": {
+    "editor": {
+      "title": "Éditeur de Diagramme",
+      "code": "Code Mermaid",
+      "preview": "Aperçu en direct",
+      "codePlaceholder": "Entrez votre code Mermaid ici...",
+      "emptyPreview": "Entrez du code pour voir l'aperçu"
+    }
   }
 }

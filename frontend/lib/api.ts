@@ -358,7 +358,7 @@ export async function deleteDocument(
 }
 
 /**
- * Update a WorkItem in the backlog
+ * Update a WorkItem in the backlog (partial update - title and description only)
  */
 export async function updateWorkItem(
   projectId: string,
@@ -371,6 +371,36 @@ export async function updateWorkItem(
       method: "PUT",
       headers: getAuthHeaders(),
       body: JSON.stringify(updatedData),
+    }
+  );
+
+  // Check for 401 errors
+  await handleResponse(response);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Update a complete WorkItem (including diagrams, acceptance criteria, etc.)
+ */
+export async function updateFullWorkItem(
+  projectId: string,
+  itemId: string,
+  updatedWorkItem: WorkItem
+): Promise<WorkItem> {
+  const response = await fetch(
+    `${API_URL}/projects/${projectId}/work_items/${itemId}`,
+    {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(updatedWorkItem),
     }
   );
 

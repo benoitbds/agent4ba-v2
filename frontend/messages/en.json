@@ -77,7 +77,10 @@
     "description": "Description",
     "type": "Type",
     "acceptanceCriteria": "Acceptance Criteria",
-    "attributes": "Attributes"
+    "attributes": "Attributes",
+    "diagrams": "Diagrams",
+    "diagramUpdated": "Diagram updated successfully",
+    "diagramUpdateError": "Error updating diagram"
   },
   "timeline": {
     "title": "Execution Timeline",
@@ -116,7 +119,10 @@
     "running": "In Progress",
     "errorStatus": "⚠ Error",
     "noToolsUsed": "No tools used in this session",
-    "noChanges": "No changes detected"
+    "noChanges": "No changes detected",
+    "diagramAdded": "Diagram added",
+    "diagramsAdded": "{count} diagrams added",
+    "diagramAddedToItem": "Diagram added to item {itemId}"
   },
   "invest": {
     "I": "Independent",
@@ -240,7 +246,10 @@
     "empty": "(empty)",
     "thread": "Thread:",
     "token": "Token:",
-    "close": "Close"
+    "close": "Close",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving..."
   },
   "users": {
     "modalTitle": "Manage Project Users",
@@ -296,5 +305,14 @@
     "steps": "Test Steps",
     "step": "Step",
     "expectedResult": "Expected Result"
+  },
+  "diagram": {
+    "editor": {
+      "title": "Diagram Editor",
+      "code": "Mermaid Code",
+      "preview": "Live Preview",
+      "codePlaceholder": "Enter your Mermaid code here...",
+      "emptyPreview": "Enter code to see preview"
+    }
   }
 }
