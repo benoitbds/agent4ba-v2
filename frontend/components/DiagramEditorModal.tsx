@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { X } from "lucide-react";
+import { X, Edit2 } from "lucide-react";
 import type { Diagram, WorkItem } from "@/types/events";
 import MermaidDiagram from "./MermaidDiagram";
 
@@ -32,6 +32,7 @@ export default function DiagramEditorModal({
   const [code, setCode] = useState(diagram.code);
   const [debouncedCode, setDebouncedCode] = useState(diagram.code);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   // Debounce pour mettre à jour le rendu (300ms de délai)
   useEffect(() => {
@@ -101,43 +102,74 @@ export default function DiagramEditorModal({
           </button>
         </div>
 
-        {/* Split Screen Content */}
+        {/* Content - Preview ou Split Screen selon le mode */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Left Panel - Code Editor */}
-          <div className="w-1/2 flex flex-col border-r border-gray-200">
-            <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-              <h3 className="text-sm font-semibold text-gray-700">
-                {t("diagram.editor.code")}
-              </h3>
+          {!isEditing ? (
+            /* Mode Preview - Diagramme en plein écran */
+            <div className="w-full flex flex-col">
+              <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-700">
+                  {t("diagram.editor.preview")}
+                </h3>
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-label="Edit Code"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  <span>Edit Code</span>
+                </button>
+              </div>
+              <div className="flex-1 overflow-auto p-6 bg-gray-50">
+                {debouncedCode ? (
+                  <MermaidDiagram code={debouncedCode} />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-400">
+                    {t("diagram.editor.emptyPreview")}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex-1 overflow-hidden">
-              <textarea
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="w-full h-full p-4 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                spellCheck={false}
-                placeholder={t("diagram.editor.codePlaceholder")}
-              />
-            </div>
-          </div>
-
-          {/* Right Panel - Live Preview */}
-          <div className="w-1/2 flex flex-col">
-            <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-              <h3 className="text-sm font-semibold text-gray-700">
-                {t("diagram.editor.preview")}
-              </h3>
-            </div>
-            <div className="flex-1 overflow-auto p-4 bg-gray-50">
-              {debouncedCode ? (
-                <MermaidDiagram code={debouncedCode} />
-              ) : (
-                <div className="flex items-center justify-center h-full text-gray-400">
-                  {t("diagram.editor.emptyPreview")}
+          ) : (
+            /* Mode Edition - Split Screen */
+            <>
+              {/* Left Panel - Code Editor */}
+              <div className="w-1/2 flex flex-col border-r border-gray-200">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    {t("diagram.editor.code")}
+                  </h3>
                 </div>
-              )}
-            </div>
-          </div>
+                <div className="flex-1 overflow-hidden">
+                  <textarea
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    className="w-full h-full p-4 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    spellCheck={false}
+                    placeholder={t("diagram.editor.codePlaceholder")}
+                  />
+                </div>
+              </div>
+
+              {/* Right Panel - Live Preview */}
+              <div className="w-1/2 flex flex-col">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    {t("diagram.editor.preview")}
+                  </h3>
+                </div>
+                <div className="flex-1 overflow-auto p-4 bg-gray-50">
+                  {debouncedCode ? (
+                    <MermaidDiagram code={debouncedCode} />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400">
+                      {t("diagram.editor.emptyPreview")}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Footer Actions */}
