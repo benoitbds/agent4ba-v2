@@ -255,3 +255,25 @@ class UserService:
             raise ValueError(f"User with id '{user_id}' not found")
 
         return user.project_ids
+
+    def search_users(self, query: str) -> list[User]:
+        """
+        Recherche des utilisateurs par nom d'utilisateur (insensible à la casse).
+
+        Args:
+            query: Chaîne de caractères à rechercher dans les noms d'utilisateurs
+
+        Returns:
+            Liste des utilisateurs dont le username contient la chaîne query
+        """
+        users = self._load_users()
+        query_lower = query.lower()
+
+        matching_users = []
+        for user_data in users:
+            if query_lower in user_data["username"].lower():
+                # Créer un User sans inclure le mot de passe hashé
+                user = User(**user_data)
+                matching_users.append(user)
+
+        return matching_users
