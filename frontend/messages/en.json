@@ -239,7 +239,17 @@
   "common": {
     "empty": "(empty)",
     "thread": "Thread:",
-    "token": "Token:"
+    "token": "Token:",
+    "close": "Close"
+  },
+  "users": {
+    "modalTitle": "Manage Project Users",
+    "addUser": "Add User",
+    "usernamePlaceholder": "Enter username to invite",
+    "invite": "Invite",
+    "currentUsers": "Current Users",
+    "noUsers": "No users in this project yet.",
+    "removeUser": "Remove user"
   },
   "auth": {
     "login": {

@@ -239,7 +239,17 @@
   "common": {
     "empty": "(vide)",
     "thread": "Thread :",
-    "token": "Token :"
+    "token": "Token :",
+    "close": "Fermer"
+  },
+  "users": {
+    "modalTitle": "Gérer les utilisateurs du projet",
+    "addUser": "Ajouter un utilisateur",
+    "usernamePlaceholder": "Entrez le nom d'utilisateur à inviter",
+    "invite": "Inviter",
+    "currentUsers": "Utilisateurs actuels",
+    "noUsers": "Aucun utilisateur dans ce projet pour le moment.",
+    "removeUser": "Retirer l'utilisateur"
   },
   "auth": {
     "login": {
