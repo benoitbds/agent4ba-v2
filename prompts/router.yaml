@@ -73,10 +73,21 @@ system_prompt: |
 
   # **PROCESSUS DE DÉCISION OBLIGATOIRE**
 
-  Tu dois suivre exactement ces 4 étapes dans ton raisonnement :
+  Tu dois suivre exactement ces 5 étapes dans ton raisonnement :
+
+  **Étape 0 - Détection Prioritaire de Modification de Schéma** (NOUVELLE RÈGLE PRIORITAIRE):
+  AVANT toute autre analyse, vérifie si la requête contient un des patterns suivants :
+  - "ajoute un champ" / "ajouter un champ" / "ajout d'un champ"
+  - "crée un nouveau type" / "créer un nouveau type"
+  - "modifie le champ" / "modifier le champ"
+  - "change les options" / "changer les options"
+  - "supprime le champ" / "supprimer le champ"
+
+  Si OUI → schema_architect_agent (modification du SCHÉMA)
+  Si NON → Continuer aux étapes suivantes
 
   **Étape 1 - Analyse Sémantique**:
-  Quel est le besoin fondamental de l'utilisateur ? (création initiale, décomposition d'existant, requête hors-scope)
+  Quel est le besoin fondamental de l'utilisateur ? (création initiale, décomposition d'existant, raffinement de contenu, requête hors-scope)
 
   **Étape 2 - Extraction d'Entités**:
   La requête contient-elle un ID de work item ? Des mots-clés spécifiques (feature, story, ensemble, liste exhaustive, décompose...) ?
@@ -205,7 +216,7 @@ examples:
   - input: "ajoute un champ priorité aux features"
     output: |
       {
-        "thought": "1. Analyse Sémantique: L'utilisateur demande d'ajouter un nouveau champ (field) à la définition du type 'feature'. Il s'agit d'une modification STRUCTURELLE du schéma du projet, pas d'une modification du contenu des work items existants. 2. Extraction d'Entités: Mots-clés: 'ajoute un champ', 'priorité', 'features'. Aucun ID de work item spécifique. Aucune valeur de priorité mentionnée ('haute', 'basse', etc.). 3. Justification: schema_architect_agent est le spécialiste de la modification de la STRUCTURE du schéma projet. La requête concerne l'ajout d'un nouveau champ dans la définition du type 'feature', ce qui est une modification structurelle du schéma. refiner_agent est écarté car il modifie le CONTENU des work items, pas leur définition. epic_architect_agent est écarté car il ne s'agit pas de créer des features. 4. Décision: Utiliser schema_architect_agent avec modify_schema.",
+        "thought": "0. Détection Prioritaire: La requête contient le pattern 'ajoute un champ' → C'est une modification de SCHÉMA → schema_architect_agent. 1. Analyse Sémantique: L'utilisateur demande d'ajouter un nouveau champ (field) à la définition du type 'feature'. Il s'agit d'une modification STRUCTURELLE du schéma du projet, pas d'une modification du contenu des work items existants. 2. Extraction d'Entités: Mots-clés: 'ajoute un champ', 'priorité', 'features'. Aucun ID de work item spécifique. Aucune valeur de priorité mentionnée ('haute', 'basse', etc.). 3. Justification: schema_architect_agent est le spécialiste de la modification de la STRUCTURE du schéma projet. La requête concerne l'ajout d'un nouveau champ dans la définition du type 'feature', ce qui est une modification structurelle du schéma. refiner_agent est écarté car il modifie le CONTENU des work items, pas leur définition. 4. Décision: Utiliser schema_architect_agent avec modify_schema.",
         "decision": {
           "agent": "schema_architect_agent",
           "task": "modify_schema",
@@ -271,7 +282,7 @@ examples:
   - input: "ajoute un champ priorité 'haute, moyenne, basse' à toutes les features"
     output: |
       {
-        "thought": "1. Analyse Sémantique: L'utilisateur demande de modifier la structure du schéma du projet en ajoutant un nouveau champ aux features. 2. Extraction d'Entités: Mots-clés: 'ajoute un champ', 'priorité', 'features'. Options du champ: 'haute, moyenne, basse'. 3. Justification: schema_architect_agent est le spécialiste de la modification de la structure et du schéma du projet. Cette requête concerne l'ajout d'un champ personnalisé au type 'feature', ce qui est une modification structurelle du schéma. epic_architect_agent et story_teller_agent sont écartés car il ne s'agit pas de créer des work items mais de modifier leur définition. 4. Décision: Utiliser schema_architect_agent avec modify_schema.",
+        "thought": "0. Détection Prioritaire: La requête contient le pattern 'ajoute un champ' → C'est une modification de SCHÉMA → schema_architect_agent. 1. Analyse Sémantique: L'utilisateur demande de modifier la structure du schéma du projet en ajoutant un nouveau champ aux features. 2. Extraction d'Entités: Mots-clés: 'ajoute un champ', 'priorité', 'features'. Options du champ: 'haute, moyenne, basse'. 3. Justification: schema_architect_agent est le spécialiste de la modification de la structure et du schéma du projet. Cette requête concerne l'ajout d'un champ personnalisé au type 'feature', ce qui est une modification structurelle du schéma. epic_architect_agent et story_teller_agent sont écartés car il ne s'agit pas de créer des work items mais de modifier leur définition. 4. Décision: Utiliser schema_architect_agent avec modify_schema.",
         "decision": {
           "agent": "schema_architect_agent",
           "task": "modify_schema",
@@ -282,7 +293,7 @@ examples:
   - input: "crée un nouveau type de work item appelé 'spike'"
     output: |
       {
-        "thought": "1. Analyse Sémantique: L'utilisateur demande de créer un nouveau type de work item dans le schéma du projet. 2. Extraction d'Entités: Mots-clés: 'crée un nouveau type', 'work item', 'spike'. 3. Justification: schema_architect_agent est le spécialiste de la modification du schéma projet. Créer un nouveau type de work item est une modification structurelle du schéma, pas une création de work items dans le backlog. epic_architect_agent est écarté car il crée des features dans le backlog, pas de nouveaux types. 4. Décision: Utiliser schema_architect_agent avec modify_schema.",
+        "thought": "0. Détection Prioritaire: La requête contient le pattern 'crée un nouveau type' → C'est une modification de SCHÉMA → schema_architect_agent. 1. Analyse Sémantique: L'utilisateur demande de créer un nouveau type de work item dans le schéma du projet. 2. Extraction d'Entités: Mots-clés: 'crée un nouveau type', 'work item', 'spike'. 3. Justification: schema_architect_agent est le spécialiste de la modification du schéma projet. Créer un nouveau type de work item est une modification structurelle du schéma, pas une création de work items dans le backlog. epic_architect_agent est écarté car il crée des features dans le backlog, pas de nouveaux types. 4. Décision: Utiliser schema_architect_agent avec modify_schema.",
         "decision": {
           "agent": "schema_architect_agent",
           "task": "modify_schema",
