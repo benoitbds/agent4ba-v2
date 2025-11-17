@@ -84,6 +84,8 @@
   },
   "timeline": {
     "title": "Execution Timeline",
+    "realTimeView": "Real-time View",
+    "history": "History",
     "waiting": "Waiting for requests...",
     "userRequest": "User Request",
     "toolsUsed": "tools used",
