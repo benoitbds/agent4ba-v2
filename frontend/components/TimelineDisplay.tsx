@@ -34,6 +34,16 @@ function getEventIcon(type: TimelineEvent['type']): string {
       return '✓';
     case 'WORKFLOW_COMPLETE':
       return '🎉';
+    case 'STATUS_MESSAGE':
+      return '📢';
+    case 'CLARIFICATION_NEEDED':
+      return '❓';
+    case 'IMPACT_PLAN_READY':
+      return '📋';
+    case 'SCHEMA_CHANGE_PROPOSED':
+      return '🔧';
+    case 'ERROR':
+      return '❌';
     default:
       return '📍';
   }
@@ -144,16 +154,52 @@ export default function TimelineDisplay({ events }: TimelineDisplayProps) {
       </h2>
 
       <div className="flex-1 overflow-y-auto pr-2 space-y-2">
-        {filteredEvents.map((event, index) => (
-          <div
-            key={event.event_id}
-            className="timeline-event-enter bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
-            style={{
-              animation: 'slideIn 0.3s ease-out',
-            }}
-          >
-            {/* Header de l'événement */}
-            <div className="flex items-start gap-3">
+        {filteredEvents.map((event, index) => {
+          // Special rendering for STATUS_MESSAGE events to match the original panel style
+          if (event.type === 'STATUS_MESSAGE') {
+            const statusType = event.details?.statusType || 'success';
+            const clarificationQuestion = event.details?.clarificationQuestion;
+            return (
+              <div
+                key={event.event_id}
+                className={`timeline-event-enter rounded-lg p-4 ${
+                  statusType === "error"
+                    ? "bg-red-100 border border-red-300 text-red-800"
+                    : statusType === "warning"
+                    ? "bg-yellow-100 border border-yellow-300 text-yellow-800"
+                    : statusType === "info"
+                    ? "bg-blue-100 border border-blue-300 text-blue-800"
+                    : "bg-green-100 border border-green-300 text-green-800"
+                }`}
+                style={{
+                  animation: 'slideIn 0.3s ease-out',
+                }}
+              >
+                {clarificationQuestion && (
+                  <div className="flex items-start gap-2 mb-2">
+                    <span className="text-2xl">❓</span>
+                    <p className="font-semibold flex-1">Clarification nécessaire</p>
+                  </div>
+                )}
+                <p className={clarificationQuestion ? "" : "font-semibold"}>{event.message}</p>
+                <span className="text-xs opacity-70 mt-2 block">
+                  {formatTimestamp(event.timestamp)}
+                </span>
+              </div>
+            );
+          }
+
+          // Normal event rendering
+          return (
+            <div
+              key={event.event_id}
+              className="timeline-event-enter bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
+              style={{
+                animation: 'slideIn 0.3s ease-out',
+              }}
+            >
+              {/* Header de l'événement */}
+              <div className="flex items-start gap-3">
               {/* Icône */}
               <div className="text-2xl flex-shrink-0">
                 {getEventIcon(event.type)}
@@ -233,7 +279,8 @@ export default function TimelineDisplay({ events }: TimelineDisplayProps) {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
 
         {/* Élément de référence pour le scroll automatique */}
         <div ref={timelineEndRef} />

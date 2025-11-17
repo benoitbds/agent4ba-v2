@@ -174,7 +174,7 @@ export interface TimelineSession {
   user_query: string;
   timestamp: Date;
   tool_runs: Map<string, ToolRunState>;
-  agent_events: TimelineEvent[];
+  agent_events: SessionTimelineEvent[];
   is_expanded: boolean;
 }
 
@@ -208,7 +208,7 @@ export type SSEEvent =
   | ToolUsedEvent;
 
 // For timeline display
-export interface TimelineEvent {
+export interface SessionTimelineEvent {
   id: string;
   timestamp: Date;
   event: SSEEvent;
