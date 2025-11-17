@@ -7,6 +7,7 @@ import ChatInput, { ChatInputRef } from "@/components/ChatInput";
 import TimelineView from "@/components/TimelineView";
 import TimelineDisplay from "@/components/TimelineDisplay";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
+import SchemaImpactModal from "@/components/SchemaImpactModal";
 import CreateProjectModal from "@/components/CreateProjectModal";
 import DeleteProjectModal from "@/components/DeleteProjectModal";
 import BacklogView from "@/components/BacklogView";
@@ -17,8 +18,8 @@ import { PrivateRoute } from "@/components/PrivateRoute";
 import { Header } from "@/components/Header";
 import { useAuth } from "@/context/AuthContext";
 import { useTimelineStream } from "@/hooks/useTimelineStream";
-import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject, UnauthorizedError, executeWorkflow, respondToClarification } from "@/lib/api";
-import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent, ContextItem, ClarificationNeededResponse, ApprovalNeededResponse } from "@/types/events";
+import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject, UnauthorizedError, executeWorkflow, respondToClarification, getProjectSchema, updateProjectSchema, continueAfterSchemaApproval } from "@/lib/api";
+import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent, ContextItem, ClarificationNeededResponse, ApprovalNeededResponse, ProjectSchema } from "@/types/events";
 
 export default function Home() {
   const t = useTranslations();
@@ -47,6 +48,13 @@ export default function Home() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [clarificationQuestion, setClarificationQuestion] = useState<string | null>(null);
   const [inputPlaceholder, setInputPlaceholder] = useState<string>(t('newRequest.placeholder'));
+
+  // Schema approval state
+  const [schemaChange, setSchemaChange] = useState<{
+    oldSchema: ProjectSchema;
+    newSchema: ProjectSchema;
+    threadId: string;
+  } | null>(null);
 
   // Real-time timeline SSE state
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -497,6 +505,33 @@ export default function Home() {
       setInputPlaceholder(t('newRequest.clarificationPlaceholder') || "Entrez votre réponse...");
       setStatusMessage(lastEvent.message);
       setStatusType('warning');
+    } else if (lastEvent.type === 'SCHEMA_CHANGE_PROPOSED' && lastEvent.status === 'WAITING') {
+      console.log("[TIMELINE] Schema change proposed");
+
+      // Récupérer le schéma actuel et le nouveau schéma depuis l'événement
+      if (lastEvent.details?.proposed_schema && lastEvent.details?.thread_id && selectedProject) {
+        // Récupérer le schéma actuel du projet
+        getProjectSchema(selectedProject)
+          .then((currentSchema) => {
+            // Type assertion safe car on a vérifié l'existence plus haut
+            const proposedSchema = lastEvent.details!.proposed_schema as ProjectSchema;
+            const threadId = lastEvent.details!.thread_id as string;
+
+            setSchemaChange({
+              oldSchema: currentSchema,
+              newSchema: proposedSchema,
+              threadId: threadId,
+            });
+            setStatusMessage(t('status.schemaApprovalRequired') || "Approbation requise pour la modification du schéma");
+            setStatusType('info');
+          })
+          .catch((error) => {
+            if (handleUnauthorizedError(error)) return;
+            console.error("Failed to fetch current schema:", error);
+            setStatusMessage(t('status.error') || "Erreur lors de la récupération du schéma");
+            setStatusType('error');
+          });
+      }
     }
   }, [timelineEvents, selectedProject, sessionId, t, handleUnauthorizedError]);
 
@@ -623,6 +658,49 @@ export default function Home() {
       console.error("Error rejecting plan:", error);
       setStatusMessage(
         `${t('status.errorRejecting')} ${error instanceof Error ? error.message : t('status.error')}`
+      );
+      setStatusType('error');
+    }
+  };
+
+  const handleApproveSchemaChange = async () => {
+    if (!schemaChange) {
+      console.error("No schema change available");
+      return;
+    }
+
+    try {
+      setStatusMessage(t('status.approvingSchema') || "Approbation du schéma en cours...");
+      setStatusType('info');
+
+      // 1. Sauvegarder le nouveau schéma
+      await updateProjectSchema(selectedProject, schemaChange.newSchema);
+      console.log("[SCHEMA] Schema updated successfully");
+
+      // 2. Appeler l'API pour reprendre le workflow
+      const response = await continueAfterSchemaApproval(schemaChange.threadId, true);
+      console.log("[SCHEMA] Workflow continued:", response);
+
+      setStatusMessage(t('status.schemaApproved') || "Schéma approuvé avec succès");
+      setStatusType('success');
+
+      // 3. Fermer la modale
+      setSchemaChange(null);
+
+      // 4. Rafraîchir le backlog en arrière-plan
+      getProjectBacklog(selectedProject)
+        .then((items) => setBacklogItems(items))
+        .catch((error) => {
+          if (handleUnauthorizedError(error)) return;
+          console.error("Failed to refresh backlog:", error);
+        });
+    } catch (error) {
+      if (handleUnauthorizedError(error)) return;
+      console.error("Error approving schema change:", error);
+      setStatusMessage(
+        `${t('status.errorApprovingSchema') || "Erreur lors de l'approbation du schéma"}: ${
+          error instanceof Error ? error.message : t('status.error')
+        }`
       );
       setStatusType('error');
     }
@@ -829,6 +907,18 @@ export default function Home() {
           onApprove={handleApprove}
           onReject={handleReject}
           isOpen={true}
+        />
+      )}
+
+      {/* Schema Impact Modal */}
+      {schemaChange && (
+        <SchemaImpactModal
+          isOpen={true}
+          onClose={() => setSchemaChange(null)}
+          onApprove={handleApproveSchemaChange}
+          oldSchema={schemaChange.oldSchema}
+          newSchema={schemaChange.newSchema}
+          threadId={schemaChange.threadId}
         />
       )}
 

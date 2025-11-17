@@ -2,6 +2,27 @@
  * Types pour les événements SSE du backend Agent4BA
  */
 
+// Schema types
+export interface FieldDefinition {
+  name: string;
+  label?: string | null;
+  type: string;
+  required?: boolean;
+  default_value?: string | number | boolean | null;
+  allowed_values?: (string | number)[];
+}
+
+export interface WorkItemTypeDefinition {
+  name: string;
+  label?: string | null;
+  fields: FieldDefinition[];
+}
+
+export interface ProjectSchema {
+  version: string;
+  work_item_types: WorkItemTypeDefinition[];
+}
+
 export interface TestCaseStep {
   step: string;
   expected_result: string;
@@ -109,6 +130,16 @@ export interface WorkflowCompleteEvent extends BaseEvent {
   status: string;
 }
 
+export interface SchemaChangeProposedEvent extends BaseEvent {
+  type: "SCHEMA_CHANGE_PROPOSED";
+  message: string;
+  status: string;
+  details: {
+    proposed_schema: ProjectSchema;
+    thread_id: string;
+  };
+}
+
 export interface ErrorEvent extends BaseEvent {
   type: "error";
   error: string;
@@ -170,6 +201,7 @@ export type SSEEvent =
   | LLMEndEvent
   | ImpactPlanReadyEvent
   | WorkflowCompleteEvent
+  | SchemaChangeProposedEvent
   | ErrorEvent
   | AgentStartEvent
   | AgentPlanEvent

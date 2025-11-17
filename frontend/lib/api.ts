@@ -11,6 +11,7 @@ import type {
   ExecuteSuccessResponse,
   ExecuteWorkflowResponse,
   RespondSuccessResponse,
+  ProjectSchema,
 } from "@/types/events";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
@@ -600,6 +601,76 @@ export async function respondToClarification(
       conversation_id: conversationId,
       user_response: userResponse,
     }),
+  });
+
+  // Check for 401 errors
+  await handleResponse(response);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get the current schema for a project
+ */
+export async function getProjectSchema(
+  projectId: string
+): Promise<ProjectSchema> {
+  const response = await fetch(`${API_URL}/projects/${projectId}/schema`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+  });
+
+  // Check for 401 errors
+  await handleResponse(response);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Update the schema for a project
+ */
+export async function updateProjectSchema(
+  projectId: string,
+  schema: ProjectSchema
+): Promise<{ message: string }> {
+  const response = await fetch(`${API_URL}/projects/${projectId}/schema`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(schema),
+  });
+
+  // Check for 401 errors
+  await handleResponse(response);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `HTTP error! status: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Continue the workflow after schema approval
+ */
+export async function continueAfterSchemaApproval(
+  threadId: string,
+  approved: boolean
+): Promise<{ result: string; status: string }> {
+  const response = await fetch(`${API_URL}/agent/run/${threadId}/continue`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ approved }),
   });
 
   // Check for 401 errors
