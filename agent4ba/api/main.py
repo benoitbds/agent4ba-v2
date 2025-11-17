@@ -24,6 +24,7 @@ from agent4ba.api.events import (
     AgentStartEvent,
     ErrorEvent,
     ImpactPlanReadyEvent,
+    SchemaChangeReadyEvent,
     ThreadIdEvent,
     ToolUsedEvent,
     UserRequestEvent,
@@ -685,7 +686,35 @@ def run_workflow_in_background(
             timeline_service.signal_done(session_id)
             logger.info(f"[BACKGROUND] Signaled stream done (clarification needed) for session: {session_id}")
 
-        # Si le workflow attend une approbation
+        # Si le workflow attend une approbation de schéma
+        elif workflow_status == "awaiting_schema_approval":
+            logger.info("[BACKGROUND] Workflow awaiting schema approval (interrupted before approval node)")
+            logger.info(f"[BACKGROUND] Thread ID for resuming: {session_id}")
+
+            # Ajouter l'événement SchemaChangeReadyEvent
+            proposed_schema = final_state.get("proposed_schema", {})
+            schema_change_event = SchemaChangeReadyEvent(
+                proposed_schema=proposed_schema,
+                thread_id=session_id,
+                status=workflow_status,
+            )
+            timeline_events.append(schema_change_event.model_dump())
+
+            # Pousser l'événement d'approbation de schéma au TimelineService
+            schema_approval_tl_event = TLEvent(
+                type="SCHEMA_CHANGE_PROPOSED",
+                message="Schema change ready for approval",
+                status="WAITING",
+                details={"proposed_schema": proposed_schema, "thread_id": session_id},
+            )
+            timeline_service.add_event(session_id, schema_approval_tl_event)
+            logger.info("[BACKGROUND] Pushed SCHEMA_CHANGE_PROPOSED event")
+
+            # Signaler la fin du stream (le workflow attend une approbation)
+            timeline_service.signal_done(session_id)
+            logger.info(f"[BACKGROUND] Signaled stream done (schema approval needed) for session: {session_id}")
+
+        # Si le workflow attend une approbation d'impact plan
         elif workflow_status == "awaiting_approval":
             logger.info("[BACKGROUND] Workflow awaiting approval (interrupted before approval node)")
             logger.info(f"[BACKGROUND] Thread ID for resuming: {session_id}")

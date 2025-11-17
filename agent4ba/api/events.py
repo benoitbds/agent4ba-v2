@@ -81,6 +81,18 @@ class ImpactPlanReadyEvent(StreamEvent):
     )
 
 
+class SchemaChangeReadyEvent(StreamEvent):
+    """Événement envoyé quand un changement de schéma est prêt pour validation."""
+
+    type: str = Field(default="schema_change_proposed", description="Type d'événement")
+    proposed_schema: dict[str, Any] = Field(..., description="Nouveau schéma proposé")
+    thread_id: str = Field(..., description="Identifiant du thread pour validation")
+    status: str = Field(
+        default="awaiting_schema_approval",
+        description="Statut du workflow",
+    )
+
+
 class WorkflowCompleteEvent(StreamEvent):
     """Événement indiquant la fin du workflow."""
 

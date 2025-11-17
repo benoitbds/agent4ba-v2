@@ -259,11 +259,11 @@ def modify_schema(state: Any) -> dict[str, Any]:
         if event_queue:
             event_queue.put(validation_event)
 
-        # Retourner le nouveau schéma dans l'état
+        # Retourner le nouveau schéma dans l'état avec statut awaiting_schema_approval
         return {
-            "new_schema": new_schema.model_dump(),
-            "status": "completed",
-            "result": f"Nouveau schéma généré avec succès : {len(new_schema.work_item_types)} types de work items définis",
+            "status": "awaiting_schema_approval",
+            "proposed_schema": new_schema.model_dump(),
+            "result": f"Nouveau schéma proposé : {len(new_schema.work_item_types)} types de work items définis. En attente d'approbation.",
             "agent_events": agent_events,
         }
 
