@@ -75,6 +75,9 @@ class GraphState(TypedDict):
     clarification_question: str | None  # Question à poser à l'utilisateur
     user_response: str | None  # Réponse de l'utilisateur à la question
 
+    # Champs pour l'approbation du schéma
+    proposed_schema: dict[str, Any] | None  # Nouveau schéma proposé en attente d'approbation
+
 
 
 def load_task_rewriter_prompt() -> dict[str, Any]:
@@ -660,8 +663,8 @@ def should_continue_after_agent(
     """
     Fonction de routage conditionnel après l'agent.
 
-    Si le status est "awaiting_approval", on va vers le nœud approval
-    qui déclenche une interruption pour validation humaine.
+    Si le status est "awaiting_approval" ou "awaiting_schema_approval",
+    on va vers le nœud approval qui déclenche une interruption pour validation humaine.
 
     Args:
         state: État actuel du graphe
@@ -670,7 +673,7 @@ def should_continue_after_agent(
         Nom du prochain nœud
     """
     status = state.get("status", "completed")
-    if status == "awaiting_approval":
+    if status in ("awaiting_approval", "awaiting_schema_approval"):
         return "approval"
     return "end"
 
@@ -820,7 +823,7 @@ def agent_node(state: GraphState) -> dict[str, Any]:
     # Envoyer un événement de timeline pour la fin de l'exécution de l'agent
     if thread_id:
         agent_status = result.get("status", "completed")
-        event_status = "SUCCESS" if agent_status in ["completed", "awaiting_approval"] else "ERROR"
+        event_status = "SUCCESS" if agent_status in ["completed", "awaiting_approval", "awaiting_schema_approval"] else "ERROR"
         event = TimelineEvent(
             type="AGENT_COMPLETE",
             agent_name=agent_id,
@@ -983,7 +986,7 @@ def end_node(state: GraphState) -> dict[str, Any]:
         status = state.get("status", "completed")
         result = state.get("result", "No result")
 
-        event_status = "SUCCESS" if status in ["completed", "awaiting_approval", "approved"] else "ERROR"
+        event_status = "SUCCESS" if status in ["completed", "awaiting_approval", "awaiting_schema_approval", "approved"] else "ERROR"
         event = TimelineEvent(
             type="WORKFLOW_COMPLETE",
             message=f"Workflow completed with status: {status}",
