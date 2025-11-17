@@ -1257,6 +1257,36 @@ async def get_project_backlog(
         ) from e
 
 
+@app.get("/projects/{project_id}/schema")
+async def get_project_schema(
+    project_id: str,
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> JSONResponse:
+    """
+    Récupère le schéma de projet définissant les types de WorkItems et leurs champs.
+
+    Args:
+        project_id: Identifiant unique du projet
+        current_user: Utilisateur authentifié avec accès au projet
+
+    Returns:
+        JSONResponse avec le schéma du projet (types de WorkItems et leurs champs)
+
+    Raises:
+        HTTPException: Si le projet n'existe pas ou n'a pas de schéma
+    """
+    storage = ProjectContextService()
+
+    try:
+        schema = storage.get_project_schema(project_id)
+        return JSONResponse(content=schema.model_dump())
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Schema not found for project '{project_id}': {e}",
+        ) from e
+
+
 @app.get("/projects/{project_id}/diagrams")
 async def get_project_diagrams(
     project_id: str,
