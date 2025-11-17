@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { useTranslations } from 'next-intl';
 import { CheckCircle, UserCheck, Sparkles, ListChecks, Trash2, TestTube, Loader2 } from "lucide-react";
-import type { WorkItem } from "@/types/events";
+import useSWR from 'swr';
+import type { WorkItem, FieldDefinition } from "@/types/events";
+import { getProjectSchema, updateFullWorkItem } from "@/lib/api";
 import TestCasesViewer from "./TestCasesViewer";
 
 interface EditWorkItemModalProps {
@@ -30,17 +32,30 @@ export default function EditWorkItemModal({
   const t = useTranslations();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [attributes, setAttributes] = useState<Record<string, unknown>>({});
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [isGeneratingAC, setIsGeneratingAC] = useState(false);
   const [isGeneratingTC, setIsGeneratingTC] = useState(false);
 
+  // Fetch the project schema
+  const { data: schema, error: schemaError } = useSWR(
+    item?.project_id ? `/projects/${item.project_id}/schema` : null,
+    () => item?.project_id ? getProjectSchema(item.project_id) : null
+  );
+
+  // Find the work item type definition in the schema
+  const workItemTypeDef = schema?.work_item_types?.find(
+    (type) => type.name === item?.type
+  );
+
   // Initialiser les champs quand l'item change
   useEffect(() => {
     if (item) {
       setTitle(item.title);
       setDescription(item.description || "");
+      setAttributes(item.attributes || {});
       setError("");
     }
   }, [item]);
@@ -60,10 +75,24 @@ export default function EditWorkItemModal({
 
     setIsSaving(true);
     try {
+      // Construire le work item complet avec les attributs dynamiques
+      const updatedWorkItem: WorkItem = {
+        ...item,
+        title: title.trim(),
+        description: description.trim() || "",
+        attributes: attributes,
+      };
+
+      // Utiliser l'API pour mettre à jour le work item complet
+      await updateFullWorkItem(item.project_id, item.id, updatedWorkItem);
+
+      // Appeler également l'ancien callback pour maintenir la compatibilité
+      // et rafraîchir la vue parent
       await onSave(item.id, {
         title: title.trim(),
         description: description.trim() || null,
       });
+
       handleClose();
     } catch (err) {
       setError(t('editWorkItem.saveFailed'));
@@ -122,8 +151,112 @@ export default function EditWorkItemModal({
   const handleClose = () => {
     setTitle("");
     setDescription("");
+    setAttributes({});
     setError("");
     onClose();
+  };
+
+  // Fonction pour mettre à jour un attribut dynamique
+  const updateAttribute = (fieldName: string, value: unknown) => {
+    setAttributes((prev) => ({
+      ...prev,
+      [fieldName]: value,
+    }));
+  };
+
+  // Fonction pour rendre un champ dynamique selon son type
+  const renderDynamicField = (field: FieldDefinition) => {
+    const value = attributes[field.name];
+    const fieldLabel = field.label || field.name;
+
+    switch (field.type) {
+      case "text":
+        return (
+          <div key={field.name} className="mb-4">
+            <label htmlFor={`field-${field.name}`} className="block text-sm font-medium text-gray-700 mb-2">
+              {fieldLabel}
+              {field.required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            <input
+              id={`field-${field.name}`}
+              type="text"
+              value={(value as string) || ""}
+              onChange={(e) => updateAttribute(field.name, e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isSaving}
+              required={field.required}
+            />
+          </div>
+        );
+
+      case "textarea":
+        return (
+          <div key={field.name} className="mb-4">
+            <label htmlFor={`field-${field.name}`} className="block text-sm font-medium text-gray-700 mb-2">
+              {fieldLabel}
+              {field.required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            <textarea
+              id={`field-${field.name}`}
+              value={(value as string) || ""}
+              onChange={(e) => updateAttribute(field.name, e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
+              disabled={isSaving}
+              required={field.required}
+            />
+          </div>
+        );
+
+      case "select":
+        return (
+          <div key={field.name} className="mb-4">
+            <label htmlFor={`field-${field.name}`} className="block text-sm font-medium text-gray-700 mb-2">
+              {fieldLabel}
+              {field.required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            <select
+              id={`field-${field.name}`}
+              value={(value as string) || ""}
+              onChange={(e) => updateAttribute(field.name, e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isSaving}
+              required={field.required}
+            >
+              <option value="">-- {t('editWorkItem.selectOption')} --</option>
+              {field.allowed_values?.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+
+      case "list":
+        // Pour l'instant, on affiche un textarea pour les listes
+        return (
+          <div key={field.name} className="mb-4">
+            <label htmlFor={`field-${field.name}`} className="block text-sm font-medium text-gray-700 mb-2">
+              {fieldLabel} {t('editWorkItem.listSeparator')}
+              {field.required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            <textarea
+              id={`field-${field.name}`}
+              value={Array.isArray(value) ? (value as string[]).join("\n") : ""}
+              onChange={(e) => {
+                const lines = e.target.value.split("\n").filter(line => line.trim());
+                updateAttribute(field.name, lines);
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
+              disabled={isSaving}
+              required={field.required}
+            />
+          </div>
+        );
+
+      default:
+        return null;
+    }
   };
 
   if (!isOpen || !item) return null;
@@ -200,6 +333,16 @@ export default function EditWorkItemModal({
               disabled={isSaving}
             />
           </div>
+
+          {/* Champs dynamiques basés sur le schéma */}
+          {workItemTypeDef?.fields && workItemTypeDef.fields.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-3 border-b pb-2">
+                {t('editWorkItem.customFields')}
+              </h3>
+              {workItemTypeDef.fields.map((field) => renderDynamicField(field))}
+            </div>
+          )}
 
           {/* Affichage des critères d'acceptation */}
           {item.acceptance_criteria && item.acceptance_criteria.length > 0 && (
