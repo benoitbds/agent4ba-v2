@@ -29,6 +29,7 @@
     "rejected": "Rejeté:",
     "schemaApproved": "Schéma approuvé avec succès",
     "approvingSchema": "Approbation du schéma en cours...",
+    "clarificationReceived": "Clarification reçue, reprise du workflow...",
     "error": "Erreur:",
     "errorApproving": "Erreur lors de l'approbation:",
     "errorRejecting": "Erreur lors du rejet:",
@@ -335,5 +336,14 @@
     "processing": "En cours...",
     "reject": "Rejeter",
     "approve": "Approuver"
+  },
+  "clarification": {
+    "title": "L'agent a besoin d'une clarification",
+    "question": "Question",
+    "yourResponse": "Votre réponse",
+    "responsePlaceholder": "Entrez votre réponse...",
+    "cancel": "Annuler",
+    "submit": "Soumettre la clarification",
+    "submitting": "Envoi en cours..."
   }
 }
