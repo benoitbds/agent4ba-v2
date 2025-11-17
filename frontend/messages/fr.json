@@ -24,8 +24,11 @@
     "processing": "Traitement en cours...",
     "impactPlanReady": "ImpactPlan prêt pour validation",
     "approvalRequired": "Approbation requise pour l'ImpactPlan",
+    "schemaApprovalRequired": "Approbation requise pour la modification du schéma",
     "approved": "Approuvé:",
     "rejected": "Rejeté:",
+    "schemaApproved": "Schéma approuvé avec succès",
+    "approvingSchema": "Approbation du schéma en cours...",
     "error": "Erreur:",
     "errorApproving": "Erreur lors de l'approbation:",
     "errorRejecting": "Erreur lors du rejet:",
@@ -327,6 +330,7 @@
     "deletions": "Suppressions",
     "warning": "Attention",
     "warningMessage": "Approuver ce changement modifiera la structure des données pour tous les utilisateurs de ce projet.",
+    "processing": "En cours...",
     "reject": "Rejeter",
     "approve": "Approuver"
   }

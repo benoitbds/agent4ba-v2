@@ -24,8 +24,11 @@
     "processing": "Processing...",
     "impactPlanReady": "ImpactPlan ready for validation",
     "approvalRequired": "Approval required for the ImpactPlan",
+    "schemaApprovalRequired": "Approval required for schema modification",
     "approved": "Approved:",
     "rejected": "Rejected:",
+    "schemaApproved": "Schema approved successfully",
+    "approvingSchema": "Approving schema...",
     "error": "Error:",
     "errorApproving": "Error during approval:",
     "errorRejecting": "Error during rejection:",
@@ -327,6 +330,7 @@
     "deletions": "Deletions",
     "warning": "Warning",
     "warningMessage": "Approving this change will modify the data structure for all users of this project.",
+    "processing": "Processing...",
     "reject": "Reject",
     "approve": "Approve"
   }
