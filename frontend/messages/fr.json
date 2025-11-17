@@ -87,6 +87,8 @@
   },
   "timeline": {
     "title": "Timeline d'exécution",
+    "realTimeView": "Vue temps réel",
+    "history": "Historique",
     "waiting": "En attente de requêtes...",
     "userRequest": "Requête utilisateur",
     "toolsUsed": "outils utilisés",

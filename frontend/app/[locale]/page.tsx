@@ -49,6 +49,9 @@ export default function Home() {
   const [clarificationQuestion, setClarificationQuestion] = useState<string | null>(null);
   const [inputPlaceholder, setInputPlaceholder] = useState<string>(t('newRequest.placeholder'));
 
+  // History collapse state
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+
   // Schema approval state
   const [schemaChange, setSchemaChange] = useState<{
     oldSchema: ProjectSchema;
@@ -848,20 +851,52 @@ export default function Home() {
               </div>
             )}
 
-            {/* Real-time SSE Timeline - only show if session is active or events exist */}
-            {(sessionId || timelineEvents.length > 0) && (
+            {/* Timeline Section - combine real-time and history */}
+            {((sessionId || timelineEvents.length > 0) || sessions.length > 0) && (
               <div className="bg-white rounded-lg shadow-sm p-6 flex-1 overflow-hidden flex flex-col">
-                <TimelineDisplay events={timelineEvents} />
-              </div>
-            )}
+                {/* Real-time SSE Timeline - only show if session is active or events exist */}
+                {(sessionId || timelineEvents.length > 0) && (
+                  <div className="flex-1 overflow-hidden flex flex-col mb-4">
+                    <TimelineDisplay events={timelineEvents} />
+                  </div>
+                )}
 
-            {/* Timeline View - only show if there are sessions */}
-            {sessions.length > 0 && (
-              <div className="bg-white rounded-lg shadow-sm p-6 flex-1 overflow-hidden flex flex-col">
-                <TimelineView
-                  sessions={sessions}
-                  onToggleSession={handleToggleSession}
-                />
+                {/* History Section - collapsible */}
+                {sessions.length > 0 && (
+                  <div className="border-t pt-4">
+                    <button
+                      onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+                      className="flex items-center justify-between w-full mb-3 text-left hover:bg-gray-50 rounded p-2 transition-colors"
+                    >
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {t('timeline.history')}
+                      </h3>
+                      <svg
+                        className={`w-5 h-5 text-gray-500 transition-transform ${
+                          isHistoryExpanded ? 'rotate-180' : ''
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                    </button>
+                    {isHistoryExpanded && (
+                      <div className="max-h-96 overflow-hidden flex flex-col">
+                        <TimelineView
+                          sessions={sessions}
+                          onToggleSession={handleToggleSession}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
