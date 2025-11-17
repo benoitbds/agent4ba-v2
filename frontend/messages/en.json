@@ -316,5 +316,15 @@
       "parseError": "Syntax error in Mermaid code.",
       "parseErrorWithLine": "Syntax error in Mermaid code at line {line}."
     }
+  },
+  "schemaApproval": {
+    "title": "Schema Change Approval",
+    "thread": "Thread",
+    "additions": "Additions",
+    "deletions": "Deletions",
+    "warning": "Warning",
+    "warningMessage": "Approving this change will modify the data structure for all users of this project.",
+    "reject": "Reject",
+    "approve": "Approve"
   }
 }
