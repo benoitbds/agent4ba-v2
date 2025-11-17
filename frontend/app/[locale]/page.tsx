@@ -846,7 +846,7 @@ export default function Home() {
                 ref={chatInputRef}
                 onSubmit={handleChatSubmit}
                 disabled={isStreaming}
-                placeholder={inputPlaceholder}
+                placeholder={t('newRequest.placeholder')}
               />
               <ContextPills context={chatContext} onRemove={handleRemoveFromContext} />
             </div>
