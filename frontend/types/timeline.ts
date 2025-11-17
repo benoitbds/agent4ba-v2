@@ -22,6 +22,7 @@ export interface TimelineEvent {
     | 'IMPACT_PLAN_READY'
     | 'CLARIFICATION_NEEDED'
     | 'SCHEMA_CHANGE_PROPOSED'
+    | 'STATUS_MESSAGE'
     | 'ERROR';
   agent_name?: string;
   message: string;

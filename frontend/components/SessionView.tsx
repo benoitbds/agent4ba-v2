@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import ToolRunView from "./ToolRunView";
-import type { TimelineSession, TimelineEvent, AgentStartEvent, AgentPlanEvent } from "@/types/events";
+import type { TimelineSession, SessionTimelineEvent, AgentStartEvent, AgentPlanEvent } from "@/types/events";
 
 interface SessionViewProps {
   session: TimelineSession;
@@ -21,10 +21,10 @@ export default function SessionView({ session, isLastSession, onToggle }: Sessio
   // Extraire les événements agent_start et agent_plan
   const agentStartEvent = session.agent_events.find(
     (e) => e.event.type === "agent_start"
-  ) as TimelineEvent | undefined;
+  ) as SessionTimelineEvent | undefined;
   const agentPlanEvent = session.agent_events.find(
     (e) => e.event.type === "agent_plan"
-  ) as TimelineEvent | undefined;
+  ) as SessionTimelineEvent | undefined;
 
   const agentStart = agentStartEvent?.event as AgentStartEvent | undefined;
   const agentPlan = agentPlanEvent?.event as AgentPlanEvent | undefined;

@@ -19,7 +19,8 @@ import { Header } from "@/components/Header";
 import { useAuth } from "@/context/AuthContext";
 import { useTimelineStream } from "@/hooks/useTimelineStream";
 import { streamChatEvents, sendApprovalDecision, getProjectBacklog, getProjects, getProjectDocuments, getProjectTimelineHistory, createProject, deleteProject, UnauthorizedError, executeWorkflow, respondToClarification, getProjectSchema, updateProjectSchema, continueAfterSchemaApproval } from "@/lib/api";
-import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, TimelineEvent, ContextItem, ClarificationNeededResponse, ApprovalNeededResponse, ProjectSchema } from "@/types/events";
+import type { TimelineSession, ToolRunState, ImpactPlan, SSEEvent, WorkItem, ToolUsedEvent, ContextItem, ClarificationNeededResponse, ApprovalNeededResponse, ProjectSchema, SessionTimelineEvent } from "@/types/events";
+import type { TimelineEvent } from "@/types/timeline";
 
 export default function Home() {
   const t = useTranslations();
@@ -62,6 +63,7 @@ export default function Home() {
   // Real-time timeline SSE state
   const [sessionId, setSessionId] = useState<string | null>(null);
   const { events: timelineEvents, isConnected, updateEvent } = useTimelineStream(sessionId, token);
+  const [localStatusEvents, setLocalStatusEvents] = useState<TimelineEvent[]>([]);
 
   // Helper function to handle 401 errors - use useCallback to memoize
   const handleUnauthorizedError = useCallback((error: unknown) => {
@@ -159,7 +161,7 @@ export default function Home() {
 
           // Process tool_used events into tool_runs Map
           const toolRunsMap = new Map<string, ToolRunState>();
-          const agentEvents: TimelineEvent[] = [];
+          const agentEvents: SessionTimelineEvent[] = [];
 
           historySession.events.forEach((evt: SSEEvent, eventIndex: number) => {
             if (evt.type === "tool_used") {
@@ -218,6 +220,29 @@ export default function Home() {
 
     loadTimelineHistory();
   }, [selectedProject, handleUnauthorizedError, t]);
+
+  // Create timeline event from status message
+  useEffect(() => {
+    if (statusMessage) {
+      const statusEvent: TimelineEvent = {
+        event_id: `status-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: 'STATUS_MESSAGE',
+        message: statusMessage,
+        status: statusType === 'error' ? 'ERROR' : statusType === 'warning' ? 'WAITING' : 'SUCCESS',
+        details: {
+          statusType: statusType,
+          clarificationQuestion: clarificationQuestion,
+        },
+      };
+      setLocalStatusEvents((prev) => [...prev, statusEvent]);
+    }
+  }, [statusMessage, statusType, clarificationQuestion]);
+
+  // Combine SSE events with local status events
+  const combinedTimelineEvents = [...timelineEvents, ...localStatusEvents].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
 
   // Function to refresh documents list after upload
   const handleDocumentUploadSuccess = async () => {
@@ -438,7 +463,7 @@ export default function Home() {
               const userRequestEvent = historySession.events.find((evt: SSEEvent) => evt.type === "user_request");
               const userQuery = userRequestEvent && "query" in userRequestEvent ? userRequestEvent.query : t('agentTimeline.historicalSession');
               const toolRunsMap = new Map<string, ToolRunState>();
-              const agentEvents: TimelineEvent[] = [];
+              const agentEvents: SessionTimelineEvent[] = [];
 
               historySession.events.forEach((evt: SSEEvent, eventIndex: number) => {
                 if (evt.type === "tool_used") {
@@ -583,7 +608,7 @@ export default function Home() {
             const userRequestEvent = historySession.events.find((evt: SSEEvent) => evt.type === "user_request");
             const userQuery = userRequestEvent && "query" in userRequestEvent ? userRequestEvent.query : t('agentTimeline.historicalSession');
             const toolRunsMap = new Map<string, ToolRunState>();
-            const agentEvents: TimelineEvent[] = [];
+            const agentEvents: SessionTimelineEvent[] = [];
 
             historySession.events.forEach((evt: SSEEvent, eventIndex: number) => {
               if (evt.type === "tool_used") {
@@ -816,29 +841,6 @@ export default function Home() {
               <ContextPills context={chatContext} onRemove={handleRemoveFromContext} />
             </div>
 
-            {/* Status Message */}
-            {statusMessage && (
-              <div
-                className={`p-4 rounded-lg ${
-                  statusType === "error"
-                    ? "bg-red-100 border border-red-300 text-red-800"
-                    : statusType === "warning"
-                    ? "bg-yellow-100 border border-yellow-300 text-yellow-800"
-                    : statusType === "info"
-                    ? "bg-blue-100 border border-blue-300 text-blue-800"
-                    : "bg-green-100 border border-green-300 text-green-800"
-                }`}
-              >
-                {clarificationQuestion && (
-                  <div className="flex items-start gap-2 mb-2">
-                    <span className="text-2xl">❓</span>
-                    <p className="font-semibold flex-1">{t('newRequest.clarificationNeeded')}</p>
-                  </div>
-                )}
-                <p className={clarificationQuestion ? "" : "font-semibold"}>{statusMessage}</p>
-              </div>
-            )}
-
             {/* Streaming Indicator */}
             {isStreaming && (
               <div className="bg-blue-100 border border-blue-300 rounded-lg p-4">
@@ -852,12 +854,12 @@ export default function Home() {
             )}
 
             {/* Timeline Section - combine real-time and history */}
-            {((sessionId || timelineEvents.length > 0) || sessions.length > 0) && (
+            {((sessionId || combinedTimelineEvents.length > 0) || sessions.length > 0) && (
               <div className="bg-white rounded-lg shadow-sm p-6 flex-1 overflow-hidden flex flex-col">
                 {/* Real-time SSE Timeline - only show if session is active or events exist */}
-                {(sessionId || timelineEvents.length > 0) && (
+                {(sessionId || combinedTimelineEvents.length > 0) && (
                   <div className="flex-1 overflow-hidden flex flex-col mb-4">
-                    <TimelineDisplay events={timelineEvents} />
+                    <TimelineDisplay events={combinedTimelineEvents} />
                   </div>
                 )}
 

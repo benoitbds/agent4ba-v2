@@ -3,10 +3,10 @@
 import { useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Link2, Brain, MessageSquare, FileText, Flag } from "lucide-react";
-import type { TimelineEvent } from "@/types/events";
+import type { SessionTimelineEvent } from "@/types/events";
 
 interface AgentTimelineProps {
-  events: TimelineEvent[];
+  events: SessionTimelineEvent[];
 }
 
 export default function AgentTimeline({ events }: AgentTimelineProps) {
@@ -87,7 +87,7 @@ export default function AgentTimeline({ events }: AgentTimelineProps) {
     return "border-l-gray-300";
   };
 
-  const formatEventDetails = (event: TimelineEvent, compact = false) => {
+  const formatEventDetails = (event: SessionTimelineEvent, compact = false) => {
     const { type } = event.event;
 
     switch (type) {
