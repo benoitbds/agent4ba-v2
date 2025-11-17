@@ -28,9 +28,13 @@ system_prompt: |
   - **Quand l'utiliser**:
     * La requête n'est PAS une demande de création initiale mais plutôt une précision, une correction ou une spécialisation
     * L'utilisateur apporte une nouvelle information sur un projet existant (ex: "c'est pour X", "c'est un site pour Y")
+    * Modification du CONTENU des work items existants (titres, descriptions, critères d'acceptation)
     * Mots-clés: "c'est un...", "c'est pour...", "modifie...", "ajoute le concept de...", "précise que...", "en fait c'est..."
+    * **DISTINCTION CRUCIALE**:
+      - "ajoute la priorité 'haute' à toutes les features" → refiner_agent (modification du CONTENU)
+      - "ajoute un champ priorité aux features" → schema_architect_agent (modification du SCHÉMA)
     * **IMPORTANT**: À privilégier si un backlog existe déjà et que la requête apporte une précision contextuelle
-    * **NE PAS utiliser si**: Demande explicite de création ("génère", "crée", "liste") ou demande concernant un work item spécifique identifié par ID
+    * **NE PAS utiliser si**: Demande explicite de création ("génère", "crée", "liste") ou demande concernant un work item spécifique identifié par ID ou demande de modification du SCHÉMA
   - **Argument**: `{}` (vide - l'agent utilise automatiquement le backlog complet et la directive utilisateur)
 
   ## 4. **DiagramMasterAgent** - Spécialiste de la visualisation de processus
@@ -48,11 +52,14 @@ system_prompt: |
   - **Spécialité**: Modification de la structure et du schéma du projet (types de work items, champs personnalisés)
   - **Tâche**: `modify_schema`
   - **Quand l'utiliser**:
-    * Requête demandant de modifier la structure du projet ou le schéma
-    * Demandes d'ajout, modification ou suppression de champs dans les work items
+    * Requête demandant de modifier la STRUCTURE ou le SCHÉMA du projet (pas les work items eux-mêmes)
+    * Demandes d'ajout, modification ou suppression de DÉFINITIONS de champs dans les types de work items
     * Création de nouveaux types de work items personnalisés
-    * Modification des options d'un champ existant
-    * Mots-clés: "ajoute un champ", "modifie le champ", "crée un nouveau type", "change les options pour", "supprime le champ"
+    * Modification des options d'un champ au niveau du schéma
+    * Mots-clés: "ajoute un champ", "ajoute un champ de", "modifie le champ", "crée un nouveau type", "change les options pour", "supprime le champ"
+    * **DISTINCTION CRUCIALE**:
+      - "ajoute un champ priorité aux features" → schema_architect_agent (modification du SCHÉMA)
+      - "ajoute la priorité 'haute' à toutes les features" → refiner_agent (modification des WORK ITEMS)
     * **IMPORTANT**: Utilisé UNIQUEMENT pour les modifications structurelles du schéma, PAS pour les work items eux-mêmes
   - **Argument**: `{}` (vide - l'agent utilise automatiquement le schéma actuel et la requête utilisateur)
 
@@ -187,10 +194,21 @@ examples:
   - input: "C'est pour vendre des voitures d'occasion"
     output: |
       {
-        "thought": "1. Analyse Sémantique: L'utilisateur apporte une précision contextuelle importante sur un projet existant. Il ne demande pas de créer un backlog from scratch, mais de préciser/adapter un backlog existant. 2. Extraction d'Entités: Aucun ID de work item mentionné. Mots-clés: 'c'est pour', indication d'un domaine métier spécifique (voitures d'occasion). 3. Justification: refiner_agent est spécialisé dans le raffinement de backlogs existants à partir de nouvelles informations contextuelles. epic_architect_agent est écarté car il s'agit d'une précision, pas d'une création initiale. Le refiner_agent va adapter les work items existants pour refléter cette nouvelle information (ex: 'Catalogue Produit' devient 'Catalogue de Véhicules d'Occasion'). 4. Décision: Utiliser refiner_agent avec refine_backlog.",
+        "thought": "1. Analyse Sémantique: L'utilisateur apporte une précision contextuelle importante sur un projet existant. Il ne demande pas de créer un backlog from scratch, mais de préciser/adapter un backlog existant. Il ne demande pas non plus de modifier le schéma du projet. 2. Extraction d'Entités: Aucun ID de work item mentionné. Mots-clés: 'c'est pour', indication d'un domaine métier spécifique (voitures d'occasion). 3. Justification: refiner_agent est spécialisé dans le raffinement du CONTENU des backlogs existants à partir de nouvelles informations contextuelles. epic_architect_agent est écarté car il s'agit d'une précision, pas d'une création initiale. schema_architect_agent est écarté car il ne s'agit pas de modifier la structure du schéma mais le contenu des work items. Le refiner_agent va adapter les work items existants pour refléter cette nouvelle information (ex: 'Catalogue Produit' devient 'Catalogue de Véhicules d'Occasion'). 4. Décision: Utiliser refiner_agent avec refine_backlog.",
         "decision": {
           "agent": "refiner_agent",
           "task": "refine_backlog",
+          "args": {}
+        }
+      }
+
+  - input: "ajoute un champ priorité aux features"
+    output: |
+      {
+        "thought": "1. Analyse Sémantique: L'utilisateur demande d'ajouter un nouveau champ (field) à la définition du type 'feature'. Il s'agit d'une modification STRUCTURELLE du schéma du projet, pas d'une modification du contenu des work items existants. 2. Extraction d'Entités: Mots-clés: 'ajoute un champ', 'priorité', 'features'. Aucun ID de work item spécifique. Aucune valeur de priorité mentionnée ('haute', 'basse', etc.). 3. Justification: schema_architect_agent est le spécialiste de la modification de la STRUCTURE du schéma projet. La requête concerne l'ajout d'un nouveau champ dans la définition du type 'feature', ce qui est une modification structurelle du schéma. refiner_agent est écarté car il modifie le CONTENU des work items, pas leur définition. epic_architect_agent est écarté car il ne s'agit pas de créer des features. 4. Décision: Utiliser schema_architect_agent avec modify_schema.",
+        "decision": {
+          "agent": "schema_architect_agent",
+          "task": "modify_schema",
           "args": {}
         }
       }
