@@ -8,6 +8,7 @@ import TimelineView from "@/components/TimelineView";
 import TimelineDisplay from "@/components/TimelineDisplay";
 import ImpactPlanModal from "@/components/ImpactPlanModal";
 import SchemaImpactModal from "@/components/SchemaImpactModal";
+import ClarificationModal from "@/components/ClarificationModal";
 import CreateProjectModal from "@/components/CreateProjectModal";
 import DeleteProjectModal from "@/components/DeleteProjectModal";
 import BacklogView from "@/components/BacklogView";
@@ -45,10 +46,11 @@ export default function Home() {
   const [chatContext, setChatContext] = useState<ContextItem[]>([]);
   const chatInputRef = useRef<ChatInputRef>(null);
 
-  // Multi-turn conversation state
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  const [clarificationQuestion, setClarificationQuestion] = useState<string | null>(null);
-  const [inputPlaceholder, setInputPlaceholder] = useState<string>(t('newRequest.placeholder'));
+  // Clarification modal state
+  const [clarification, setClarification] = useState<{
+    question: string;
+    conversationId: string;
+  } | null>(null);
 
   // History collapse state
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
@@ -134,13 +136,11 @@ export default function Home() {
     loadDocuments();
   }, [selectedProject, handleUnauthorizedError]);
 
-  // Reset context and conversation state when project changes
+  // Reset context and clarification state when project changes
   useEffect(() => {
     setChatContext([]);
-    setConversationId(null);
-    setClarificationQuestion(null);
-    setInputPlaceholder(t('newRequest.placeholder'));
-  }, [selectedProject, t]);
+    setClarification(null);
+  }, [selectedProject]);
 
   // Load timeline history when selected project changes
   useEffect(() => {
@@ -232,12 +232,11 @@ export default function Home() {
         status: statusType === 'error' ? 'ERROR' : statusType === 'warning' ? 'WAITING' : 'SUCCESS',
         details: {
           statusType: statusType,
-          clarificationQuestion: clarificationQuestion,
         },
       };
       setLocalStatusEvents((prev) => [...prev, statusEvent]);
     }
-  }, [statusMessage, statusType, clarificationQuestion]);
+  }, [statusMessage, statusType]);
 
   // Combine SSE events with local status events
   const combinedTimelineEvents = [...timelineEvents, ...localStatusEvents].sort(
@@ -357,27 +356,70 @@ export default function Home() {
   };
 
   const handleChatSubmit = async (query: string) => {
-    // Déterminer si c'est une nouvelle requête ou une réponse à une clarification
-    const isRespondingToClarification = conversationId !== null && clarificationQuestion !== null;
-
     setIsStreaming(true);
     setStatusMessage(null);
     setStatusType(null);
 
     try {
-      if (isRespondingToClarification) {
-        // Cas 1: Réponse à une clarification
-        console.log("[MULTI-TURN] Responding to clarification:", conversationId);
+      // Générer un session_id AVANT d'appeler /execute pour le streaming temps réel
+      const newSessionId = crypto.randomUUID();
+      console.log("[TIMELINE] Generated session_id for real-time streaming:", newSessionId);
 
-        const response = await respondToClarification(conversationId, query);
+      // Ouvrir immédiatement la connexion SSE AVANT l'exécution du workflow
+      setSessionId(newSessionId);
 
-        // Réinitialiser l'état de conversation
-        setConversationId(null);
-        setClarificationQuestion(null);
-        setInputPlaceholder(t('newRequest.placeholder'));
+      const response = await executeWorkflow({
+        project_id: selectedProject,
+        query,
+        context: chatContext.length > 0 ? chatContext : undefined,
+        session_id: newSessionId, // Passer le session_id au backend
+      });
 
-        // Afficher le résultat final
-        setStatusMessage(`${t('agentTimeline.workflowComplete')}: ${response.result}`);
+      // Le backend retourne toujours 202 Accepted avec le session_id
+      // Les événements (workflow complete, approval needed, etc.) arrivent via SSE
+      console.log("[EXECUTE] Workflow started with session_id:", response.session_id);
+
+      // La suite de la logique est gérée par le useEffect qui écoute timelineEvents
+    } catch (error) {
+      if (handleUnauthorizedError(error)) return;
+      console.error("Error executing workflow:", error);
+      setStatusMessage(
+        `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
+      );
+      setStatusType('error');
+    } finally {
+      setIsStreaming(false);
+      // Clear context after sending the request
+      setChatContext([]);
+    }
+  };
+
+  const handleClarificationSubmit = async (response: string) => {
+    if (!clarification) return;
+
+    try {
+      console.log("[CLARIFICATION] Responding with:", response);
+
+      // Appeler l'API POST /respond avec le conversation_id et la réponse
+      const result = await respondToClarification(clarification.conversationId, response);
+
+      console.log("[CLARIFICATION] Response received:", result);
+
+      // Fermer la modale
+      setClarification(null);
+
+      // Si le backend retourne un nouveau session_id, relancer le stream SSE
+      if (result.status === 'continued' && result.thread_id) {
+        // Le workflow continue, générer un nouveau session_id pour le streaming
+        const newSessionId = crypto.randomUUID();
+        console.log("[CLARIFICATION] Resuming workflow with new session_id:", newSessionId);
+        setSessionId(newSessionId);
+
+        setStatusMessage(t('status.clarificationReceived') || "Clarification reçue, reprise du workflow...");
+        setStatusType('info');
+      } else {
+        // Workflow terminé
+        setStatusMessage(`${t('agentTimeline.workflowComplete')}: ${result.result}`);
         setStatusType('success');
 
         // Rafraîchir le backlog après la complétion
@@ -388,48 +430,17 @@ export default function Home() {
           if (handleUnauthorizedError(error)) return;
           console.error("Failed to refresh backlog:", error);
         }
-      } else {
-        // Cas 2: Nouvelle requête
-        console.log("[MULTI-TURN] Starting new request");
-
-        // Générer un session_id AVANT d'appeler /execute pour le streaming temps réel
-        const newSessionId = crypto.randomUUID();
-        console.log("[TIMELINE] Generated session_id for real-time streaming:", newSessionId);
-
-        // Ouvrir immédiatement la connexion SSE AVANT l'exécution du workflow
-        setSessionId(newSessionId);
-
-        const response = await executeWorkflow({
-          project_id: selectedProject,
-          query,
-          context: chatContext.length > 0 ? chatContext : undefined,
-          session_id: newSessionId, // Passer le session_id au backend
-        });
-
-        // Le backend retourne toujours 202 Accepted avec le session_id
-        // Les événements (workflow complete, approval needed, etc.) arrivent via SSE
-        console.log("[EXECUTE] Workflow started with session_id:", response.session_id);
-
-        // La suite de la logique est gérée par le useEffect qui écoute timelineEvents
       }
     } catch (error) {
       if (handleUnauthorizedError(error)) return;
-      console.error("Error executing workflow:", error);
+      console.error("Error submitting clarification:", error);
       setStatusMessage(
         `${t('status.error')} ${error instanceof Error ? error.message : t('status.error')}`
       );
       setStatusType('error');
 
-      // En cas d'erreur, réinitialiser l'état de conversation
-      setConversationId(null);
-      setClarificationQuestion(null);
-      setInputPlaceholder(t('newRequest.placeholder'));
-    } finally {
-      setIsStreaming(false);
-      // Clear context after sending the request (only for new requests)
-      if (!isRespondingToClarification) {
-        setChatContext([]);
-      }
+      // Fermer la modale même en cas d'erreur
+      setClarification(null);
     }
   };
 
@@ -527,12 +538,11 @@ export default function Home() {
     } else if (lastEvent.type === 'CLARIFICATION_NEEDED') {
       console.log("[TIMELINE] Clarification needed:", lastEvent.message);
 
-      // Utiliser le session_id actuel comme conversation_id pour la clarification
-      setConversationId(sessionId);
-      setClarificationQuestion(lastEvent.message);
-      setInputPlaceholder(t('newRequest.clarificationPlaceholder') || "Entrez votre réponse...");
-      setStatusMessage(lastEvent.message);
-      setStatusType('warning');
+      // Ouvrir la modale de clarification avec la question et le session_id
+      setClarification({
+        question: lastEvent.message,
+        conversationId: sessionId || '',
+      });
     } else if (lastEvent.type === 'SCHEMA_CHANGE_PROPOSED' && lastEvent.status === 'WAITING') {
       console.log("[TIMELINE] Schema change proposed");
 
@@ -983,6 +993,16 @@ export default function Home() {
         onDocumentsChange={handleDocumentUploadSuccess}
         onSelectDocument={handleSelectDocument}
       />
+
+      {/* Clarification Modal */}
+      {clarification && (
+        <ClarificationModal
+          isOpen={true}
+          onClose={() => setClarification(null)}
+          onSubmit={handleClarificationSubmit}
+          question={clarification.question}
+        />
+      )}
 
       {/* Project Users Modal */}
       <ProjectUsersModal

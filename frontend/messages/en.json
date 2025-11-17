@@ -29,6 +29,7 @@
     "rejected": "Rejected:",
     "schemaApproved": "Schema approved successfully",
     "approvingSchema": "Approving schema...",
+    "clarificationReceived": "Clarification received, resuming workflow...",
     "error": "Error:",
     "errorApproving": "Error during approval:",
     "errorRejecting": "Error during rejection:",
@@ -335,5 +336,14 @@
     "processing": "Processing...",
     "reject": "Reject",
     "approve": "Approve"
+  },
+  "clarification": {
+    "title": "The agent needs clarification",
+    "question": "Question",
+    "yourResponse": "Your response",
+    "responsePlaceholder": "Enter your response...",
+    "cancel": "Cancel",
+    "submit": "Submit clarification",
+    "submitting": "Submitting..."
   }
 }
