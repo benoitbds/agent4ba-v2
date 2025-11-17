@@ -1287,6 +1287,64 @@ async def get_project_schema(
         ) from e
 
 
+@app.put("/projects/{project_id}/schema")
+async def update_project_schema(
+    project_id: str,
+    schema_data: dict[str, Any],
+    current_user: Annotated[User, Depends(get_current_project_user)],
+) -> JSONResponse:
+    """
+    Met à jour le schéma d'un projet avec un nouveau schéma complet.
+
+    Cet endpoint remplace le schéma existant par le nouveau schéma fourni.
+    Le schéma doit être valide et conforme au modèle ProjectSchema.
+
+    Args:
+        project_id: Identifiant unique du projet
+        schema_data: Nouveau schéma du projet (format ProjectSchema)
+        current_user: Utilisateur authentifié avec accès au projet
+
+    Returns:
+        JSONResponse avec un message de confirmation
+
+    Raises:
+        HTTPException: Si le projet n'existe pas, le schéma est invalide ou une erreur survient
+    """
+    from agent4ba.models.schema import ProjectSchema
+
+    storage = ProjectContextService()
+
+    try:
+        # Valider le schéma avec le modèle Pydantic
+        new_schema = ProjectSchema(**schema_data)
+
+        # Sauvegarder le nouveau schéma
+        storage._save_project_schema(project_id, new_schema)
+
+        logger.info(f"[UPDATE_SCHEMA] Schema updated successfully for project {project_id}")
+        logger.info(f"[UPDATE_SCHEMA] New schema has {len(new_schema.work_item_types)} work item types")
+
+        return JSONResponse(
+            content={
+                "message": "Schema updated successfully",
+                "work_item_types_count": len(new_schema.work_item_types),
+            },
+            status_code=200,
+        )
+
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' not found: {e}",
+        ) from e
+    except Exception as e:
+        logger.error(f"[UPDATE_SCHEMA] Error updating schema: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid schema or error updating: {e}",
+        ) from e
+
+
 @app.get("/projects/{project_id}/diagrams")
 async def get_project_diagrams(
     project_id: str,
