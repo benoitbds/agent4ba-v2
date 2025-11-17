@@ -5,6 +5,11 @@ import re
 from pathlib import Path
 
 from agent4ba.core.models import WorkItem
+from agent4ba.models.schema import (
+    FieldDefinition,
+    ProjectSchema,
+    WorkItemTypeDefinition,
+)
 
 
 class ProjectContextService:
@@ -18,6 +23,161 @@ class ProjectContextService:
             base_path: Chemin de base pour le stockage des projets
         """
         self.base_path = Path(base_path)
+
+    def _get_default_project_schema(self) -> ProjectSchema:
+        """
+        Crée un schéma de projet par défaut basé sur la structure actuelle des WorkItems.
+
+        Returns:
+            ProjectSchema avec les types par défaut (feature, story, task, bug, epic, test_case)
+        """
+        # Définir les champs communs à tous les types
+        common_fields = [
+            FieldDefinition(
+                name="title",
+                type="text",
+                label="Titre",
+                required=True,
+            ),
+            FieldDefinition(
+                name="description",
+                type="textarea",
+                label="Description",
+                required=False,
+            ),
+            FieldDefinition(
+                name="parent_id",
+                type="text",
+                label="ID du parent",
+                required=False,
+            ),
+            FieldDefinition(
+                name="acceptance_criteria",
+                type="list",
+                label="Critères d'acceptation",
+                required=False,
+            ),
+        ]
+
+        # Champs spécifiques aux test_case
+        test_case_fields = common_fields + [
+            FieldDefinition(
+                name="scenario",
+                type="textarea",
+                label="Scénario (Gherkin)",
+                required=False,
+            ),
+            FieldDefinition(
+                name="steps",
+                type="list",
+                label="Étapes du test",
+                required=False,
+            ),
+        ]
+
+        # Définir les types de WorkItems par défaut
+        work_item_types = [
+            WorkItemTypeDefinition(
+                name="epic",
+                label="Epic",
+                fields=common_fields.copy(),
+            ),
+            WorkItemTypeDefinition(
+                name="feature",
+                label="Feature",
+                fields=common_fields.copy(),
+            ),
+            WorkItemTypeDefinition(
+                name="story",
+                label="User Story",
+                fields=common_fields.copy(),
+            ),
+            WorkItemTypeDefinition(
+                name="task",
+                label="Task",
+                fields=common_fields.copy(),
+            ),
+            WorkItemTypeDefinition(
+                name="bug",
+                label="Bug",
+                fields=common_fields.copy(),
+            ),
+            WorkItemTypeDefinition(
+                name="test_case",
+                label="Test Case",
+                fields=test_case_fields,
+            ),
+        ]
+
+        return ProjectSchema(
+            version="1.0",
+            work_item_types=work_item_types,
+        )
+
+    def _load_project_schema(self, project_id: str) -> ProjectSchema:
+        """
+        Charge le schéma d'un projet depuis le fichier project_schema.json.
+
+        Args:
+            project_id: Identifiant unique du projet
+
+        Returns:
+            ProjectSchema du projet
+
+        Raises:
+            FileNotFoundError: Si le fichier de schéma n'existe pas
+        """
+        project_dir = self._get_project_dir(project_id)
+        schema_file = project_dir / "project_schema.json"
+
+        if not schema_file.exists():
+            raise FileNotFoundError(
+                f"Schema file not found for project '{project_id}': {schema_file}"
+            )
+
+        with schema_file.open("r", encoding="utf-8") as f:
+            schema_data = json.load(f)
+
+        return ProjectSchema(**schema_data)
+
+    def _save_project_schema(self, project_id: str, schema: ProjectSchema) -> None:
+        """
+        Sauvegarde le schéma d'un projet dans le fichier project_schema.json.
+
+        Args:
+            project_id: Identifiant unique du projet
+            schema: Schéma du projet à sauvegarder
+        """
+        project_dir = self._get_project_dir(project_id)
+        project_dir.mkdir(parents=True, exist_ok=True)
+
+        schema_file = project_dir / "project_schema.json"
+
+        # Convertir le schéma en dictionnaire
+        schema_dict = schema.model_dump()
+
+        with schema_file.open("w", encoding="utf-8") as f:
+            json.dump(schema_dict, f, indent=2, ensure_ascii=False)
+
+    def get_project_schema(self, project_id: str) -> ProjectSchema:
+        """
+        Récupère le schéma d'un projet.
+
+        Args:
+            project_id: Identifiant unique du projet
+
+        Returns:
+            ProjectSchema du projet
+
+        Raises:
+            FileNotFoundError: Si le projet ou son schéma n'existe pas
+        """
+        project_dir = self._get_project_dir(project_id)
+
+        if not project_dir.exists():
+            raise FileNotFoundError(f"Project '{project_id}' does not exist")
+
+        return self._load_project_schema(project_id)
 
     def _get_project_dir(self, project_id: str) -> Path:
         """
@@ -246,6 +406,10 @@ class ProjectContextService:
 
         # Initialiser un backlog vide
         self.save_backlog(project_id, [])
+
+        # Créer le schéma de projet par défaut
+        default_schema = self._get_default_project_schema()
+        self._save_project_schema(project_id, default_schema)
 
         # Créer le fichier de gestion des utilisateurs du projet
         users_file = project_dir / "users.json"
