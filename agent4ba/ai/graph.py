@@ -18,6 +18,7 @@ from agent4ba.ai import (
     document_agent,
     epic_architect_agent,
     refiner_agent,
+    schema_architect_agent,
     story_teller_agent,
     test_agent,
 )
@@ -474,6 +475,8 @@ def router_node(state: GraphState) -> dict[str, Any]:
             "document_agent": "document_agent",
             "diagrammasteragent": "diagram_master_agent",
             "diagram_master_agent": "diagram_master_agent",
+            "schemaarchitectagent": "schema_architect_agent",
+            "schema_architect_agent": "schema_architect_agent",
             "fallbackagent": "fallback_agent",
             "fallback_agent": "fallback_agent",
         }
@@ -796,6 +799,16 @@ def agent_node(state: GraphState) -> dict[str, Any]:
             result = {
                 "status": "error",
                 "result": f"Unknown task '{agent_task}' for refiner_agent",
+            }
+
+    elif agent_id == "schema_architect_agent":
+        # Router vers la méthode appropriée du schema_architect_agent
+        if agent_task == "modify_schema":
+            result = schema_architect_agent.modify_schema(state)
+        else:
+            result = {
+                "status": "error",
+                "result": f"Unknown task '{agent_task}' for schema_architect_agent",
             }
 
     else:
